@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+
+import toml
+from argparse import ArgumentParser
+
+from bonito.model import Model
+
+parser = ArgumentParser()
+parser.add_argument("config")
+args = parser.parse_args()
+
+model = Model(toml.load(args.config))
+
+print(model)
+print("Total parameters in model", sum(p.numel() for p in model.parameters()))
