@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+
+l = {'N': 0, 'A': 1, 'C': 2, 'G': 3, 'T': 4}
+
+
+def ref_encode(seq, max_size=500):
+    e = np.zeros(max_size, dtype=np.int32)
+    for i, char in enumerate(seq):
+        e[i] = l[char]
+    return e
+
+
+chunksize = 2000
+
+basepth = "/data/training/chunks/%s" % chunksize
+
+with open(os.path.join(basepth, "references.txt")) as rfile:
+    references = rfile.read().split()
+
+big = max(len(r) for r in references)
+
+print("num refs", len(references))
+print("big refs", big)
+
+targets = np.array([ref_encode(r, max_size=big) for r in references], dtype=np.uint8)
+target_lengths = np.array([len(r) for r in references], dtype=np.uint16)
+
+np.save(os.path.join(basepth, "references.npy"), targets)
+np.save(os.path.join(basepth, "reference_lengths.npy"), target_lengths)

@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+import os
+import numpy as np
+from multiprocessing import Pool
+from bisect import bisect, bisect_left
+from itertools import chain, islice, product, groupby
+
+NPROCS = 30
+MAX_READS = 6000000
+CHUNKSIZE = 2000
+TRAINING_FILE = "/data/training/remapped_v4.1.0.hdf5"
+OUTDIR = '/data/training/chunks/%s' % CHUNKSIZE
+
+TOTAL_CHUNKS = np.int32(sum([(s - (s % CHUNKSIZE)) / CHUNKSIZE for s in islice(lengths(TRAINING_FILE), MAX_READS)]))
+
+print("Samples of [chunks, samples] needs %.2f GB" % (TOTAL_CHUNKS * CHUNKSIZE / 1e9 * 4))
+
+CHUNKS = np.zeros((TOTAL_CHUNKS, CHUNKSIZE), dtype=np.float32)
+REFS = list()
+
+CUTOFF = CHUNKSIZE / 20  # avg speed at least 200 bps 
+MAX_DIFF = 80            # largest gap between between samples without label
+
+os.makedirs(OUTDIR, exist_ok=True)
+
+
+with Pool(NPROCS) as pool, open(os.path.join(OUTDIR, "references.txt"), 'w') as REFERENCES:
+
+    big_gap = 0
+    min_bases = 0
+    min_cover = 0
+    chunk_idx = 0    
+    chunk_count = 0
+
+    for read_idx, res in enumerate(pool.imap(transform_rle, islice(get_reads(TRAINING_FILE), MAX_READS))):
+
+        progress(read_idx)
+
+        # calculate how many chunks in this read
+        duration = len(res[0])
+        num_chunks = np.floor(duration / CHUNKSIZE).astype(np.int32)
+        
+        for chunk in range(0, num_chunks):
+            
+            chunk_count += 1
+            
+            # squiggle space
+            c_start = chunk * CHUNKSIZE
+            c_end = (chunk + 1) * CHUNKSIZE
+            
+            # reference space 
+            ref_start = max(0, bisect_left(res[3], c_start) - 1)
+            ref_end = min(bisect_left(res[3], c_end), duration)
+            
+            # not enough bases
+            if (ref_end - ref_start) < CUTOFF:
+                min_bases += 1
+                continue
+            
+            # not enough coverage
+            if np.abs(c_start - res[3][ref_start]) >= MAX_DIFF or np.abs(c_end - res[3][ref_end]) >= MAX_DIFF:
+                min_cover += 1
+                continue
+                  
+            # numple of samples difference between each base
+            sdiff = np.diff(res[3][ref_start:ref_end + 1])
+            
+            # expand diffs out into sample space so adiff is len == chunksize
+            adiff = np.fromiter((chain.from_iterable([v] * v for v in sdiff)), dtype=np.int16)
+            
+            # max gap too large
+            if np.max(adiff >= MAX_DIFF):
+                big_gap += 1
+                continue
+    
+            reference = ''.join(base_indices[b] for b in res[2][ref_start:ref_end]) + '\n'
+
+            REFS.append(res[2][ref_start:ref_end])
+
+            CHUNKS[chunk_idx, :] = res[0][c_start:c_end]
+            REFERENCES.write(reference)
+                    
+            chunk_idx += 1
+ 
+    skipped = chunk_count - chunk_idx
+    percent = (skipped / chunk_count * 100) if skipped else 0
+    
+    print("\n\nSkipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
+    print("Reason for skipping:")
+    print("  - minimum number of bases       ", min_bases)
+    print("  - minimum coverage over chunk   ", min_cover)
+    print("  - large difference between bases", big_gap)
+    print()
+
+    CHUNKS = np.delete(CHUNKS, np.s_[chunk_idx:], axis=0)
+    np.save(os.path.join(OUTDIR, "chunks.npy"), CHUNKS) 
