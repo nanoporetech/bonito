@@ -11,6 +11,6 @@ $ pip install -r requirements.txt
 $ python setup.py develop
 ```
 
-## References
+### References
 
 [Quartznet: Deep Automatic Speech Recognition With 1D Time-Channel Separable Convolutions](https://arxiv.org/pdf/1910.10261.pdf)

@@ -21,7 +21,6 @@ residual = false
 separable = false
 
 # B1
-
 [[block]]
 filters = 256
 repeat = 5
@@ -33,7 +32,6 @@ residual = true
 separable = true
 
 # B2
-
 [[block]]
 filters = 256
 repeat = 5
@@ -45,7 +43,6 @@ residual = true
 separable = true
 
 # B3
-
 [[block]]
 filters = 512
 repeat = 5
@@ -57,7 +54,6 @@ residual = true
 separable = true
 
 # B4
-
 [[block]]
 filters = 512
 repeat = 5
@@ -69,7 +65,6 @@ residual = true
 separable = true
 
 # B5
-
 [[block]]
 filters = 512
 repeat = 5
@@ -81,7 +76,6 @@ residual = true
 separable = true
 
 # C2
-
 [[block]]
 filters = 512
 repeat = 1
@@ -93,7 +87,6 @@ residual = false
 separable = true
 
 # C3
-
 [[block]]
 filters = 1024
 repeat = 1

@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 
+"""
+Bonito chunk caller
+"""
+
 import os
 import time
+import torch
+import numpy as np
 from itertools import starmap
 from datetime import datetime
 from argparse import ArgumentParser
@@ -9,18 +15,10 @@ from argparse import ArgumentParser
 from bonito.util import init, load_data, load_model
 from bonito.util import decode_ctc, stitch, identity, palign
 
-import torch
-import numpy as np
-
-
-torch.nn.Module.dump_patches = True
 
 def main(args):
 
     init(args.seed)
-    
-    NUM_PREDICTIONS = args.chunks
-    PREDICTIONS_PER = args.batch
 
     print("* loading data")
     chunks, targets, target_lengths = load_data(args.outdir, chunksize=args.chunksize, limit=args.chunks, shuffle=True)
@@ -37,8 +35,8 @@ def main(args):
         t0 = time.perf_counter()
     
         with torch.no_grad():
-            for i in range(0, int(NUM_PREDICTIONS / PREDICTIONS_PER)):
-                tchunks = torch.tensor(np.expand_dims(chunks[i*PREDICTIONS_PER:(i+1)*PREDICTIONS_PER], axis=1))
+            for i in range(0, int(args.chunks / args.batchsize)):
+                tchunks = torch.tensor(np.expand_dims(chunks[i*args.batchsize:(i+1)*args.batchsize], axis=1))
                 predictions = torch.exp(model(tchunks.to(args.device)))
                 predictions = predictions.cpu().numpy()
                 p.append(predictions)
@@ -53,7 +51,7 @@ def main(args):
         
         print("* time %.3f" % (t1 - t0))
         print("* mean %.3f" % np.mean(identities))
-        print("* mode %.3f" % np.median(identities))
+        print("* median %.3f" % np.median(identities))
 
         palign(references[0], sequences[0])
         
@@ -63,9 +61,9 @@ if __name__ == "__main__":
     parser.add_argument("name")
     parser.add_argument("device")
     parser.add_argument("--seed", default=9, type=int)    
-    parser.add_argument("--batch", default=100, type=int)
     parser.add_argument("--weights", default=0, type=str)
     parser.add_argument("--chunks", default=500, type=int)
+    parser.add_argument("--batchsize", default=100, type=int)
     parser.add_argument("--chunksize", default=2000, type=int)
     parser.add_argument("--outdir", default='/data/training/models/')    
     main(parser.parse_args())
