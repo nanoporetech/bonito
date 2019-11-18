@@ -54,15 +54,9 @@ def load_data(basepth, chunksize=2000, shuffle=True, limit=None):
 def load_model(dirname, device, weights=0):
     outdir = '/data/training/models/'
     workdir = os.path.join(outdir, dirname)
-
-    if weights == 0:
-        weights = os.path.join(workdir, 'weights.tar')
-    else:
-        weights = os.path.join(workdir, 'weights_%s.tar' % weights)
-        
+    weights = os.path.join(workdir, 'weights_%s.tar' % weights if weights else 'weights.tar')
     modelfile = os.path.join(workdir, 'model.py')
     device = torch.device(device)
-
     model = torch.load(modelfile, map_location=device)
     model.load_state_dict(torch.load(weights, map_location=device))
     model.eval()
