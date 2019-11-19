@@ -1,12 +1,12 @@
 # Bonito
 
-A convolutional basecaller inspired by Jasper/Quartznet using a simple 5 state `{BLANK, A, C, G, T}` representation and trained with CTC. 
+A convolutional basecaller inspired by Jasper/Quartznet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
 
 ## Quickstart
 
 ```
-$ python3 -m venv .venv 
-$ source ./.venv/bin/activate
+$ python3 -m venv venv3
+$ source venv3/bin/activate
 $ pip install --upgrade pip
 $ pip install -r requirements.txt
 $ python setup.py develop
@@ -17,10 +17,12 @@ $ python setup.py develop
 Download the training from [here](https://nanoporetech.ent.box.com/s/zvdpnbztlc727igiv61hees4v45391ho).
 
 ```
-(.venv) $ ./bin/train /data/training/example ./config/quartznet5x5.toml
+(venv3) $ ./bin/train /data/training/example ./config/quartznet5x5.toml
 ```
 
 The default configuration is for the QuartzNet 5x5 architecture.
+
+Automatic mixed precision can be use for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
 ## Scripts
 
