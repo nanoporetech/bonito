@@ -1,3 +1,7 @@
+"""
+Bonito utils
+"""
+
 import os
 from itertools import groupby
 
@@ -18,20 +22,25 @@ def init(seed):
     assert(torch.cuda.is_available())
 
 
-# FIX this
-lk = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
+labels = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
 
 
 def stitch(target):
-    return ''.join(lk[t] for t in target if t)
+    return ''.join(labels[t] for t in target if t)
 
 
 def decode_ctc(predictions, p=0.0):
+    """
+    Argmax decoder with collapsing repeats
+    """
     path = np.argmax(predictions, axis=1)
-    return ''.join([lk[b] for b, g in groupby(path) if b])
+    return ''.join([labels[b] for b, g in groupby(path) if b])
 
 
 def load_data(basepth, chunksize=2000, shuffle=True, limit=None):
+    """
+    Load the training data
+    """
     basepth = os.path.join(basepth, '..', 'chunks', str(chunksize))
     chunks = np.load(os.path.join(basepth, "chunks.npy"))
     targets = np.load(os.path.join(basepth, "references.npy"))
@@ -52,6 +61,9 @@ def load_data(basepth, chunksize=2000, shuffle=True, limit=None):
 
 
 def load_model(dirname, device, weights=0):
+    """
+    Load a model from disk
+    """
     outdir = '/data/training/models/'
     workdir = os.path.join(outdir, dirname)
     weights = os.path.join(workdir, 'weights_%s.tar' % weights if weights else 'weights.tar')
@@ -64,7 +76,9 @@ def load_model(dirname, device, weights=0):
 
 
 def identity(seq1, seq2, score_only=True, trim_end_gaps=True, alignment=False):
-
+    """
+    Align two sequences
+    """
     if trim_end_gaps:
         needle = pairwise2.align.globalms(seq1, seq2, 5, -4, -10, -0.5, penalize_end_gaps=False, one_alignment_only=True)
 
@@ -98,4 +112,7 @@ def identity(seq1, seq2, score_only=True, trim_end_gaps=True, alignment=False):
 
 
 def palign(seq1, seq2):
+    """
+    Print the alignment between `seq1` and `seq2`
+    """
     return identity(seq1, seq2, score_only=False)

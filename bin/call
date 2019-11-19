@@ -4,12 +4,10 @@
 Bonito chunk caller
 """
 
-import os
 import time
 import torch
 import numpy as np
 from itertools import starmap
-from datetime import datetime
 from argparse import ArgumentParser
 
 from bonito.util import init, load_data, load_model

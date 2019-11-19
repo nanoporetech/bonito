@@ -1,4 +1,7 @@
-import torch
+"""
+Bonito Model template
+"""
+
 import torch.nn as nn
 
 
