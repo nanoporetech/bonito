@@ -14,7 +14,7 @@ $ python setup.py develop
 
 ## Training a model
 
-Download the training from (here)[https://nanoporetech.ent.box.com/s/zvdpnbztlc727igiv61hees4v45391ho].
+Download the training from [here](https://nanoporetech.ent.box.com/s/zvdpnbztlc727igiv61hees4v45391ho).
 
 ```
 (.venv) $ ./bin/train /data/training/example ./config/quartznet5x5.toml
