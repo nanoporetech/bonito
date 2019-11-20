@@ -41,7 +41,7 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
         target = target.to(device)
 
         # fixed sized output lengths
-        out_lengths = torch.tensor(data.shape[-1]*len(lengths), dtype=torch.int32)
+        out_lengths = torch.tensor([data.shape[-1]]*len(lengths), dtype=torch.int32)
 
         optimizer.zero_grad()
 
@@ -83,7 +83,7 @@ def test(model, device, test_loader):
             data, target = data.to(device), target.to(device)
 
             # fixed sized output lengths
-            out_lengths = torch.tensor(data.shape[-1]*len(lengths), dtype=torch.int32)
+            out_lengths = torch.tensor([data.shape[-1]]*len(lengths), dtype=torch.int32)
 
             output = model(data)
             predictions.append(torch.exp(output).cpu())

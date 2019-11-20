@@ -25,9 +25,14 @@ except ImportError: pass
 
 def main(args):
 
+    workdir = os.path.expanduser(args.training_directory)
+
+    if os.path.exists(workdir):
+        print("* error: %s exists." % workdir)
+        exit(1)
+
     init(args.seed)
     device = torch.device(args.device)
-    workdir = os.path.join(args.outdir, args.name)
 
     chunks, targets, target_lengths = load_data(limit=args.chunks)
 
@@ -61,7 +66,7 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
 
-        print(args.name, "epoch", epoch)
+        print("Train Epoch:", epoch, "[%s]" % workdir.split('/')[-1])
         train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
         test_loss, mean, median = test(model, device, test_loader)
 
@@ -79,9 +84,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("name")
+    parser.add_argument("training_directory")
     parser.add_argument("config")
-    parser.add_argument("--outdir", default='data')
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
