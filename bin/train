@@ -5,6 +5,7 @@ Bonito training.
 """
 
 import os
+import sys
 from datetime import datetime
 from argparse import ArgumentParser
 
@@ -59,7 +60,14 @@ def main(args):
     toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
-    if args.amp: model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
+
+    if args.amp:
+        try:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
+        except NameError:
+            print("* error: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
+            sys.exit()
+
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
     log_interval = np.floor(len(train_dataset) / args.batch * 0.10)
