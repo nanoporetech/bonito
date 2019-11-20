@@ -40,13 +40,14 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
         data = data.to(device)
         target = target.to(device)
 
-        olengths = torch.tensor([2000]*len(lengths), dtype=torch.int32)
+        # fixed sized output lengths
+        out_lengths = torch.tensor(data.shape[-1]*len(lengths), dtype=torch.int32)
 
         optimizer.zero_grad()
 
         output = model(data)
 
-        loss = criterion(output.transpose(1, 0), target, olengths, lengths)
+        loss = criterion(output.transpose(1, 0), target, out_lengths, lengths)
 
         if use_amp:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -80,12 +81,14 @@ def test(model, device, test_loader):
         for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
 
             data, target = data.to(device), target.to(device)
-            olengths = torch.tensor([2000]*len(lengths), dtype=torch.int32)
+
+            # fixed sized output lengths
+            out_lengths = torch.tensor(data.shape[-1]*len(lengths), dtype=torch.int32)
 
             output = model(data)
             predictions.append(torch.exp(output).cpu())
 
-            test_loss += criterion(output.transpose(1, 0), target, olengths, lengths)
+            test_loss += criterion(output.transpose(1, 0), target, out_lengths, lengths)
 
     references = list(map(stitch, test_loader.dataset.targets))
     predictions = np.concatenate(predictions)
