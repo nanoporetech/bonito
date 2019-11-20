@@ -3,47 +3,50 @@ Bonito Model template
 """
 
 import torch.nn as nn
+from torch.nn import ReLU, LeakyReLU
+from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
 
 activations = {
-    "relu": nn.ReLU,
-    "leaky_relu": nn.LeakyReLU,
+    "relu": ReLU,
+    "leaky_relu": LeakyReLU,
 }
 
 
-class Model(nn.Module):
+class Model(Module):
     """
-    Model
+    Model template for QuartzNet style architectures
+
+    https://arxiv.org/pdf/1910.10261.pdf
     """
     def __init__(self, config):
         super(Model, self).__init__()
+        feature_size = config['block'][-1]['filters']
+        alphabet_size = len(config["labels"]["labels"])
         self.encoder = Encoder(config)
-        self.decoder = Decoder(
-            config['block'][-1]['filters'],
-            len(config["labels"]["labels"])
-        )
+        self.decoder = Decoder(feature_size, alphabet_size)
 
     def forward(self, x):
         encoded = self.encoder(x)
         return self.decoder(encoded)
 
 
-class Encoder(nn.Module):
+class Encoder(Module):
     """
-    Encoder
+    Builds the model encoder
     """
     def __init__(self, config):
         super(Encoder, self).__init__()
         self.config = config
 
-        feat_in = self.config['input']['features']
+        features = self.config['input']['features']
         activation = activations[self.config['encoder']['activation']]()
         encoder_layers = []
 
         for layer in self.config['block']:
             encoder_layers.append(
                 Block(
-                    feat_in, layer['filters'], activation,
+                    features, layer['filters'], activation,
                     repeat=layer['repeat'], kernel_size=layer['kernel'],
                     stride=layer['stride'], dilation=layer['dilation'],
                     dropout=layer['dropout'], residual=layer['residual'],
@@ -51,15 +54,15 @@ class Encoder(nn.Module):
                 )
             )
 
-            feat_in = layer['filters']
+            features = layer['filters']
 
-        self.encoder = nn.Sequential(*encoder_layers)
+        self.encoder = Sequential(*encoder_layers)
 
     def forward(self, x):
         return self.encoder([x])
 
 
-class TCSConv1d(nn.Module):
+class TCSConv1d(Module):
     """
     Time-Channel Separable 1D Convolution
     """
@@ -69,17 +72,17 @@ class TCSConv1d(nn.Module):
         self.separable = separable
 
         if separable:
-            self.depthwise = nn.Conv1d(
+            self.depthwise = Conv1d(
                 in_channels, in_channels, kernel_size=kernel_size, stride=stride,
                 padding=padding, dilation=dilation, bias=bias, groups=in_channels
             )
 
-            self.pointwise = nn.Conv1d(
+            self.pointwise = Conv1d(
                 in_channels, out_channels, kernel_size=1, stride=stride,
                 dilation=dilation, bias=bias, padding=0
             )
         else:
-            self.conv = nn.Conv1d(
+            self.conv = Conv1d(
                 in_channels, out_channels, kernel_size=kernel_size,
                 stride=stride, padding=padding, dilation=dilation, bias=bias
             )
@@ -93,16 +96,16 @@ class TCSConv1d(nn.Module):
         return x
 
 
-class Block(nn.Module):
+class Block(Module):
     """
-    TCSConv, BN, ReLu
+    TCSConv, Batch Normalisation, Activation, Dropout
     """
     def __init__(self, in_channels, out_channels, activation, repeat=5, kernel_size=1, stride=1, dilation=1, dropout=0.0, residual=False, separable=False):
 
         super(Block, self).__init__()
 
         self.use_res = residual
-        self.conv = nn.ModuleList()
+        self.conv = ModuleList()
 
         _in_channels = in_channels
         padding = self.get_padding(kernel_size[0], stride[0], dilation[0])
@@ -110,7 +113,7 @@ class Block(nn.Module):
         # add the first n - 1 convolutions + activation
         for _ in range(repeat - 1):
             self.conv.extend(
-                self.get_conv(
+                self.get_tcs(
                     _in_channels, out_channels, kernel_size=kernel_size,
                     stride=stride, dilation=dilation,
                     padding=padding, separable=separable
@@ -120,9 +123,9 @@ class Block(nn.Module):
             self.conv.extend(self.get_activation(activation, dropout))
             _in_channels = out_channels
 
-        # add the last conv and bn
+        # add the last conv and batch norm
         self.conv.extend(
-            self.get_conv(
+            self.get_tcs(
                 _in_channels, out_channels,
                 kernel_size=kernel_size,
                 stride=stride, dilation=dilation,
@@ -130,25 +133,29 @@ class Block(nn.Module):
             )
         )
 
+        # add the residual connection
         if self.use_res:
-            self.residual = nn.Sequential(*self.get_conv(in_channels, out_channels))
+            self.residual = Sequential(*self.get_tcs(in_channels, out_channels))
 
-        self.activation = nn.Sequential(*self.get_activation(activation, dropout))
+        # add the activation and dropout
+        self.activation = Sequential(*self.get_activation(activation, dropout))
 
     def get_activation(self, activation, dropout):
-        return activation, nn.Dropout(p=dropout)
+        return activation, Dropout(p=dropout)
 
     def get_padding(self, kernel_size, stride, dilation):
         if stride > 1 and dilation > 1:
-            raise ValueError("Only stride or dilation may be greater than 1")
+            raise ValueError("Dilation and stride can not both be greater than 1")
         return (kernel_size // 2) * dilation
 
-    def get_conv(self, in_channels, out_channels, kernel_size=1, stride=1, dilation=1, padding=0, bias=False, separable=False):
+    def get_tcs(self, in_channels, out_channels, kernel_size=1, stride=1, dilation=1, padding=0, bias=False, separable=False):
         return [
             TCSConv1d(
-                in_channels, out_channels, kernel_size, stride=stride, dilation=dilation, padding=padding, bias=bias, separable=separable
+                in_channels, out_channels, kernel_size,
+                stride=stride, dilation=dilation, padding=padding,
+                bias=bias, separable=separable
             ),
-            nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.1)
+            BatchNorm1d(out_channels, eps=1e-3, momentum=0.1)
         ]
 
     def forward(self, x):
@@ -160,13 +167,13 @@ class Block(nn.Module):
         return [self.activation(_x)]
 
 
-class Decoder(nn.Module):
+class Decoder(Module):
     """
     Decoder
     """
     def __init__(self, features, classes):
         super(Decoder, self).__init__()        
-        self.layers = nn.Sequential(nn.Conv1d(features, classes, kernel_size=1, bias=True))
+        self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
 
     def forward(self, x):
         x = self.layers(x[-1])

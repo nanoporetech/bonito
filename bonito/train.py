@@ -39,12 +39,10 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
 
         data = data.to(device)
         target = target.to(device)
-
         # fixed sized output lengths
         out_lengths = torch.tensor([data.shape[-1]]*len(lengths), dtype=torch.int32)
 
         optimizer.zero_grad()
-
         output = model(data)
 
         loss = criterion(output.transpose(1, 0), target, out_lengths, lengths)

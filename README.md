@@ -31,8 +31,6 @@ $ python setup.py develop
 (venv3) $ ./bin/train /data/model-dir config/quartznet5x5.toml --amp --batch 64 --chunks 20000
 ```
 
-The default configuration is for the QuartzNet 5x5 architecture.
-
 Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
 ## Scripts
