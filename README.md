@@ -1,6 +1,13 @@
 # Bonito
 
-A convolutional basecaller based off QuartzNet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
+A convolutional basecaller inspired by QuartzNet.
+
+## Features
+
+ - Raw signal input
+ - 5 state output `{BLANK, A, C, G, T}`
+ - CTC training
+ - Small Python codebase
 
 ## Quickstart
 
@@ -34,3 +41,11 @@ Automatic mixed precision can be use for speeding up training by passing the `--
 
  - [Sequence Modeling With CTC](https://distill.pub/2017/ctc/)
  - [Quartznet: Deep Automatic Speech Recognition With 1D Time-Channel Separable Convolutions](https://arxiv.org/pdf/1910.10261.pdf)
+
+### Licence and Copyright
+(c) 2019 Oxford Nanopore Technologies Ltd.
+
+Bonito is distributed under the terms of the Oxford Nanopore
+Technologies, Ltd.  Public License, v. 1.0.  If a copy of the License
+was not distributed with this file, You can obtain one at
+http://nanoporetech.com
