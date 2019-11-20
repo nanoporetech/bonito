@@ -14,9 +14,9 @@ A convolutional basecaller inspired by QuartzNet.
 ```bash
 $ python3 -m venv venv3
 $ source venv3/bin/activate
-$ pip install --upgrade pip
-$ pip install -r requirements.txt
-$ python setup.py develop
+(venv3) $ pip install --upgrade pip
+(venv3) $ pip install -r requirements.txt
+(venv3) $ python setup.py develop
 ```
 
 ## Training a model
