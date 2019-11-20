@@ -29,7 +29,7 @@ def main(args):
     device = torch.device(args.device)
     workdir = os.path.join(args.outdir, args.name)
 
-    chunks, targets, target_lengths = load_data(args.outdir, chunksize=args.chunksize, limit=args.chunks)
+    chunks, targets, target_lengths = load_data(limit=args.chunks)
 
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
     train_dataset = ReadDataSet(chunks[:split], targets[:split], target_lengths[:split])
@@ -86,7 +86,6 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
     parser.add_argument("--batch", default=32, type=int)
-    parser.add_argument("--chunksize", default=2000, type=int)
     parser.add_argument("--chunks", default=20000, type=int)
     parser.add_argument("--validation_split", default=0.97, type=float)
     parser.add_argument("--seed", default=9, type=int)

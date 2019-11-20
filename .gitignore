@@ -4,4 +4,6 @@
 venv3/
 *.lprof
 *.egg-info/
-data/
+bonito/data/*.npy
+bonito/data/*.zip
+

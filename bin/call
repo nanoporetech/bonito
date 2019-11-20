@@ -19,7 +19,7 @@ def main(args):
     init(args.seed)
 
     print("* loading data")
-    chunks, targets, target_lengths = load_data(args.outdir, chunksize=args.chunksize, limit=args.chunks, shuffle=True)
+    chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=args.shuffle)
 
     for w in [int(i) for i in args.weights.split(',')]:
     
@@ -62,6 +62,5 @@ if __name__ == "__main__":
     parser.add_argument("--weights", default=0, type=str)
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--batchsize", default=100, type=int)
-    parser.add_argument("--chunksize", default=2000, type=int)
-    parser.add_argument("--outdir", default='/data/training/models/')    
+    parser.add_argument("--shuffle", action="store_true", default=True)
     main(parser.parse_args())

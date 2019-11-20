@@ -10,6 +10,7 @@ import random
 import numpy as np
 from Bio import pairwise2
 
+__dir__ = os.path.dirname(__file__)
 labels = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
 
 
@@ -43,25 +44,25 @@ def decode_ctc(predictions, p=0.0):
     return ''.join([labels[b] for b, g in groupby(path) if b])
 
 
-def load_data(path, chunksize=2000, shuffle=True, limit=None):
+def load_data(shuffle=False, limit=None):
     """
     Load the training data
     """
-    chunks = np.load(os.path.join(path, "chunks.npy"))
-    targets = np.load(os.path.join(path, "references.npy"))
-    target_lengths = np.load(os.path.join(path, "reference_lengths.npy"))
-    
+    chunks = np.load(os.path.join(__dir__, "data", "chunks.npy"))
+    targets = np.load(os.path.join(__dir__, "data", "references.npy"))
+    target_lengths = np.load(os.path.join(__dir__, "data", "reference_lengths.npy"))
+
     if limit:
         chunks = chunks[:limit]
         targets = targets[:limit]
         target_lengths = target_lengths[:limit]
-    
+
     if shuffle:
         shuf = np.random.permutation(chunks.shape[0])
         chunks = chunks[shuf]
         targets = targets[shuf]
         target_lengths = target_lengths[shuf]
-        
+
     return chunks, targets, target_lengths
 
 

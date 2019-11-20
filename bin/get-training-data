@@ -1,0 +1,6 @@
+#!/bin/bash
+
+url="https://www.dropbox.com/sh/7l5w1287af5ampo/AABYGqaot3qSoAs-rWzu8OCxa?dl=0"
+zipfile="bonito/data/training-data.zip"
+wget --max-redirect=20 -O "$zipfile" "$url"
+unzip "$zipfile" -d bonito/data/ && rm "$zipfile"
