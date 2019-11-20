@@ -10,9 +10,15 @@ import random
 import numpy as np
 from Bio import pairwise2
 
+labels = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
+
 
 def init(seed):
-    # https://pytorch.org/docs/stable/notes/randomness.html
+    """
+    Initialise random libs and setup cudnn
+
+    https://pytorch.org/docs/stable/notes/randomness.html
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -22,11 +28,11 @@ def init(seed):
     assert(torch.cuda.is_available())
 
 
-labels = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
-
-
-def stitch(target):
-    return ''.join(labels[t] for t in target if t)
+def stitch(encoded):
+    """
+    Convert a integer encode reference into a string and remove blanks
+    """
+    return ''.join(labels[e] for e in encoded if e)
 
 
 def decode_ctc(predictions, p=0.0):
@@ -37,14 +43,13 @@ def decode_ctc(predictions, p=0.0):
     return ''.join([labels[b] for b, g in groupby(path) if b])
 
 
-def load_data(basepth, chunksize=2000, shuffle=True, limit=None):
+def load_data(path, chunksize=2000, shuffle=True, limit=None):
     """
     Load the training data
     """
-    basepth = os.path.join(basepth, '..', 'chunks', str(chunksize))
-    chunks = np.load(os.path.join(basepth, "chunks.npy"))
-    targets = np.load(os.path.join(basepth, "references.npy"))
-    target_lengths = np.load(os.path.join(basepth, "reference_lengths.npy"))
+    chunks = np.load(os.path.join(path, "chunks.npy"))
+    targets = np.load(os.path.join(path, "references.npy"))
+    target_lengths = np.load(os.path.join(path, "reference_lengths.npy"))
     
     if limit:
         chunks = chunks[:limit]
