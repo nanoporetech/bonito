@@ -22,7 +22,7 @@ $ python setup.py develop
 ## Training a model
 
 ```bash
-(venv3) $ # download the training data and training a model with the default settings
+(venv3) $ # download the training data and train a model with the default settings
 (venv3) $ ./bin/get-training-data
 (venv3) $ ./bin/train /data/model-dir ./config/quartznet5x5.toml
 (venv3) $
