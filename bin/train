@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("name")
     parser.add_argument("config")
-    parser.add_argument("--outdir", default='/data/training/models/')
+    parser.add_argument("--outdir", default='training')
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
