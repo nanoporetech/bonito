@@ -1,6 +1,6 @@
 # Bonito
 
-A convolutional basecaller inspired by Jasper/Quartznet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
+A convolutional basecaller based of QuartzNet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
 
 ## Quickstart
 
@@ -34,5 +34,4 @@ Automatic mixed precision can be use for speeding up training by passing the `--
 ### References
 
  - [Sequence Modeling With CTC](https://distill.pub/2017/ctc/)
- - [Jasper: An End-to-End Convolutional Neural Acoustic Model](https://arxiv.org/pdf/1904.03288.pdf)
  - [Quartznet: Deep Automatic Speech Recognition With 1D Time-Channel Separable Convolutions](https://arxiv.org/pdf/1910.10261.pdf)

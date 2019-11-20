@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+
+"""
+Convert a chunkify training file
+"""
+
+import os
+import h5py
+import numpy as np
+from bisect import bisect_left
+from argparse import ArgumentParser
+from itertools import islice, chain
+
+
+def lengths(tfile):
+    """ return the sample lengths for each read in the training file """
+    with h5py.File(tfile) as training_file:
+        for read_id in training_file['Reads']:
+            yield len(training_file['Reads/%s' % read_id]['Dacs']) - training_file['Reads/%s' % read_id]['Ref_to_signal'][0]
+
+
+def scale(read, samples, normalise=True):
+    """ scale and normalise a read """
+    scaling = read.attrs['range'] / read.attrs['digitisation']
+    scaled = (scaling * (samples + read.attrs['offset'])).astype(np.float32)
+    if normalise:
+        return (scaled - read.attrs['shift_frompA']) / read.attrs['scale_frompA']
+    return scaled
+
+
+def align(samples, pointers):
+    """ align to the start of the reference """
+    return samples[pointers[0]:], pointers - pointers[0]
+
+
+def get_reads(tfile):
+    """ get each dataset per read """
+    with h5py.File(tfile) as training_file:
+        for read_id in training_file['Reads']:
+
+            read = training_file['Reads/%s' % read_id]
+
+            reference = read['Reference'][:]
+            pointers = read['Ref_to_signal'][:]
+            samples = read['Dacs'][:]
+
+            samples = scale(read, samples)
+            samples, pointers = align(samples, pointers)
+
+            yield read_id, samples, reference, pointers
+
+
+def main(args):
+
+    # args.max_reads = 6000000
+    # args.chunksize = 2000
+    # args.file = "/data/training/remapped_v4.1.0.hdf5"
+    # args.outdir = '/data/training/chunks/%s' % args.chunksize
+
+    # avg speed at least 200 bps 
+    cutoff = args.chunksize / 20  
+    
+    total_chunks = np.int32(sum([(s - (s % args.chunksize)) / args.chunksize for s in islice(lengths(args.file), args.max_reads)]))
+
+    print("Samples of [chunks, samples] needs %.2f GB" % (total_chunks * args.chunksize / 1e9 * 4))
+
+    chunks = np.zeros((total_chunks, args.chunksize), dtype=np.float32)
+    refs = list()
+
+    os.makedirs(args.outdir, exist_ok=True)
+
+    big_gap = 0
+    min_bases = 0
+    min_cover = 0
+    chunk_idx = 0    
+    chunk_count = 0
+
+    for read_id, samples, reference, pointers in get_reads(args.file):
+
+        # calculate how many chunks in this read
+        duration = len(samples)
+        num_chunks = np.floor(duration / args.chunksize).astype(np.int32)
+
+        for chunk in range(0, num_chunks):
+
+            chunk_count += 1
+
+            # squiggle space
+            c_start = chunk * args.chunksize
+            c_end = (chunk + 1) * args.chunksize
+
+            # reference space 
+            ref_start = max(0, bisect_left(pointers, c_start) - 1)
+            ref_end = min(bisect_left(pointers, c_end), duration)
+
+            # not enough bases
+            if ref_end - ref_start < cutoff:
+                min_bases += 1
+                continue
+
+            # not enough coverage
+            if np.abs(c_start - pointers[ref_start]) >= args.max_diff or np.abs(c_end - pointers[ref_end]) >= args.max_diff:
+                min_cover += 1
+                continue
+
+            # numple of samples difference between each base
+            sdiff = np.diff(pointers[ref_start:ref_end + 1])
+
+            # expand diffs out into sample space so adiff is len == chunksize
+            adiff = np.fromiter((chain.from_iterable([v] * v for v in sdiff)), dtype=np.int16)
+
+            # max gap too large
+            if np.max(adiff >= args.max_diff):
+                big_gap += 1
+                continue
+
+            refs.append(reference[ref_start:ref_end])
+
+            chunks[chunk_idx, :] = samples[c_start:c_end]
+            chunk_idx += 1
+
+        skipped = chunk_count - chunk_idx
+        percent = (skipped / chunk_count * 100) if skipped else 0
+
+        print("\n\nSkipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
+        print("Reason for skipping:")
+        print("  - minimum number of bases       ", min_bases)
+        print("  - minimum coverage over chunk   ", min_cover)
+        print("  - large difference between bases", big_gap)
+        print()
+
+        chunks = np.delete(chunks, np.s_[chunk_idx:], axis=0)
+        np.save(os.path.join(args.outdir, "chunks.npy"), chunks)
+
+        labels = {'N': 0, 'A': 1, 'C': 2, 'G': 3, 'T': 4}        
+        max_ref_length = max(len(r) for r in refs)
+
+        def ref_encode(seq, max_size=500):
+            e = np.zeros(max_size, dtype=np.int32)
+            for i, char in enumerate(seq):
+                e[i] = labels[char]
+            return e
+
+        targets = np.array([ref_encode(r, max_size=max_ref_length) for r in refs], dtype=np.uint8)
+        target_lengths = np.array([len(r) for r in refs], dtype=np.uint16)
+
+        np.save(os.path.join(args.outdir, "references.npy"), targets)
+        np.save(os.path.join(args.outdir, "reference_lengths.npy"), target_lengths)
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("file")
+    parser.add_argument("outdir")
+    parser.add_argument("--chunksize", default=2000, type=int)
+    parser.add_argument("--max-chunks", default=1e6, type=int)
+    parser.add_argument(
+        "--max-diff", default=80, type=int, 
+        help="largest differnce between between samples without label"
+    )
+    main(parser.parse_args())
