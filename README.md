@@ -23,7 +23,9 @@ $ python setup.py develop
 
 ```
 (venv3) $ ./bin/get-training-data
-(venv3) $ ./bin/train /data/training/example ./config/quartznet5x5.toml
+(venv3) $ ./bin/train /data/model-dir ./config/quartznet5x5.toml
+(venv3) $ # train on gpu 1, use mixed precision, larger batch size and only 20,000 chunks
+(venv3) $ CUDA_VISIBLE_DEVICES=1 ./bin/train /data/model-dir config/quartznet5x5.toml --amp --batch 64 --chunks 20000
 ```
 
 The default configuration is for the QuartzNet 5x5 architecture.
