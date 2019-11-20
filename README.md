@@ -1,6 +1,6 @@
 # Bonito
 
-A convolutional basecaller based of QuartzNet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
+A convolutional basecaller based off QuartzNet using a simple 5 state encoding `{BLANK, A, C, G, T}` and trained with CTC.
 
 ## Quickstart
 

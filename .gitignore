@@ -4,3 +4,4 @@
 venv3/
 *.lprof
 *.egg-info/
+data/

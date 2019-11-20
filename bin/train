@@ -61,6 +61,7 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
 
+        print(args.name, "epoch", epoch)
         train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
         test_loss, mean, median = test(model, device, test_loader)
 
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("name")
     parser.add_argument("config")
-    parser.add_argument("--outdir", default='training')
+    parser.add_argument("--outdir", default='data')
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
