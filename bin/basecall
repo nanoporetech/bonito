@@ -99,7 +99,7 @@ def stitch(predictions, overlap):
 def main(args):
 
     sys.stderr.write("> loading model\n")
-    model = load_model(args.model, args.device, weights=args.weights)
+    model = load_model(args.model_directory, args.device, weights=args.weights)
 
     num_reads = 0
     num_chunks = 0
@@ -108,7 +108,7 @@ def main(args):
     sys.stderr.write("> calling\n")
 
     # TODO: implement multi read batching, don't just one read at a time to the GPU!
-    for i, fast5 in enumerate(glob("%s/*fast5" % args.directory), start=1):
+    for i, fast5 in enumerate(glob("%s/*fast5" % args.reads_directory), start=1):
 
         for read_id, raw_data in get_raw_data(fast5):
 
@@ -153,9 +153,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("directory")
-    parser.add_argument("model")
-    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("reads-directory")
+    parser.add_argument("model-directory")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--batch", default=500, type=int)
     parser.add_argument("--chunks", default=500, type=int)

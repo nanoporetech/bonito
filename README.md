@@ -4,10 +4,10 @@ A convolutional basecaller inspired by QuartzNet.
 
 ## Features
 
- - Raw signal input
- - 5 state output `{BLANK, A, C, G, T}`
- - CTC training
- - Small Python codebase
+ - Raw signal input.
+ - Simple 5 state output `{BLANK, A, C, G, T}`.
+ - CTC training.
+ - Small Python codebase.
 
 ## Quickstart
 
@@ -28,7 +28,7 @@ $ python setup.py develop
 
 The default configuration is for the QuartzNet 5x5 architecture.
 
-Automatic mixed precision can be use for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
+Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
 ## Scripts
 

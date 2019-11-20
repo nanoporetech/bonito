@@ -22,16 +22,16 @@ def main(args):
     chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=args.shuffle)
 
     for w in [int(i) for i in args.weights.split(',')]:
-    
+
         print("* loading model %s" % w)
-        model = load_model(args.name, args.device, weights=w)
-    
+        model = load_model(args.model_directory, args.device, weights=w)
+
         print("* calling")
-    
+
         p = []
 
         t0 = time.perf_counter()
-    
+
         with torch.no_grad():
             for i in range(0, int(args.chunks / args.batchsize)):
                 tchunks = torch.tensor(np.expand_dims(chunks[i*args.batchsize:(i+1)*args.batchsize], axis=1))
@@ -40,25 +40,25 @@ def main(args):
                 p.append(predictions)
 
         predictions = np.concatenate(p)
-        
+
         t1 = time.perf_counter()
-        
-        references = list(map(stitch, targets))            
+
+        references = list(map(stitch, targets))
         sequences = list(map(decode_ctc, predictions))
         identities = list(starmap(identity, zip(references, sequences)))
-        
+
         print("* time %.3f" % (t1 - t0))
         print("* mean %.3f" % np.mean(identities))
         print("* median %.3f" % np.median(identities))
 
         palign(references[0], sequences[0])
-        
-    
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("name")
-    parser.add_argument("device")
-    parser.add_argument("--seed", default=9, type=int)    
+    parser.add_argument("model-directory")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default=0, type=str)
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--batchsize", default=100, type=int)

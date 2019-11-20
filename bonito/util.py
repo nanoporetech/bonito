@@ -2,7 +2,9 @@
 Bonito utils
 """
 
+import re
 import os
+from glob import glob
 from itertools import groupby
 
 import torch
@@ -66,14 +68,16 @@ def load_data(shuffle=False, limit=None):
     return chunks, targets, target_lengths
 
 
-def load_model(dirname, device, weights=0):
+def load_model(dirname, device, weights=None):
     """
     Load a model from disk
     """
-    outdir = '/data/training/models/'
-    workdir = os.path.join(outdir, dirname)
-    weights = os.path.join(workdir, 'weights_%s.tar' % weights if weights else 'weights.tar')
-    modelfile = os.path.join(workdir, 'model.py')
+    if not weights: # take the latest checkpoint
+        weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+        weights = max([int(re.sub("[^0-9]+", "", w)) for w in weight_files])
+        print("loaded cp", weights)
+    weights = os.path.join(dirname, 'weights_%s.tar' % weights)
+    modelfile = os.path.join(dirname, 'model.py')
     device = torch.device(device)
     model = torch.load(modelfile, map_location=device)
     model.load_state_dict(torch.load(weights, map_location=device))
