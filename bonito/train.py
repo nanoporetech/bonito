@@ -35,17 +35,16 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
     model.train()
     for batch_idx, (data, target, lengths) in enumerate(train_loader, start=1):
 
-        chunks += data.shape[0]
+        optimizer.zero_grad()
 
+        chunks += data.shape[0]
         data = data.to(device)
         target = target.to(device)
-        # fixed sized output lengths
-        out_lengths = torch.tensor([data.shape[-1]]*len(lengths), dtype=torch.int32)
 
-        optimizer.zero_grad()
         output = model(data)
-
-        loss = criterion(output.transpose(1, 0), target, out_lengths, lengths)
+        # fixed sized output lengths
+        out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
+        loss = criterion(output.transpose(0, 1), target, out_lengths, lengths)
 
         if use_amp:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -79,13 +78,11 @@ def test(model, device, test_loader):
         for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
 
             data, target = data.to(device), target.to(device)
-
-            # fixed sized output lengths
-            out_lengths = torch.tensor([data.shape[-1]]*len(lengths), dtype=torch.int32)
-
             output = model(data)
             predictions.append(torch.exp(output).cpu())
 
+            # fixed sized output lengths
+            out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
             test_loss += criterion(output.transpose(1, 0), target, out_lengths, lengths)
 
     references = list(map(stitch, test_loader.dataset.targets))
