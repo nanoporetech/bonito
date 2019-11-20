@@ -35,10 +35,10 @@ Automatic mixed precision can be used for speeding up training by passing the `-
 
 ## Scripts
 
- - `./bin/view` view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `./bin/view-model` view a model architecture for a given `.toml` file and the number of parameters in the network.
  - `./bin/train` train a bonito model.
- - `./bin/call` evaluate a model performance on chunk basis.
- - `./bin/basecall` full basecaller `.fast5` in, `.fasta` out.
+ - `./bin/call` evaluate a model performance on a chunk basis.
+ - `./bin/basecall` full basecaller *(`.fast5` -> `.fasta`)*
 
 ### References
 
