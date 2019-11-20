@@ -66,7 +66,7 @@ def main(args):
             model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
         except NameError:
             print("* error: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
-            sys.exit()
+            sys.exit(1)
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
