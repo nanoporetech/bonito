@@ -74,8 +74,8 @@ def load_model(dirname, device, weights=None):
     """
     if not weights: # take the latest checkpoint
         weight_files = glob(os.path.join(dirname, "weights_*.tar"))
-        weights = max([int(re.sub("[^0-9]+", "", w)) for w in weight_files])
-        print("loaded cp", weights)
+        weights = max([int(re.sub(".*([0-9]+).*", "\\1", w)) for w in weight_files])
+
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
     modelfile = os.path.join(dirname, 'model.py')
     device = torch.device(device)
