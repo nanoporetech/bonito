@@ -1,3 +1,4 @@
 biopython==1.75
 toml==0.10.0
 torch==1.2.0
+ont-fast5-api==2.0.0

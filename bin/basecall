@@ -10,7 +10,7 @@ from glob import glob
 from textwrap import wrap
 from argparse import ArgumentParser
 
-from bonito.utils import load_model, decode_ctc
+from bonito.util import load_model, decode_ctc
 
 import torch
 import numpy as np
