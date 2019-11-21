@@ -173,7 +173,7 @@ class Decoder(Module):
     """
     def __init__(self, features, classes):
         super(Decoder, self).__init__()        
-        self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
+        self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True, dilation=2))
 
     def forward(self, x):
         x = self.layers(x[-1])
