@@ -91,7 +91,7 @@ def accuracy(seq1, seq2):
     """
     Calculate the balanced accuracy between `seq` and `seq2`
     """
-    alignment = parasail.sg_trace_scan_16(seq1, seq2, 10, 1, parasail.blosum62)
+    alignment = parasail.sg_trace_scan_16(seq1, seq2, 5, 4, parasail.dnafull)
 
     counts = defaultdict(int)
     cigar = alignment.cigar.decode.decode()
@@ -99,7 +99,7 @@ def accuracy(seq1, seq2):
     for c in re.findall("[0-9]+[=XID]", cigar):
         counts[c[-1]] += int(c[:-1])
 
-    accuracy = (counts['='] - counts['I']) / (counts['='] + counts['M'] + counts['D'])
+    accuracy = (counts['='] - counts['I']) / (counts['='] + counts['X'] + counts['D'])
     return accuracy * 100
 
 
@@ -107,7 +107,8 @@ def print_alignment(seq1, seq2):
     """
     Print the alignment between `seq1` and `seq2`
     """
-    alignment = parasail.sg_trace_scan_16(seq1, seq2, 10, 1, parasail.blosum62)
+    alignment = parasail.sg_trace_scan_16(seq1, seq2, 5, 4, parasail.dnafull)
+
     print(alignment.traceback.query)
     print(alignment.traceback.comp)
     print(alignment.traceback.ref)

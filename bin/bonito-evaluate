@@ -11,7 +11,7 @@ from itertools import starmap
 from argparse import ArgumentParser
 
 from bonito.util import init, load_data, load_model
-from bonito.util import decode_ctc, decode_ref, print_alignment, accuracy
+from bonito.util import decode_ctc, decode_ref, accuracy
 
 
 def main(args):
@@ -19,7 +19,7 @@ def main(args):
     init(args.seed)
 
     print("* loading data")
-    chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=args.shuffle)
+    chunks, targets, _ = load_data(limit=args.chunks, shuffle=args.shuffle)
 
     for w in [int(i) for i in args.weights.split(',')]:
 
@@ -51,7 +51,6 @@ def main(args):
         print("* median    %.2f%%" % np.median(accuracies))
         print("* time      %.2f" % duration)
         print("* samples/s %.2E" % (args.chunks * chunks.shape[1] / duration))
-
 
 
 if __name__ == "__main__":
