@@ -1,14 +1,12 @@
-#!/usr/bin/env python
-
 """
 Bonito Basecaller
 """
 
+import argparse
 import sys
 import time
 from glob import glob
 from textwrap import wrap
-from argparse import ArgumentParser
 
 from bonito.util import load_model, decode_ctc
 
@@ -151,8 +149,10 @@ def main(args):
     sys.stderr.write("> done\n")
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
     parser.add_argument("reads-directory")
     parser.add_argument("model-directory")
     parser.add_argument("--device", default="cuda")
@@ -161,4 +161,4 @@ if __name__ == "__main__":
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--overlap", default=600, type=int)
     parser.add_argument("--chunksize", default=2000, type=int)
-    main(parser.parse_args())
+    return parser

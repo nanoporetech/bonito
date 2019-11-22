@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
 """
 Convert a chunkify training file
 """
 
+import argparse
 import os
 import h5py
 import numpy as np
@@ -58,8 +57,8 @@ def main(args):
     # args.outdir = '/data/training/chunks/%s' % args.chunksize
 
     # avg speed at least 200 bps 
-    cutoff = args.chunksize / 20  
-    
+    cutoff = args.chunksize / 20
+
     total_chunks = np.int32(sum([(s - (s % args.chunksize)) / args.chunksize for s in islice(lengths(args.file), args.max_reads)]))
 
     print("Samples of [chunks, samples] needs %.2f GB" % (total_chunks * args.chunksize / 1e9 * 4))
@@ -72,7 +71,7 @@ def main(args):
     big_gap = 0
     min_bases = 0
     min_cover = 0
-    chunk_idx = 0    
+    chunk_idx = 0
     chunk_count = 0
     labels = ['N', 'A', 'C', 'G', 'T']
 
@@ -148,14 +147,16 @@ def main(args):
         np.save(os.path.join(args.outdir, "reference_lengths.npy"), target_lengths)
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
     parser.add_argument("file")
     parser.add_argument("outdir")
     parser.add_argument("--chunksize", default=2000, type=int)
     parser.add_argument("--max-chunks", default=1e6, type=int)
     parser.add_argument(
-        "--max-diff", default=80, type=int, 
+        "--max-diff", default=80, type=int,
         help="largest differnce between between samples without label"
     )
-    main(parser.parse_args())
+    return parser

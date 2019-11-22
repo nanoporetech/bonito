@@ -4,9 +4,9 @@
 Bonito training.
 """
 
+import argparse
 import os
 from datetime import datetime
-from argparse import ArgumentParser
 
 from bonito.model import Model
 from bonito.util import load_data, init
@@ -89,8 +89,10 @@ def main(args):
         if schedular: schedular.step()
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
     parser.add_argument("training_directory")
     parser.add_argument("config")
     parser.add_argument("--device", default="cuda")
@@ -102,4 +104,4 @@ if __name__ == "__main__":
     parser.add_argument("--validation_split", default=0.99, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
-    main(parser.parse_args())
+    return parser
