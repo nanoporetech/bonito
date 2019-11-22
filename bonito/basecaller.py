@@ -153,8 +153,8 @@ def argparser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         add_help=False)
-    parser.add_argument("reads-directory")
-    parser.add_argument("model-directory")
+    parser.add_argument("reads_directory")
+    parser.add_argument("model_directory")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--batch", default=500, type=int)
