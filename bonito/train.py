@@ -1,7 +1,11 @@
+"""
+Bonito train
+"""
+
 import time
 from itertools import starmap
 
-from bonito.util import decode_ctc, decode_ref, accuracy, print_alignment
+from bonito.util import decode_ctc, decode_ref, accuracy
 
 import numpy as np
 import torch
@@ -55,15 +59,16 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
         optimizer.step()
 
         if batch_idx % log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, chunks, len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
+            print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
+                chunks, len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.item())
+            )
 
-    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-        epoch, chunks, len(train_loader.dataset),
-        100. * batch_idx / len(train_loader),
-        loss.item()))
-    print('Train Epoch: %s [%.2f Seconds]' % (epoch, time.perf_counter() - t0))
+    print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
+        chunks, len(train_loader.dataset),
+        100. * batch_idx / len(train_loader), loss.item())
+    )
+    print('[%.2f Seconds]' % (time.perf_counter() - t0))
 
     return loss.item(), time.perf_counter() - t0
 
@@ -89,13 +94,17 @@ def test(model, device, test_loader):
     predictions = np.concatenate(predictions)
     sequences = list(map(decode_ctc, predictions))
 
-    accuracies = list(starmap(accuracy, zip(references, sequences)))
+    if all(map(len, sequences)):
+        accuracies = list(starmap(accuracy, zip(references, sequences)))
+    else:
+        accuracies = [0]
+
     mean = np.mean(accuracies)
     median = np.median(accuracies)
 
-    print_alignment(references[0], sequences[0])
-
-    print("* mean %.3f" % mean)
-    print("* median %.3f" % median)
-    print('\nTest set: Average loss: {:.4f}\n'.format(test_loss / batch_idx))
+    print()
+    print('Validation Loss:              %.4f' % (test_loss / batch_idx))
+    print("Valdiation Accuracy (mean):   %.3f%%" % max(0, mean))
+    print("Validation Accuracy (median): %.3f%%" % max(0, median))
+    print()
     return test_loss.item(), mean, median

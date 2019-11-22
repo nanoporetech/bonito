@@ -27,7 +27,7 @@ def main(args):
 
     workdir = os.path.expanduser(args.training_directory)
 
-    if os.path.exists(workdir):
+    if os.path.exists(workdir) and not args.force:
         print("* error: %s exists." % workdir)
         exit(1)
 
@@ -73,7 +73,7 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
 
-        print("Train Epoch:", epoch, "[%s]" % workdir.split('/')[-1])
+        print("[Epoch %s]:" % epoch, workdir.split('/')[-1])
         train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
         test_loss, mean, median = test(model, device, test_loader)
 
@@ -84,7 +84,7 @@ def main(args):
             now = datetime.today()
             logfile.write("%s Train Epoch %s: Loss %.2f - %.2f seconds\n" % (now, epoch, train_loss, train_time))
             logfile.write("%s Validation Loss %.2f\n" % (now, test_loss))
-            logfile.write("%s Inference Accuracy %.3f %.3f \n\n" % (now, mean, median))
+            logfile.write("%s Inference Accuracy %.2f %.3f \n\n" % (now, mean, median))
 
         if schedular: schedular.step()
 
@@ -101,4 +101,5 @@ if __name__ == "__main__":
     parser.add_argument("--chunks", default=1000000, type=int)
     parser.add_argument("--validation_split", default=0.99, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("-f", "--force", action="store_true", default=False)
     main(parser.parse_args())
