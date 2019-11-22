@@ -87,27 +87,32 @@ def load_model(dirname, device, weights=None):
     return model
 
 
-def accuracy(seq1, seq2):
+def accuracy(ref, seq, balanced=False):
     """
-    Calculate the balanced accuracy between `seq` and `seq2`
+    Calculate the accuracy between `ref` and `seq`
     """
-    alignment = parasail.sg_trace_scan_16(seq1, seq2, 5, 4, parasail.dnafull)
-
+    alignment = parasail.sw_trace_striped_32(ref, seq, 8, 4, parasail.dnafull)
     counts = defaultdict(int)
     cigar = alignment.cigar.decode.decode()
 
     for c in re.findall("[0-9]+[=XID]", cigar):
         counts[c[-1]] += int(c[:-1])
 
-    accuracy = (counts['='] - counts['I']) / (counts['='] + counts['X'] + counts['D'])
+    if balanced:
+        accuracy = (counts['='] - counts['I']) / (counts['='] + counts['X'] + counts['D'])
+    else:
+        accuracy = counts['='] / (counts['='] + counts['I'] + counts['X'] + counts['D'])
     return accuracy * 100
 
 
-def print_alignment(seq1, seq2):
+def print_alignment(ref, seq):
     """
-    Print the alignment between `seq1` and `seq2`
+    Print the alignment between `ref` and `seq`
     """
-    alignment = parasail.sg_trace_scan_16(seq1, seq2, 5, 4, parasail.dnafull)
+    alignment = parasail.sw_trace_striped_32(ref, seq, 8, 4, parasail.dnafull)
+
+    cigar = alignment.cigar.decode.decode()
+    print(cigar)
 
     print(alignment.traceback.query)
     print(alignment.traceback.comp)
