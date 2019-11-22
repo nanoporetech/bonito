@@ -107,7 +107,7 @@ def print_alignment(seq1, seq2):
     """
     Print the alignment between `seq1` and `seq2`
     """
-    alignment = parasail.sg_trace(seq1, seq2, 10, 1, parasail.blosum62)
+    alignment = parasail.sg_trace_scan_16(seq1, seq2, 10, 1, parasail.blosum62)
     print(alignment.traceback.query)
     print(alignment.traceback.comp)
     print(alignment.traceback.ref)
