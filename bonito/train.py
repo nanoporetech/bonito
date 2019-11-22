@@ -1,7 +1,7 @@
 import time
 from itertools import starmap
 
-from bonito.util import decode_ctc, stitch, identity, palign
+from bonito.util import decode_ctc, decode_ref, accuracy, print_alignment
 
 import numpy as np
 import torch
@@ -85,19 +85,15 @@ def test(model, device, test_loader):
             out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
             test_loss += criterion(output.transpose(1, 0), target, out_lengths, lengths)
 
-    references = list(map(stitch, test_loader.dataset.targets))
+    references = list(map(decode_ref, test_loader.dataset.targets))
     predictions = np.concatenate(predictions)
     sequences = list(map(decode_ctc, predictions))
 
-    try:
-        identities = list(starmap(identity, zip(references, sequences)))
-        palign(references[0], sequences[0])
-    except IndexError:
-        # it might take a few epochs for sensible alignment on a small dataset
-        identities = [0]
+    accuracies = list(starmap(accuracy, zip(references, sequences)))
+    mean = np.mean(accuracies)
+    median = np.median(accuracies)
 
-    mean = np.mean(identities)
-    median = np.median(identities)
+    print_alignment(references[0], sequences[0])
 
     print("* mean %.3f" % mean)
     print("* median %.3f" % median)

@@ -24,21 +24,21 @@ $ source venv3/bin/activate
 ```bash
 (venv3) $ # download the training data and train a model with the default settings
 (venv3) $ ./bin/get-training-data
-(venv3) $ ./bin/train /data/model-dir ./config/quartznet5x5.toml
+(venv3) $ ./bin/bonito-train /data/model-dir ./config/quartznet5x5.toml
 (venv3) $
 (venv3) $ # train on gpu 1, use mixed precision, larger batch size and only 20,000 chunks
 (venv3) $ export CUDA_VISIBLE_DEVICES=1
-(venv3) $ ./bin/train /data/model-dir config/quartznet5x5.toml --amp --batch 64 --chunks 20000
+(venv3) $ ./bin/bonito-train /data/model-dir config/quartznet5x5.toml --amp --batch 64 --chunks 20000
 ```
 
 Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
 ## Scripts
 
- - `./bin/view-model` view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `./bin/train` train a bonito model.
- - `./bin/call` evaluate a model performance on a chunk basis.
- - `./bin/basecall` full basecaller *(`.fast5` -> `.fasta`)*
+ - `./bin/bonito-view` view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `./bin/bonito-train` train a bonito model.
+ - `./bin/bonito-evaluate` evaluate a model performance on a chunk basis.
+ - `./bin/bonito-basecaller` basecaller *(`.fast5` -> `.fasta`)*
 
 ### References
 

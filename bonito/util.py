@@ -6,14 +6,16 @@ import re
 import os
 from glob import glob
 from itertools import groupby
+from collections import defaultdict
 
 import torch
 import random
+import parasail
 import numpy as np
-from Bio import pairwise2
+
 
 __dir__ = os.path.dirname(__file__)
-labels = {0: 'N', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
+labels = ['N', 'A', 'C', 'G', 'T']
 
 
 def init(seed):
@@ -31,9 +33,9 @@ def init(seed):
     assert(torch.cuda.is_available())
 
 
-def stitch(encoded):
+def decode_ref(encoded):
     """
-    Convert a integer encode reference into a string and remove blanks
+    Convert a integer encoded reference into a string and remove blanks
     """
     return ''.join(labels[e] for e in encoded if e)
 
@@ -74,7 +76,7 @@ def load_model(dirname, device, weights=None):
     """
     if not weights: # take the latest checkpoint
         weight_files = glob(os.path.join(dirname, "weights_*.tar"))
-        weights = max([int(re.sub(".*([0-9]+).*", "\\1", w)) for w in weight_files])
+        weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
     modelfile = os.path.join(dirname, 'model.py')
@@ -85,44 +87,29 @@ def load_model(dirname, device, weights=None):
     return model
 
 
-def identity(seq1, seq2, score_only=True, trim_end_gaps=True, alignment=False):
+def accuracy(seq1, seq2):
     """
-    Align two sequences
+    Calculate the balanced accuracy between `seq` and `seq2`
     """
-    if trim_end_gaps:
-        needle = pairwise2.align.globalms(seq1, seq2, 5, -4, -10, -0.5, penalize_end_gaps=False, one_alignment_only=True)
+    alignment = parasail.sg_trace_scan_16(seq1, seq2, 10, 1, parasail.blosum62)
 
-        aref = needle[0][0]
-        aseq = needle[0][1]
+    counts = defaultdict(int)
+    cigar = alignment.cigar.decode.decode()
 
-        i = 0
-        j = len(aref)
+    for c in re.findall("[0-9]+[=XID]", cigar):
+        counts[c[-1]] += int(c[:-1])
 
-        # do we have gaps at the start?
-        if aref.startswith('-'):
-            i += len(aref) - len(aref.lstrip('-'))
-        elif aseq.startswith('-'):
-            i += len(aseq) - len(aseq.lstrip('-'))
-
-        # do we have gaps at the end?
-        if aref.endswith('-'):
-            j -= len(aref) - len(aref.rstrip('-'))
-        elif aseq.endswith('-'):
-            j -= len(aseq) - len(aseq.rstrip('-'))
-
-        seq1 = aref[i:j]
-        seq2 = aseq[i:j]
-
-    identical_matches = pairwise2.align.globalxx(seq1, seq2, one_alignment_only=True, score_only=True)
-    needle = pairwise2.align.globalms(seq1, seq2, 5, -4, -10, -0.5, penalize_end_gaps=False, one_alignment_only=True)
-
-    if not score_only: print(pairwise2.format_alignment(*needle[0]))
-    if alignment: return pairwise2.format_alignment(*needle[0])
-    return (identical_matches / needle[0][4]) * 100
+    accuracy = (counts['='] - counts['I']) / (counts['='] + counts['M'] + counts['D'])
+    return accuracy * 100
 
 
-def palign(seq1, seq2):
+def print_alignment(seq1, seq2):
     """
     Print the alignment between `seq1` and `seq2`
     """
-    return identity(seq1, seq2, score_only=False)
+    alignment = parasail.sg_trace(seq1, seq2, 10, 1, parasail.blosum62)
+    print(alignment.traceback.query)
+    print(alignment.traceback.comp)
+    print(alignment.traceback.ref)
+    print("  Score=%s" % alignment.score)
+    return alignment.score

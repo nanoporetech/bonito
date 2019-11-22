@@ -74,6 +74,7 @@ def main(args):
     min_cover = 0
     chunk_idx = 0    
     chunk_count = 0
+    labels = ['N', 'A', 'C', 'G', 'T']
 
     for read_id, samples, reference, pointers in get_reads(args.file):
 
@@ -132,7 +133,6 @@ def main(args):
         chunks = np.delete(chunks, np.s_[chunk_idx:], axis=0)
         np.save(os.path.join(args.outdir, "chunks.npy"), chunks)
 
-        labels = {'N': 0, 'A': 1, 'C': 2, 'G': 3, 'T': 4}        
         max_ref_length = max(len(r) for r in refs)
 
         def ref_encode(seq, max_size=500):

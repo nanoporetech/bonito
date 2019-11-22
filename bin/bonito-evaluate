@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Bonito chunk caller
+Bonito model evaluator
 """
 
 import time
@@ -11,7 +11,7 @@ from itertools import starmap
 from argparse import ArgumentParser
 
 from bonito.util import init, load_data, load_model
-from bonito.util import decode_ctc, stitch, identity, palign
+from bonito.util import decode_ctc, decode_ref, print_alignment, accuracy
 
 
 def main(args):
@@ -23,7 +23,7 @@ def main(args):
 
     for w in [int(i) for i in args.weights.split(',')]:
 
-        print("* loading model %s" % w)
+        print("* loading model", w)
         model = load_model(args.model_directory, args.device, weights=w)
 
         print("* calling")
@@ -36,22 +36,22 @@ def main(args):
             for i in range(0, int(args.chunks / args.batchsize)):
                 tchunks = torch.tensor(np.expand_dims(chunks[i*args.batchsize:(i+1)*args.batchsize], axis=1))
                 predictions = torch.exp(model(tchunks.to(args.device)))
-                predictions = predictions.cpu().numpy()
-                p.append(predictions)
+                predictions = predictions.cpu()
+                p.append(predictions.numpy())
 
         predictions = np.concatenate(p)
 
-        t1 = time.perf_counter()
+        duration = time.perf_counter() - t0
 
-        references = list(map(stitch, targets))
+        references = list(map(decode_ref, targets))
         sequences = list(map(decode_ctc, predictions))
-        identities = list(starmap(identity, zip(references, sequences)))
+        accuracies = list(starmap(accuracy, zip(references, sequences)))
 
-        print("* time %.3f" % (t1 - t0))
-        print("* mean %.3f" % np.mean(identities))
-        print("* median %.3f" % np.median(identities))
+        print("* mean      %.2f%%" % np.mean(accuracies))
+        print("* median    %.2f%%" % np.median(accuracies))
+        print("* time      %.2f" % duration)
+        print("* samples/s %.2E" % (args.chunks * chunks.shape[1] / duration))
 
-        palign(references[0], sequences[0])
 
 
 if __name__ == "__main__":
@@ -62,5 +62,5 @@ if __name__ == "__main__":
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--batchsize", default=100, type=int)
-    parser.add_argument("--shuffle", action="store_true", default=True)
+    parser.add_argument("--shuffle", action="store_true", default=False)
     main(parser.parse_args())
