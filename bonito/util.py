@@ -110,10 +110,6 @@ def print_alignment(ref, seq):
     Print the alignment between `ref` and `seq`
     """
     alignment = parasail.sw_trace_striped_32(ref, seq, 8, 4, parasail.dnafull)
-
-    cigar = alignment.cigar.decode.decode()
-    print(cigar)
-
     print(alignment.traceback.query)
     print(alignment.traceback.comp)
     print(alignment.traceback.ref)
