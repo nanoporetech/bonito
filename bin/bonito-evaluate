@@ -16,7 +16,7 @@ from bonito.util import decode_ctc, decode_ref, accuracy, poa
 
 def main(args):
 
-    init(args.seed)
+    init(args.seed, args.device)
 
     print("* loading data")
     poas = []
@@ -64,8 +64,8 @@ def main(args):
         accuracies = list(starmap(accuracy, zip(references, poa(poas))))
         duration = time.perf_counter() - t0
 
-        print("* mean      %.2f%%" % np.mean(accuracies))
-        print("* median    %.2f%%" % np.median(accuracies))
+        print("* mean poa      %.2f%%" % np.mean(accuracies))
+        print("* median poa   %.2f%%" % np.median(accuracies))
         print("* time      %.2f" % duration)
 
 
