@@ -6,4 +6,4 @@ venv3/
 *.egg-info/
 bonito/data/*.npy
 bonito/data/*.zip
-
+dist/
