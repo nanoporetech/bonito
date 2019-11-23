@@ -26,7 +26,7 @@ labels = ['N', 'A', 'C', 'G', 'T']
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 
 
-def init(seed):
+def init(seed, device):
     """
     Initialise random libs and setup cudnn
 
@@ -35,6 +35,7 @@ def init(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    if device == "cpu": return
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
