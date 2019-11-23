@@ -31,7 +31,7 @@ def main(args):
         print("* error: %s exists." % workdir)
         exit(1)
 
-    init(args.seed)
+    init(args.seed, args.device)
     device = torch.device(args.device)
 
     chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=True)

@@ -13,13 +13,20 @@ import random
 import parasail
 import numpy as np
 
+try:
+    from claragenomics.bindings import cuda
+    from claragenomics.bindings.cudapoa import CudaPoaBatch
+except ImportError:
+    # allow import to fail until claragenomics is on pypi
+    pass
+
 
 __dir__ = os.path.dirname(__file__)
 labels = ['N', 'A', 'C', 'G', 'T']
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 
 
-def init(seed):
+def init(seed, device):
     """
     Initialise random libs and setup cudnn
 
@@ -28,6 +35,7 @@ def init(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    if device == "cpu": return
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -149,3 +157,31 @@ def print_alignment(ref, seq):
     print(alignment.traceback.ref)
     print("  Score=%s" % alignment.score)
     return alignment.score
+
+
+def poa(groups, max_sequences_per_poa=100, gpu_mem_per_batch=0.9):
+    """
+    Generate consensus for POA groups.
+
+    Args:
+        groups : A list of lists of sequences for which consensus is to be generated.
+    """
+    free, total = cuda.cuda_get_mem_info(cuda.cuda_get_device())
+    gpu_mem_per_batch *= free
+    batch = CudaPoaBatch(max_sequences_per_poa, gpu_mem_per_batch, stream=None, output_type="consensus")
+    results = []
+
+    for i, group in enumerate(groups, start=1):
+        group_status, seq_status = batch.add_poa_group(group)
+
+        # Once batch is full, run POA processing
+        if group_status == 1 or i == len(groups):
+            batch.generate_poa()
+
+            consensus, coverage, status = batch.get_consensus()
+            results.extend(consensus)
+
+            batch.reset()
+            group_status, seq_status = batch.add_poa_group(group)
+
+    return results
