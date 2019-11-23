@@ -61,9 +61,9 @@ def load_data(shuffle=False, limit=None):
     """
     Load the training data
     """
-    chunks = np.load(os.path.join(__dir__, "data", "chunks.npy"))
-    targets = np.load(os.path.join(__dir__, "data", "references.npy"))
-    target_lengths = np.load(os.path.join(__dir__, "data", "reference_lengths.npy"))
+    chunks = np.load(os.path.join(__dir__, "data", "chunks.npy"), mmap_mode='r')
+    targets = np.load(os.path.join(__dir__, "data", "references.npy"), mmap_mode='r')
+    target_lengths = np.load(os.path.join(__dir__, "data", "reference_lengths.npy"), mmap_mode='r')
 
     if limit:
         chunks = chunks[:limit]
