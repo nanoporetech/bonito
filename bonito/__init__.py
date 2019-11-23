@@ -6,7 +6,7 @@ __version__ = '0.0.1'
 
 def main():
     parser = argparse.ArgumentParser(
-        'medaka',
+        'bonito',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
@@ -24,5 +24,4 @@ def main():
         p.set_defaults(func=mod.main)
 
     args = parser.parse_args()
-    print(args)
     args.func(args)
