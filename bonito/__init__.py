@@ -24,5 +24,4 @@ def main():
         p.set_defaults(func=mod.main)
 
     args = parser.parse_args()
-    print(args)
     args.func(args)
