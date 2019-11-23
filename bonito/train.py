@@ -4,9 +4,10 @@
 Bonito training.
 """
 
-import argparse
 import os
 from datetime import datetime
+from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
 from bonito.util import load_data, init
@@ -45,6 +46,7 @@ def main(args):
     config = toml.load(args.config)
     argsdict = dict(training=vars(args))
 
+    print("[loading model]")
     model = Model(config)
 
     weights = os.path.join(workdir, 'weights.tar')
@@ -73,7 +75,7 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
 
-        print("[Epoch %s]:" % epoch, workdir.split('/')[-1])
+        print("[Epoch %s]:" % epoch, workdir.strip('/').split('/')[-1])
         train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
         test_loss, mean, median = test(model, device, test_loader)
 
@@ -90,9 +92,10 @@ def main(args):
 
 
 def argparser():
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        add_help=False)
+    parser = ArgumentParser(
+        formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False
+    )
     parser.add_argument("training_directory")
     parser.add_argument("config")
     parser.add_argument("--device", default="cuda")
