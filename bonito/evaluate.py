@@ -1,14 +1,12 @@
-#!/usr/bin/env python
-
 """
 Bonito model evaluator
 """
 
+import argparse
 import time
 import torch
 import numpy as np
 from itertools import starmap
-from argparse import ArgumentParser
 
 from bonito.util import init, load_data, load_model
 from bonito.util import decode_ctc, decode_ref, accuracy, poa
@@ -69,8 +67,10 @@ def main(args):
         print("* time      %.2f" % duration)
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
     parser.add_argument("model_directory")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=9, type=int)
@@ -79,4 +79,4 @@ if __name__ == "__main__":
     parser.add_argument("--batchsize", default=100, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
     parser.add_argument("--shuffle", action="store_true", default=False)
-    main(parser.parse_args())
+    return parser

@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-
 """
 Bonito model viewer - display a model architecture for a given config.
 """
-
+import argparse
 import toml
 from bonito.model import Model
-from argparse import ArgumentParser
 
 
 def main(args):
@@ -15,7 +12,9 @@ def main(args):
     print("Total parameters in model", sum(p.numel() for p in model.parameters()))
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
     parser.add_argument("config")
-    main(parser.parse_args())
+    return parser
