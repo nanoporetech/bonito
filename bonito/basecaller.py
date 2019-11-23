@@ -97,7 +97,7 @@ def stitch(predictions, overlap):
 def main(args):
 
     sys.stderr.write("> loading model\n")
-    model = load_model(args.model_directory, args.device, weights=args.weights)
+    model = load_model(args.model_directory, args.device, weights=int(args.weights))
 
     num_reads = 0
     num_chunks = 0
@@ -136,7 +136,9 @@ def main(args):
                     sys.stderr.write("\nBAD READ - %s\n" % fast5)
                     continue
 
-                probabilities = stitch(predictions, int(args.overlap / 2))
+                # TODO: get this from the model object or .toml config
+                stride = np.round(args.chunks / predictions.shape[1])
+                probabilities = stitch(predictions, int(args.overlap / 2 / stride))
                 sequence = decode_ctc(probabilities)
 
                 print(">%s" % read_id)
