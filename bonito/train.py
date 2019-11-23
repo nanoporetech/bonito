@@ -1,110 +1,107 @@
+#!/usr/bin/env python3
+
 """
-Bonito train
+Bonito training.
 """
 
-import time
-from itertools import starmap
+import argparse
+import os
+from datetime import datetime
 
-from bonito.util import decode_ctc, decode_ref, accuracy
+from bonito.model import Model
+from bonito.util import load_data, init
+from bonito.training import ReadDataSet, train, test
 
-import numpy as np
+import toml
 import torch
-import torch.nn as nn
+import numpy as np
+from torch.optim import AdamW
+from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 try: from apex import amp
 except ImportError: pass
 
 
-criterion = nn.CTCLoss()
+def main(args):
 
+    workdir = os.path.expanduser(args.training_directory)
 
-class ReadDataSet:
-    def __init__(self, reads, targets, lengths):
-        self.reads = np.expand_dims(reads, axis=1)
-        self.targets = targets
-        self.lengths = lengths
+    if os.path.exists(workdir) and not args.force:
+        print("* error: %s exists." % workdir)
+        exit(1)
 
-    def __getitem__(self, i):
-        return self.reads[i], self.targets[i].astype(np.int32), self.lengths[i].astype(np.int32)
+    init(args.seed, args.device)
+    device = torch.device(args.device)
 
-    def __len__(self):
-        return len(self.reads)
+    chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=True)
 
+    split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
+    train_dataset = ReadDataSet(chunks[:split], targets[:split], target_lengths[:split])
+    test_dataset = ReadDataSet(chunks[split:], targets[split:], target_lengths[split:])
+    train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
 
-def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=False):
+    config = toml.load(args.config)
+    argsdict = dict(training=vars(args))
 
-    t0 = time.perf_counter()
-    chunks = 0
+    model = Model(config)
 
+    weights = os.path.join(workdir, 'weights.tar')
+    if os.path.exists(weights): model.load_state_dict(torch.load(weights))
+
+    model.to(device)
     model.train()
-    for batch_idx, (data, target, lengths) in enumerate(train_loader, start=1):
 
-        optimizer.zero_grad()
+    os.makedirs(workdir, exist_ok=True)
+    torch.save(model, os.path.join(workdir, 'model.py'))
 
-        chunks += data.shape[0]
-        data = data.to(device)
-        target = target.to(device)
+    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
-        output = model(data)
-        # fixed sized output lengths
-        out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
-        loss = criterion(output.transpose(0, 1), target, out_lengths, lengths)
+    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
 
-        if use_amp:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-        else:
-            loss.backward()
+    if args.amp:
+        try:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
+        except NameError:
+            print("* error: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
+            exit(1)
 
-        optimizer.step()
+    schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
-        if batch_idx % log_interval == 0:
-            print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
-                chunks, len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item())
-            )
+    log_interval = np.floor(len(train_dataset) / args.batch * 0.10)
 
-    print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
-        chunks, len(train_loader.dataset),
-        100. * batch_idx / len(train_loader), loss.item())
-    )
-    print('[%.2f Seconds]' % (time.perf_counter() - t0))
+    for epoch in range(1, args.epochs + 1):
 
-    return loss.item(), time.perf_counter() - t0
+        print("[Epoch %s]:" % epoch, workdir.split('/')[-1])
+        train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
+        test_loss, mean, median = test(model, device, test_loader)
+
+        torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
+
+        # TODO: make this a csv
+        with open(os.path.join(workdir, 'training.log'), 'a') as logfile:
+            now = datetime.today()
+            logfile.write("%s Train Epoch %s: Loss %.2f - %.2f seconds\n" % (now, epoch, train_loss, train_time))
+            logfile.write("%s Validation Loss %.2f\n" % (now, test_loss))
+            logfile.write("%s Inference Accuracy %.2f %.3f \n\n" % (now, mean, median))
+
+        if schedular: schedular.step()
 
 
-def test(model, device, test_loader):
-
-    model.eval()
-    test_loss = 0
-    predictions = []
-
-    with torch.no_grad():
-        for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
-
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            predictions.append(torch.exp(output).cpu())
-
-            # fixed sized output lengths
-            out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
-            test_loss += criterion(output.transpose(1, 0), target, out_lengths, lengths)
-
-    references = list(map(decode_ref, test_loader.dataset.targets))
-    predictions = np.concatenate(predictions)
-    sequences = list(map(decode_ctc, predictions))
-
-    if all(map(len, sequences)):
-        accuracies = list(starmap(accuracy, zip(references, sequences)))
-    else:
-        accuracies = [0]
-
-    mean = np.mean(accuracies)
-    median = np.median(accuracies)
-
-    print()
-    print('Validation Loss:              %.4f' % (test_loss / batch_idx))
-    print("Valdiation Accuracy (mean):   %.3f%%" % max(0, mean))
-    print("Validation Accuracy (median): %.3f%%" % max(0, median))
-    print()
-    return test_loss.item(), mean, median
+def argparser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False)
+    parser.add_argument("training_directory")
+    parser.add_argument("config")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--lr", default=1e-3, type=float)
+    parser.add_argument("--seed", default=25, type=int)
+    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--batch", default=32, type=int)
+    parser.add_argument("--chunks", default=1000000, type=int)
+    parser.add_argument("--validation_split", default=0.99, type=float)
+    parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("-f", "--force", action="store_true", default=False)
+    return parser

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 Convert a chunkify training file
 """
@@ -147,10 +149,8 @@ def main(args):
         np.save(os.path.join(args.outdir, "reference_lengths.npy"), target_lengths)
 
 
-def argparser():
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        add_help=False)
+if __name__ == "__main__":
+    parser = ArgumentParser()
     parser.add_argument("file")
     parser.add_argument("outdir")
     parser.add_argument("--chunksize", default=2000, type=int)
@@ -159,4 +159,4 @@ def argparser():
         "--max-diff", default=80, type=int,
         help="largest differnce between between samples without label"
     )
-    return parser
+    main(parser.parse_args())
