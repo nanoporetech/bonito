@@ -52,11 +52,13 @@ def main(args):
     chunks = np.zeros((args.chunks, args.chunksize), dtype=np.float32)
     os.makedirs(args.outdir, exist_ok=True)
 
-    # min speed cut off
-    cutoff = args.chunksize / 20
+    # speed cut offs
+    min_cutoff = args.chunksize / 16
+    max_cutoff = args.chunksize / 8
 
     big_gap = 0
     min_bases = 0
+    max_bases = 0
     min_cover = 0
     chunk_idx = 0
     chunk_count = 0
@@ -80,8 +82,13 @@ def main(args):
             ref_end = min(bisect_left(pointers, c_end), duration)
 
             # not enough bases
-            if ref_end - ref_start < cutoff:
+            if ref_end - ref_start < min_cutoff:
                 min_bases += 1
+                continue
+
+            # too many bases
+            if ref_end - ref_start > max_cutoff:
+                max_bases += 1
                 continue
 
             # not enough coverage
@@ -117,16 +124,17 @@ def main(args):
     print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
     print("Reason for skipping:")
     print("  - minimum number of bases       ", min_bases)
+    print("  - maximum number of bases       ", max_bases)
     print("  - minimum coverage over chunk   ", min_cover)
     print("  - large difference between bases", big_gap)
 
     chunks = np.delete(chunks, np.s_[chunk_idx:], axis=0)
-    np.save(os.path.join(args.outdir, "chunks.npy"), chunks)
+    np.save(os.path.join(args.outdir, "chunks_%s.npy" % args.chunksize), chunks)
 
     targets = np.array(list(zip_longest(*refs, fillvalue=0)), dtype=np.uint8).T
     target_lengths = np.array([len(ref) for ref in refs], dtype=np.uint16)
-    np.save(os.path.join(args.outdir, "references.npy"), targets)
-    np.save(os.path.join(args.outdir, "reference_lengths.npy"), target_lengths)
+    np.save(os.path.join(args.outdir, "references_%s.npy" % args.chunksize), targets)
+    np.save(os.path.join(args.outdir, "reference_lengths_%s.npy" % args.chunksize), target_lengths)
 
     print()
     print("Wrote chunks.npy with shape", chunks.shape)
@@ -140,5 +148,5 @@ if __name__ == "__main__":
     parser.add_argument("outdir")
     parser.add_argument("--chunks", default=1e6, type=int)
     parser.add_argument("--chunksize", default=2000, type=int)
-    parser.add_argument("--max-diff", default=80, type=int)
+    parser.add_argument("--max-diff", default=105, type=int)
     main(parser.parse_args())
