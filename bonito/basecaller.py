@@ -139,7 +139,7 @@ def main(args):
                 # TODO: get this from the model object or .toml config
                 stride = np.round(args.chunksize / predictions.shape[1])
                 probabilities = stitch(predictions, int(args.overlap / 2 / stride))
-                sequence = decode_ctc(probabilities)
+                sequence = decode_ctc(probabilities, model.alphabet)
 
                 print(">%s" % read_id)
                 print('\n'.join(wrap(sequence, 100)))

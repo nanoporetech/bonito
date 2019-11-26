@@ -25,7 +25,6 @@ except ImportError:
 
 
 __dir__ = os.path.dirname(__file__)
-labels = ['N', 'A', 'C', 'G', 'T']
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 
 
@@ -45,14 +44,14 @@ def init(seed, device):
     assert(torch.cuda.is_available())
 
 
-def decode_ref(encoded):
+def decode_ref(encoded, labels):
     """
     Convert a integer encoded reference into a string and remove blanks
     """
     return ''.join(labels[e] for e in encoded if e)
 
 
-def decode_ctc(predictions, p=0.0):
+def decode_ctc(predictions, labels):
     """
     Argmax decoder with collapsing repeats
     """

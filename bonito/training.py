@@ -90,9 +90,8 @@ def test(model, device, test_loader):
             out_lengths = torch.tensor([output.shape[1]]*len(lengths), dtype=torch.int32)
             test_loss += criterion(output.transpose(1, 0), target, out_lengths, lengths)
 
-    references = list(map(decode_ref, test_loader.dataset.targets))
-    predictions = np.concatenate(predictions)
-    sequences = list(map(decode_ctc, predictions))
+    references = [decode_ref(target, model.alphabet) for target in test_loader.dataset.targets]
+    sequences = [decode_ctc(post, model.alphabet) for post in np.concatenate(predictions)]
 
     if all(map(len, sequences)):
         accuracies = list(starmap(accuracy, zip(references, sequences)))

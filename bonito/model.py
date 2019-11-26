@@ -21,10 +21,10 @@ class Model(Module):
     """
     def __init__(self, config):
         super(Model, self).__init__()
-        feature_size = config['block'][-1]['filters']
-        alphabet_size = len(config["labels"]["labels"])
+        self.alphabet = config["labels"]["labels"]
+        self.features = config['block'][-1]['filters']
         self.encoder = Encoder(config)
-        self.decoder = Decoder(feature_size, alphabet_size)
+        self.decoder = Decoder(self.features, len(self.alphabet))
 
     def forward(self, x):
         encoded = self.encoder(x)
