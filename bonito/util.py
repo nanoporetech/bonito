@@ -65,16 +65,16 @@ def load_data(shuffle=False, limit=None):
     targets = np.load(os.path.join(__dir__, "data", "references.npy"), mmap_mode='r')
     target_lengths = np.load(os.path.join(__dir__, "data", "reference_lengths.npy"), mmap_mode='r')
 
-    if limit:
-        chunks = chunks[:limit]
-        targets = targets[:limit]
-        target_lengths = target_lengths[:limit]
-
     if shuffle:
         shuf = np.random.permutation(chunks.shape[0])
         chunks = chunks[shuf]
         targets = targets[shuf]
         target_lengths = target_lengths[shuf]
+
+    if limit:
+        chunks = chunks[:limit]
+        targets = targets[:limit]
+        target_lengths = target_lengths[:limit]
 
     return chunks, targets, target_lengths
 
