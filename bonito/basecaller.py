@@ -105,7 +105,7 @@ def main(args):
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
 
-    # TODO: implement multi read batching, don't just one read at a time to the GPU!
+    # TODO: implement read batching, don't just send one read at a time to the GPU!
     for i, fast5 in enumerate(glob("%s/*fast5" % args.reads_directory), start=1):
 
         for read_id, raw_data in get_raw_data(fast5):

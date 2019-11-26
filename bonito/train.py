@@ -5,6 +5,7 @@ Bonito training.
 """
 
 import os
+import csv
 from datetime import datetime
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
@@ -76,19 +77,24 @@ def main(args):
     for epoch in range(1, args.epochs + 1):
 
         print("[Epoch %s]:" % epoch, workdir.strip('/').split('/')[-1])
-        train_loss, train_time = train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp)
+        train_loss, duration = train(
+            log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp
+        )
         test_loss, mean, median = test(model, device, test_loader)
-
         torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
+        with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
+            csvw = csv.writer(csvfile, delimiter=',')
+            if epoch == 1:
+                csvw.writerow([
+                    'time', 'duration', 'epoch', 'train_loss',
+                    'validation_loss', 'validation_mean', 'validation_median'
+                ])
+            csvw.writerow([
+                datetime.today(), int(duration), epoch,
+                train_loss, test_loss, mean, median,
+            ])
 
-        # TODO: make this a csv
-        with open(os.path.join(workdir, 'training.log'), 'a') as logfile:
-            now = datetime.today()
-            logfile.write("%s Train Epoch %s: Loss %.2f - %.2f seconds\n" % (now, epoch, train_loss, train_time))
-            logfile.write("%s Validation Loss %.2f\n" % (now, test_loss))
-            logfile.write("%s Inference Accuracy %.2f %.3f \n\n" % (now, mean, median))
-
-        if schedular: schedular.step()
+        schedular.step()
 
 
 def argparser():
