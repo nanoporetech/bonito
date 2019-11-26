@@ -8,6 +8,9 @@ from glob import glob
 from itertools import groupby
 from collections import defaultdict
 
+from bonito.model import Model
+
+import toml
 import torch
 import random
 import parasail
@@ -87,10 +90,11 @@ def load_model(dirname, device, weights=None):
         weight_files = glob(os.path.join(dirname, "weights_*.tar"))
         weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
-    weights = os.path.join(dirname, 'weights_%s.tar' % weights)
-    modelfile = os.path.join(dirname, 'model.py')
     device = torch.device(device)
-    model = torch.load(modelfile, map_location=device)
+    config = os.path.join(dirname, 'config.toml')
+    weights = os.path.join(dirname, 'weights_%s.tar' % weights)
+    model = Model(toml.load(config))
+    model.to(device)
     model.load_state_dict(torch.load(weights, map_location=device))
     model.eval()
     return model
