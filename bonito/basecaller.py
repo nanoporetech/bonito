@@ -136,9 +136,7 @@ def main(args):
                     sys.stderr.write("\nBAD READ - %s\n" % fast5)
                     continue
 
-                # TODO: get this from the model object or .toml config
-                stride = np.round(args.chunksize / predictions.shape[1])
-                probabilities = stitch(predictions, int(args.overlap / 2 / stride))
+                probabilities = stitch(predictions, int(args.overlap / model.stride / 2))
                 sequence = decode_ctc(probabilities, model.alphabet)
 
                 print(">%s" % read_id)

@@ -21,7 +21,8 @@ class Model(Module):
     """
     def __init__(self, config):
         super(Model, self).__init__()
-        self.alphabet = config["labels"]["labels"]
+        self.stride = config['block'][0]['stride'][0]
+        self.alphabet = config['labels']['labels']
         self.features = config['block'][-1]['filters']
         self.encoder = Encoder(config)
         self.decoder = Decoder(self.features, len(self.alphabet))
