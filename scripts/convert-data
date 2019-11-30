@@ -6,6 +6,7 @@ Convert a chunkify training file
 
 import os
 import h5py
+import random
 import numpy as np
 from bisect import bisect_left
 from argparse import ArgumentParser
@@ -26,17 +27,16 @@ def scale(read, samples, normalise=True):
     return scaled
 
 
-def lengths(tfile):
+def num_reads(tfile):
     """ return the sample lengths for each read in the training file """
     with h5py.File(tfile, 'r') as training_file:
-        for read_id in training_file['Reads']:
-            yield len(training_file['Reads/%s' % read_id]['Dacs']) - training_file['Reads/%s' % read_id]['Ref_to_signal'][0]
+        return len(training_file['Reads'])
 
 
 def get_reads(tfile):
     """ get each dataset per read """
     with h5py.File(tfile, 'r') as training_file:
-        for read_id in training_file['Reads']:
+        for read_id in np.random.permutation(training_file['Reads']):
             read = training_file['Reads/%s' % read_id]
             reference = read['Reference'][:]
             pointers = read['Ref_to_signal'][:]
@@ -48,105 +48,120 @@ def get_reads(tfile):
 
 def main(args):
 
-    refs = list()
-    chunks = np.zeros((args.chunks, args.chunksize), dtype=np.float32)
-    os.makedirs(args.outdir, exist_ok=True)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    os.makedirs(args.output_directory, exist_ok=True)
 
-    # speed cut offs
-    min_cutoff = args.chunksize / 16
-    max_cutoff = args.chunksize / 8
-
-    big_gap = 0
-    min_bases = 0
-    max_bases = 0
-    min_cover = 0
+    read_idx = 0
     chunk_idx = 0
     chunk_count = 0
 
-    for read_id, samples, reference, pointers in get_reads(args.file):
+    min_bases = 0
+    max_bases = 0
+    off_the_end_ref = 0
+    off_the_end_sig = 0
+    min_samples_per_base = 8
+    max_samples_per_base = 16
 
-        # calculate how many chunks in this read
-        duration = len(samples)
-        num_chunks = np.floor(duration / args.chunksize).astype(np.int32)
+    total_reads = num_reads(args.chunkify_file)
 
-        for chunk in range(0, num_chunks):
+    chunks = np.zeros((args.chunks, args.max_seq_len * max_samples_per_base), dtype=np.float32)
+    chunk_lengths = np.zeros(args.chunks, dtype=np.uint16)
 
-            chunk_count += 1
+    targets = np.zeros((args.chunks, args.max_seq_len), dtype=np.uint8)
+    target_lengths = np.zeros(args.chunks, dtype=np.uint8)
 
-            # squiggle space
-            c_start = chunk * args.chunksize
-            c_end = (chunk + 1) * args.chunksize
+    for read_id, samples, reference, pointers in get_reads(args.chunkify_file):
 
-            # reference space
-            ref_start = max(0, bisect_left(pointers, c_start) - 1)
-            ref_end = min(bisect_left(pointers, c_end), duration)
+        read_idx += 1
+        num_samples = np.int32(len(reference) * args.samples_per_read)
 
-            # not enough bases
-            if ref_end - ref_start < min_cutoff:
+        sequence_length = len(reference)
+        squiggle_duration = len(samples)
+
+        seq_starts = np.random.randint(0, sequence_length, size=num_samples)
+        seq_ends   = np.random.randint(args.min_seq_len, args.max_seq_len, size=num_samples) + seq_starts
+
+        for start, end in zip(seq_starts, seq_ends):
+
+            chunk_idx += 1
+
+            if end > sequence_length:
+                off_the_end_ref += 1
+                continue
+
+            squiggle_start = pointers[start]
+            squiggle_end = pointers[end]
+            squiggle_length = squiggle_end - squiggle_start
+
+            reference_length = end - start
+
+            samples_per_base = squiggle_length / reference_length
+
+            if samples_per_base < min_samples_per_base:
                 min_bases += 1
                 continue
 
-            # too many bases
-            if ref_end - ref_start > max_cutoff:
+            if samples_per_base > max_samples_per_base:
                 max_bases += 1
                 continue
 
-            # not enough coverage
-            if np.abs(c_start - pointers[ref_start]) >= args.max_diff or np.abs(c_end - pointers[ref_end]) >= args.max_diff:
-                min_cover += 1
+            if squiggle_end > squiggle_duration:
+                off_the_end_sig += 1
                 continue
 
-            # numple of samples difference between each base
-            sdiff = np.diff(pointers[ref_start:ref_end + 1])
+            chunks[chunk_count, :squiggle_length] = samples[squiggle_start:squiggle_end]
+            chunk_lengths[chunk_count] = squiggle_length
 
-            # expand diffs out into sample space so adiff is len == chunksize
-            adiff = np.fromiter((chain.from_iterable([v] * v for v in sdiff)), dtype=np.int16)
+            # index alphabet from 1 (ctc blank labels - 0)
+            targets[chunk_count, :reference_length] = reference[start:end] + 1
+            target_lengths[chunk_count] = reference_length
 
-            # max gap too large
-            if np.max(adiff >= args.max_diff):
-                big_gap += 1
-                continue
+            chunk_count += 1
 
-            refs.append(reference[ref_start:ref_end] + 1)
-
-            chunks[chunk_idx, :] = samples[c_start:c_end]
-            chunk_idx += 1
-
-            if chunk_idx == args.chunks:
+            if chunk_count == args.chunks:
                 break
 
-        if chunk_idx == args.chunks:
+        if chunk_count == args.chunks:
             break
 
-    skipped = chunk_count - chunk_idx
+    skipped = chunk_idx - chunk_count
     percent = (skipped / chunk_count * 100) if skipped else 0
 
+    print("Processed %s reads of out %s [%.2f%%]" % (read_idx, total_reads, read_idx / total_reads * 100))
     print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
     print("Reason for skipping:")
+    print("  - off the end (signal)          ", off_the_end_sig)
+    print("  - off the end (sequence)        ", off_the_end_ref)
     print("  - minimum number of bases       ", min_bases)
     print("  - maximum number of bases       ", max_bases)
-    print("  - minimum coverage over chunk   ", min_cover)
-    print("  - large difference between bases", big_gap)
 
-    chunks = np.delete(chunks, np.s_[chunk_idx:], axis=0)
-    np.save(os.path.join(args.outdir, "chunks_%s.npy" % args.chunksize), chunks)
+    if chunk_count < args.chunks:
+        chunks = np.delete(chunks, np.s_[chunk_count:], axis=0)
+        chunk_lengths = chunk_lengths[:chunk_count]
+        targets = np.delete(targets, np.s_[chunk_count:], axis=0)
+        target_lengths = target_lengths[:chunk_count]
 
-    targets = np.array(list(zip_longest(*refs, fillvalue=0)), dtype=np.uint8).T
-    target_lengths = np.array([len(ref) for ref in refs], dtype=np.uint16)
-    np.save(os.path.join(args.outdir, "references_%s.npy" % args.chunksize), targets)
-    np.save(os.path.join(args.outdir, "reference_lengths_%s.npy" % args.chunksize), target_lengths)
+    np.save(os.path.join(args.output_directory, "chunks.npy"), chunks)
+    np.save(os.path.join(args.output_directory, "chunk_lengths.npy"), chunk_lengths)
+    np.save(os.path.join(args.output_directory, "references.npy"), targets)
+    np.save(os.path.join(args.output_directory, "reference_lengths.npy"), target_lengths)
 
     print()
-    print("Wrote chunks.npy with shape", chunks.shape)
-    print("Wrote references.npy with shape", targets.shape)
-    print("Wrote reference_lengths.npy with shape", target_lengths.shape)
+    print("Training data written to %s:" % args.output_directory)
+    print("  - chunks.npy with shape", chunks.shape)
+    print("  - chunk_lengths.npy with shape", chunk_lengths.shape)
+    print("  - references.npy with shape", targets.shape)
+    print("  - reference_lengths.npy shape", target_lengths.shape)
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("file")
-    parser.add_argument("outdir")
-    parser.add_argument("--chunks", default=1e6, type=int)
-    parser.add_argument("--chunksize", default=2000, type=int)
-    parser.add_argument("--max-diff", default=105, type=int)
+    parser.add_argument("chunkify_file")
+    parser.add_argument("output_directory")
+    parser.add_argument("--seed", default=25, type=int)
+    parser.add_argument("--chunks", default=1000, type=int)
+    parser.add_argument("--min-seq-len", default=128, type=int)
+    parser.add_argument("--max-seq-len", default=256, type=int)
+    parser.add_argument("--samples-per-read", default=0.03, type=float)
     main(parser.parse_args())

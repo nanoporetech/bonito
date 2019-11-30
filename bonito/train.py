@@ -12,7 +12,7 @@ from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
 from bonito.util import load_data, init
-from bonito.training import ReadDataSet, train, test
+from bonito.training import ChunkDataSet, train, test
 
 import toml
 import torch
@@ -36,11 +36,12 @@ def main(args):
     init(args.seed, args.device)
     device = torch.device(args.device)
 
-    chunks, targets, target_lengths = load_data(limit=args.chunks, shuffle=True)
+    print("[loading data]")
+    chunks, chunk_lengths, targets, target_lengths = load_data(limit=args.chunks, shuffle=True)
 
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
-    train_dataset = ReadDataSet(chunks[:split], targets[:split], target_lengths[:split])
-    test_dataset = ReadDataSet(chunks[split:], targets[split:], target_lengths[split:])
+    train_dataset = ChunkDataSet(chunks[:split], chunk_lengths[:split], targets[:split], target_lengths[:split])
+    test_dataset = ChunkDataSet(chunks[split:], chunk_lengths[split:], targets[split:], target_lengths[split:])
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
 

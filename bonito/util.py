@@ -16,12 +16,8 @@ import random
 import parasail
 import numpy as np
 
-try:
-    from claragenomics.bindings import cuda
-    from claragenomics.bindings.cudapoa import CudaPoaBatch
-except ImportError:
-    # allow import to fail until claragenomics is on pypi
-    pass
+from claragenomics.bindings import cuda
+from claragenomics.bindings.cudapoa import CudaPoaBatch
 
 
 __dir__ = os.path.dirname(__file__)
@@ -64,21 +60,24 @@ def load_data(shuffle=False, limit=None):
     Load the training data
     """
     chunks = np.load(os.path.join(__dir__, "data", "chunks.npy"), mmap_mode='r')
+    chunk_lengths = np.load(os.path.join(__dir__, "data", "chunk_lengths.npy"), mmap_mode='r')
     targets = np.load(os.path.join(__dir__, "data", "references.npy"), mmap_mode='r')
     target_lengths = np.load(os.path.join(__dir__, "data", "reference_lengths.npy"), mmap_mode='r')
+
+    if limit:
+        chunks = chunks[:limit]
+        chunk_lengths = chunk_lengths[:limit]
+        targets = targets[:limit]
+        target_lengths = target_lengths[:limit]
 
     if shuffle:
         shuf = np.random.permutation(chunks.shape[0])
         chunks = chunks[shuf]
+        chunk_lengths = chunk_lengths[shuf]
         targets = targets[shuf]
         target_lengths = target_lengths[shuf]
 
-    if limit:
-        chunks = chunks[:limit]
-        targets = targets[:limit]
-        target_lengths = target_lengths[:limit]
-
-    return chunks, targets, target_lengths
+    return chunks, chunk_lengths, targets, target_lengths
 
 
 def load_model(dirname, device, weights=None):

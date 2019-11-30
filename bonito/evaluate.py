@@ -19,7 +19,7 @@ def main(args):
 
     print("* loading data")
     poas = []
-    chunks, targets, _ = load_data(limit=args.chunks, shuffle=args.shuffle)
+    chunks, _, targets, _ = load_data(limit=args.chunks, shuffle=args.shuffle)
 
     for w in [int(i) for i in args.weights.split(',')]:
 

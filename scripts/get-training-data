@@ -1,6 +1,9 @@
 #!/bin/bash
 
-url="https://www.dropbox.com/sh/7l5w1287af5ampo/AABYGqaot3qSoAs-rWzu8OCxa?dl=0"
-zipfile="bonito/data/training-data.zip"
-wget --max-redirect=20 -O "$zipfile" "$url"
-unzip "$zipfile" -d bonito/data/ && rm "$zipfile"
+num_chunks=1000000
+url="https://nanoporetech.box.com/shared/static/cmh91cxupa0are1kc3z9aok425m75vrb.hdf5"
+outdir="bonito/data"
+outfile="${outdir}/bonito-training-data.hdf5"
+
+wget -q --show-progress --max-redirect=9 -O "$outfile" "$url"
+./scripts/convert-data "$outfile" "$outdir" --chunks "$num_chunks"

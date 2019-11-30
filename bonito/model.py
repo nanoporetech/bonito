@@ -26,12 +26,6 @@ class Model(Module):
         self.features = config['block'][-1]['filters']
         self.encoder = Encoder(config)
         self.decoder = Decoder(self.features, len(self.alphabet))
-        self.encoder.apply(self.init_weights)
-        self.decoder.apply(self.init_weights)
-        
-    def init_weights(self, m):
-        if type(m) == Conv1d:
-            nn.init.xavier_uniform_(m.weight)
 
     def forward(self, x):
         encoded = self.encoder(x)
