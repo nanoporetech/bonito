@@ -7,3 +7,7 @@ venv3/
 bonito/data/*.npy
 bonito/data/*.zip
 dist/
+*.fa
+*.csv
+*.fast*
+*.sam
