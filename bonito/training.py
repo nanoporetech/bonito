@@ -112,4 +112,4 @@ def test(model, device, test_loader):
     print("Validation Accuracy (mean):   %.3f%%" % max(0, mean))
     print("Validation Accuracy (median): %.3f%%" % max(0, median))
     print()
-    return test_loss / batch_idx, mean, median
+    return test_loss.item() / batch_idx, mean, median
