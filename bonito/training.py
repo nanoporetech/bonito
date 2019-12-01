@@ -7,8 +7,8 @@ from itertools import starmap
 
 from bonito.util import decode_ctc, decode_ref, accuracy
 
-import numpy as np
 import torch
+import numpy as np
 import torch.nn as nn
 
 try: from apex import amp
