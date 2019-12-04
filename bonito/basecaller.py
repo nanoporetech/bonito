@@ -2,16 +2,17 @@
 Bonito Basecaller
 """
 
-import argparse
 import sys
 import time
 from glob import glob
 from textwrap import wrap
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_model, decode_ctc
 
 import torch
 import numpy as np
+from tqdm import tqdm
 from ont_fast5_api.fast5_interface import get_fast5_file
 
 
@@ -73,8 +74,6 @@ def get_raw_data(fast5_filepath):
 def window(data, size, stepsize=1, padded=False, axis=-1):
     """
     Segment data in `size` chunks with overlap
-
-    TODO: don't throw away the end of the signal
     """
     shape = list(data.shape)
     shape[axis] = np.floor(data.shape[axis] / stepsize - size / stepsize + 1).astype(int)
@@ -101,40 +100,36 @@ def main(args):
 
     num_reads = 0
     num_chunks = 0
+    skipped_reads = 0
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
 
-    # TODO: implement read batching, don't just send one read at a time to the GPU!
-    for i, fast5 in enumerate(glob("%s/*fast5" % args.reads_directory), start=1):
+    for fast5 in tqdm(glob("%s/*fast5" % args.reads_directory), ascii=True):
 
         for read_id, raw_data in get_raw_data(fast5):
 
-            # TODO: add progress lib
-            if i % 500 == 0:
-                sys.stderr.write("> upto %s\n" % i)
-
+            # TODO: handle reads smaller than chunksize and last chunk < chunksize
             chunks = window(raw_data, args.chunksize, stepsize=args.chunksize - args.overlap)
             chunks = np.expand_dims(chunks, axis=1)
+
+            if len(chunks) < 1:
+                skipped_reads += 1
+                continue
 
             num_reads += 1
             num_chunks += chunks.shape[0]
 
             with torch.no_grad():
 
-                try:
-                    # copy to gpu
-                    tchunks = torch.tensor(chunks).to(args.device)
+                # copy to gpu
+                tchunks = torch.tensor(chunks).to(args.device)
 
-                    # run model
-                    predictions = torch.exp(model(tchunks))
+                # run model
+                predictions = torch.exp(model(tchunks))
 
-                    # copy to cpu
-                    predictions = predictions.cpu()
-
-                except:
-                    sys.stderr.write("\nBAD READ - %s\n" % fast5)
-                    continue
+                # copy to cpu
+                predictions = predictions.cpu()
 
                 probabilities = stitch(predictions, int(args.overlap / model.stride / 2))
                 sequence = decode_ctc(probabilities, model.alphabet)
@@ -143,16 +138,17 @@ def main(args):
                 print('\n'.join(wrap(sequence, 100)))
 
     t1 = time.perf_counter()
-
-    sys.stderr.write("> %s reads (%s chunks) done in %.2f seconds\n" % (num_reads, num_chunks, t1 - t0))
+    sys.stderr.write("> skipped reads: %s \n" % skipped_reads)
+    sys.stderr.write("> completed reads: %s\n" % num_reads)
     sys.stderr.write("> samples per second %.1E\n" % (num_chunks * args.chunksize / (t1 - t0)))
     sys.stderr.write("> done\n")
 
 
 def argparser():
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        add_help=False)
+    parser = ArgumentParser(
+        formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False
+    )
     parser.add_argument("reads_directory")
     parser.add_argument("model_directory")
     parser.add_argument("--device", default="cuda")
