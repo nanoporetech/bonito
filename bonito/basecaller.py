@@ -100,7 +100,6 @@ def main(args):
 
     num_reads = 0
     num_chunks = 0
-    skipped_reads = 0
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -109,13 +108,12 @@ def main(args):
 
         for read_id, raw_data in get_raw_data(fast5):
 
-            # TODO: handle reads smaller than chunksize and last chunk < chunksize
-            chunks = window(raw_data, args.chunksize, stepsize=args.chunksize - args.overlap)
-            chunks = np.expand_dims(chunks, axis=1)
+            if len(raw_data) <= args.chunksize:
+                chunks = np.expand_dims(raw_data, axis=0)
+            else:
+                chunks = window(raw_data, args.chunksize, stepsize=args.chunksize - args.overlap)
 
-            if len(chunks) < 1:
-                skipped_reads += 1
-                continue
+            chunks = np.expand_dims(chunks, axis=1)
 
             num_reads += 1
             num_chunks += chunks.shape[0]
@@ -131,14 +129,17 @@ def main(args):
                 # copy to cpu
                 predictions = predictions.cpu()
 
-                probabilities = stitch(predictions, int(args.overlap / model.stride / 2))
-                sequence = decode_ctc(probabilities, model.alphabet)
+                if len(predictions) > 1:
+                    predictions = stitch(predictions, int(args.overlap / model.stride / 2))
+                else:
+                    predictions = np.squeeze(predictions, axis=0)
+
+                sequence = decode_ctc(predictions, model.alphabet)
 
                 print(">%s" % read_id)
                 print('\n'.join(wrap(sequence, 100)))
 
     t1 = time.perf_counter()
-    sys.stderr.write("> skipped reads: %s \n" % skipped_reads)
     sys.stderr.write("> completed reads: %s\n" % num_reads)
     sys.stderr.write("> samples per second %.1E\n" % (num_chunks * args.chunksize / (t1 - t0)))
     sys.stderr.write("> done\n")
