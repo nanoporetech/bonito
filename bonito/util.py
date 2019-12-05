@@ -16,8 +16,11 @@ import random
 import parasail
 import numpy as np
 
-from claragenomics.bindings import cuda
-from claragenomics.bindings.cudapoa import CudaPoaBatch
+try:
+    from claragenomics.bindings import cuda
+    from claragenomics.bindings.cudapoa import CudaPoaBatch
+except ImportError:
+    pass
 
 
 __dir__ = os.path.dirname(__file__)
