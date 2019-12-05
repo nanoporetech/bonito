@@ -6,6 +6,7 @@ venv3/
 *.egg-info/
 bonito/data/*.npy
 bonito/data/*.zip
+bonito/models/*
 dist/
 *.fa
 *.csv
