@@ -12,6 +12,8 @@ A convolutional basecaller inspired by QuartzNet.
 ## Quickstart
 
 ```bash
+$ git clone https://github.com/nanoporetech/bonito.git
+$ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
@@ -33,7 +35,7 @@ $ source venv3/bin/activate
 
 Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
-Pretraining models can be downloaded by running `./scripts/get-models`
+Pretraining models can be downloaded by running `./scripts/get-models`.
 
 ## Scripts
 
