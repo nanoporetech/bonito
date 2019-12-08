@@ -30,7 +30,7 @@ $ source venv3/bin/activate
 (venv3) $
 (venv3) $ # train on gpu 1, use mixed precision, larger batch size and only 20,000 chunks
 (venv3) $ export CUDA_VISIBLE_DEVICES=1
-(venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml --amp --batch 64 --chunks 20000
+(venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml --amp --batch 64 --chunks 1000000
 ```
 
 Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
