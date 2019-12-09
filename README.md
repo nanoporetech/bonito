@@ -35,7 +35,13 @@ $ source venv3/bin/activate
 
 Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
 
-Pretraining models can be downloaded by running `./scripts/get-models`.
+Pretrained models can be downloaded by running `./scripts/get-models`.
+
+## Basecalling
+
+```bash
+(venv3) $ bonito basecaller <READ_DIR> <MODEL_DIR> > basecalls.fasta
+```
 
 ## Scripts
 
