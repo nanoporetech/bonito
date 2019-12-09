@@ -4,6 +4,7 @@ Bonito Basecaller
 
 import sys
 import time
+from math import ceil
 from glob import glob
 from textwrap import wrap
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -117,17 +118,17 @@ def main(args):
 
             num_reads += 1
             num_chunks += chunks.shape[0]
+            predictions = []
 
             with torch.no_grad():
 
-                # copy to gpu
-                tchunks = torch.tensor(chunks).to(args.device)
+                for i in range(ceil(len(chunks) / args.batchsize)):
+                    batch = chunks[i*args.batchsize: (i+1)*args.batchsize]
+                    tchunks = torch.tensor(batch).to(args.device)
+                    probs = torch.exp(model(tchunks))
+                    predictions.append(probs.cpu())
 
-                # run model
-                predictions = torch.exp(model(tchunks))
-
-                # copy to cpu
-                predictions = predictions.cpu()
+                predictions = np.concatenate(predictions)
 
                 if len(predictions) > 1:
                     predictions = stitch(predictions, int(args.overlap / model.stride / 2))
@@ -154,7 +155,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
-    parser.add_argument("--batch", default=500, type=int)
+    parser.add_argument("--batchsize", default=64, type=int)
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--overlap", default=600, type=int)
     parser.add_argument("--chunksize", default=2000, type=int)
