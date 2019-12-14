@@ -22,7 +22,7 @@ def main(args):
     init(args.seed, args.device)
 
     print("* loading data")
-    testdata = ChunkDataSet(*load_data(limit=args.chunks, shuffle=args.shuffle))
+    testdata = ChunkDataSet(*load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory))
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
 
     for w in [int(i) for i in args.weights.split(',')]:
@@ -75,6 +75,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument("model_directory")
+    parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
