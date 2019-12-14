@@ -15,7 +15,7 @@ from itertools import chain, zip_longest
 
 def align(samples, pointers):
     """ align to the start of the mapping """
-    return samples[pointers[0]:], pointers - pointers[0]
+    return samples[pointers[0]:pointers[-1]], pointers - pointers[0]
 
 
 def scale(read, samples, normalise=True):
@@ -60,29 +60,39 @@ def main(args):
     max_bases = 0
     off_the_end_ref = 0
     off_the_end_sig = 0
-    min_samples_per_base = 8
-    max_samples_per_base = 16
 
     total_reads = num_reads(args.chunkify_file)
 
-    chunks = np.zeros((args.chunks, args.max_seq_len * max_samples_per_base), dtype=np.float32)
+    chunks = np.zeros((args.chunks, args.max_seq_len * args.max_samples_per_base), dtype=np.float32)
     chunk_lengths = np.zeros(args.chunks, dtype=np.uint16)
 
     targets = np.zeros((args.chunks, args.max_seq_len), dtype=np.uint8)
-    target_lengths = np.zeros(args.chunks, dtype=np.uint8)
+    target_lengths = np.zeros(args.chunks, dtype=np.uint16)
 
     for read_id, samples, reference, pointers in get_reads(args.chunkify_file):
 
         read_idx += 1
-        num_samples = np.int32(len(reference) * args.samples_per_read)
 
         sequence_length = len(reference)
         squiggle_duration = len(samples)
 
-        seq_starts = np.random.randint(0, sequence_length, size=num_samples)
-        seq_ends   = np.random.randint(args.min_seq_len, args.max_seq_len, size=num_samples) + seq_starts
+        # overlap chunks with +/- 2.5% of max seq len
+        overlap = np.int32(args.max_seq_len * 0.025)
 
-        for start, end in zip(seq_starts, seq_ends):
+        # first chunk
+        seq_starts = 0
+        seq_ends = np.random.randint(args.min_seq_len, args.max_seq_len)
+
+        chunk_idxs = [(seq_starts, seq_ends)]
+
+        # variable size chunks with overlap
+        while seq_ends < sequence_length - args.min_seq_len:
+            seq_starts = seq_ends + np.random.randint(-overlap, overlap)
+            seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
+            seq_ends = min(seq_ends, sequence_length)
+            chunk_idxs.append((seq_starts, seq_ends))
+
+        for start, end in chunk_idxs:
 
             chunk_idx += 1
 
@@ -98,11 +108,11 @@ def main(args):
 
             samples_per_base = squiggle_length / reference_length
 
-            if samples_per_base < min_samples_per_base:
+            if samples_per_base < args.min_samples_per_base:
                 min_bases += 1
                 continue
 
-            if samples_per_base > max_samples_per_base:
+            if samples_per_base > args.max_samples_per_base:
                 max_bases += 1
                 continue
 
@@ -160,8 +170,9 @@ if __name__ == "__main__":
     parser.add_argument("chunkify_file")
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--chunks", default=1000, type=int)
-    parser.add_argument("--min-seq-len", default=128, type=int)
-    parser.add_argument("--max-seq-len", default=256, type=int)
-    parser.add_argument("--samples-per-read", default=0.03, type=float)
+    parser.add_argument("--chunks", default=2000000, type=int)
+    parser.add_argument("--min-seq-len", default=256, type=int)
+    parser.add_argument("--max-seq-len", default=512, type=int)
+    parser.add_argument("--min-samples-per-base", default=8, type=int)
+    parser.add_argument("--max-samples-per-base", default=16, type=int)
     main(parser.parse_args())
