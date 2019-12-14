@@ -58,8 +58,6 @@ def main(args):
     model.train()
 
     os.makedirs(workdir, exist_ok=True)
-    torch.save(model, os.path.join(workdir, 'model.py'))
-
     toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
@@ -73,7 +71,7 @@ def main(args):
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
-    log_interval = np.floor(len(train_dataset) / args.batch * 0.10)
+    log_interval = np.floor(len(train_dataset) / args.batch * 0.05)
 
     for epoch in range(1, args.epochs + 1):
 
