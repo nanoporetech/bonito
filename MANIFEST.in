@@ -1,0 +1,4 @@
+include scripts/get-models
+include scripts/get-training-data
+include scripts/convert-data
+include config/quartznet5x5.toml
