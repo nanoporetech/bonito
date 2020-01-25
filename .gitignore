@@ -13,3 +13,5 @@ dist/
 *.fast*
 *.sam
 .ipynb_checkpoints/
+Untitled*.ipynb
+*.hdf5
