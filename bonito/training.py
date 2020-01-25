@@ -10,6 +10,7 @@ from bonito.util import decode_ctc, decode_ref, accuracy
 import torch
 import numpy as np
 import torch.nn as nn
+from tqdm import tqdm
 
 try: from apex import amp
 except ImportError: pass
@@ -37,13 +38,18 @@ class ChunkDataSet:
         return len(self.chunks)
 
 
-def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=False):
+def train(model, device, train_loader, optimizer, use_amp=False):
 
-    t0 = time.perf_counter()
     chunks = 0
-
     model.train()
-    for batch_idx, (data, out_lengths, target, lengths) in enumerate(train_loader, start=1):
+    t0 = time.perf_counter()
+
+    progress_bar = tqdm(
+        total=len(train_loader), desc='[0/{}]'.format(len(train_loader.dataset)),
+        ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
+    )
+
+    for data, out_lengths, target, lengths in train_loader:
 
         optimizer.zero_grad()
 
@@ -63,17 +69,10 @@ def train(log_interval, model, device, train_loader, optimizer, epoch, use_amp=F
 
         optimizer.step()
 
-        if batch_idx % log_interval == 0:
-            print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
-                chunks, len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item())
-            )
-
-    print('[{}/{} ({:.0f}%)]\tLoss: {:.4f}'.format(
-        chunks, len(train_loader.dataset),
-        100. * batch_idx / len(train_loader), loss.item())
-    )
-    print('[%.2f Seconds]' % (time.perf_counter() - t0))
+        progress_bar.set_postfix(loss='%.4f' % loss.item())
+        progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
+        progress_bar.update()
+        progress_bar.refresh()
 
     return loss.item(), time.perf_counter() - t0
 
@@ -106,10 +105,4 @@ def test(model, device, test_loader):
 
     mean = np.mean(accuracies)
     median = np.median(accuracies)
-
-    print()
-    print('Validation Loss:              %.4f' % (test_loss / batch_idx))
-    print("Validation Accuracy (mean):   %.3f%%" % max(0, mean))
-    print("Validation Accuracy (median): %.3f%%" % max(0, median))
-    print()
     return test_loss.item() / batch_idx, mean, median

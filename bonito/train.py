@@ -71,15 +71,20 @@ def main(args):
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
-    log_interval = np.floor(len(train_dataset) / args.batch * 0.05)
-
     for epoch in range(1, args.epochs + 1):
 
-        print("[Epoch %s]:" % epoch, workdir.strip('/').split('/')[-1])
-        train_loss, duration = train(
-            log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp
-        )
-        test_loss, mean, median = test(model, device, test_loader)
+        try:
+            train_loss, duration = train(
+                model, device, train_loader, optimizer, use_amp=args.amp
+            )
+            val_loss, val_mean, val_median = test(model, device, test_loader)
+        except KeyboardInterrupt:
+            break
+
+        print("[epoch {}] directory={} loss={:.4f} mean_accuracy={:.3f}% median_accuracy={:.3f}%".format(
+            epoch, workdir, val_loss, val_mean, val_median
+        ))
+
         torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
         with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
             csvw = csv.writer(csvfile, delimiter=',')
@@ -90,7 +95,7 @@ def main(args):
                 ])
             csvw.writerow([
                 datetime.today(), int(duration), epoch,
-                train_loss, test_loss, mean, median,
+                train_loss, val_loss, val_mean, val_median,
             ])
 
         schedular.step()
