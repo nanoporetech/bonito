@@ -2,6 +2,7 @@ toml==0.10.0
 tqdm==4.31.1
 torch==1.4.0
 wheel==0.33.6
+optuna==1.0.0
 parasail==1.1.19
 ont-fast5-api==2.0.0
 #pyclaragenomics-cuda-10-0==0.4.2

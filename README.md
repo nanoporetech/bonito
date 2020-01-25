@@ -46,6 +46,7 @@ Pretrained models can be downloaded by running `./scripts/get-models`.
 ## Scripts
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `bonito tune` - tune network hyperparameters.
  - `bonito train` - train a bonito model.
  - `bonito evaluate` - evaluate a model performance on a chunk basis.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
