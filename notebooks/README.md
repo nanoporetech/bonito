@@ -1,6 +1,6 @@
-# Nitobook
+# Jupyter Notebooks
 
-The *nitobook* Jupyter Notebook implements a minimal subset of *bonito* functionality to enable the training of a Quartznet neural network basecaller within a [Google Colaboratory](https://colab.research.google.com/notebooks/welcome.ipynb) session.
+The Jupyter Notebook implements a minimal subset of *bonito* functionality to enable the training of a Quartznet neural network basecaller within a [Google Colaboratory](https://colab.research.google.com/notebooks/welcome.ipynb) session.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Y3oBP41m_6SzihDyK0bES8YaFZ03KGM2)
 
