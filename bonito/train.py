@@ -30,7 +30,7 @@ def main(args):
     workdir = os.path.expanduser(args.training_directory)
 
     if os.path.exists(workdir) and not args.force:
-        print("* error: %s exists." % workdir)
+        print("[error] %s exists." % workdir)
         exit(1)
 
     init(args.seed, args.device)
@@ -66,7 +66,7 @@ def main(args):
         try:
             model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
         except NameError:
-            print("* error: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
+            print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
             exit(1)
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
@@ -81,7 +81,7 @@ def main(args):
         except KeyboardInterrupt:
             break
 
-        print("[epoch {}] directory={} loss={:.4f} mean_accuracy={:.3f}% median_accuracy={:.3f}%".format(
+        print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
             epoch, workdir, val_loss, val_mean, val_median
         ))
 

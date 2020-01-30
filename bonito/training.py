@@ -49,30 +49,31 @@ def train(model, device, train_loader, optimizer, use_amp=False):
         ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
     )
 
-    for data, out_lengths, target, lengths in train_loader:
+    with progress_bar:
 
-        optimizer.zero_grad()
+        for data, out_lengths, target, lengths in train_loader:
 
-        chunks += data.shape[0]
+            optimizer.zero_grad()
 
-        data = data.to(device)
-        target = target.to(device)
-        log_probs = model(data)
+            chunks += data.shape[0]
 
-        loss = criterion(log_probs.transpose(0, 1), target, out_lengths / model.stride, lengths)
+            data = data.to(device)
+            target = target.to(device)
+            log_probs = model(data)
 
-        if use_amp:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-        else:
-            loss.backward()
+            loss = criterion(log_probs.transpose(0, 1), target, out_lengths / model.stride, lengths)
 
-        optimizer.step()
+            if use_amp:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                loss.backward()
 
-        progress_bar.set_postfix(loss='%.4f' % loss.item())
-        progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
-        progress_bar.update()
-        progress_bar.refresh()
+            optimizer.step()
+
+            progress_bar.set_postfix(loss='%.4f' % loss.item())
+            progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
+            progress_bar.update()
 
     return loss.item(), time.perf_counter() - t0
 

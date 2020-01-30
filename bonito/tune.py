@@ -60,7 +60,7 @@ def main(args):
         lr = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
 
         config['encoder']['activation'] = 'gelu'
-        config['block'][0]['stride'] = [trial.suggest_int('stride', 3, 6)]
+        config['block'][0]['stride'] = [trial.suggest_int('stride', 4, 6)]
 
         # C1
         config['block'][0]['kernel'] = [int(trial.suggest_discrete_uniform('c1_kernel', 1, 99, 2))]
@@ -103,13 +103,15 @@ def main(args):
             try:
                 train_loss, duration = train(model, device, train_loader, optimizer, use_amp=True)
                 val_loss, val_mean, val_median = test(model, device, test_loader)
-            except KeyboardInterrupt:
-                exit()
+                print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
+                    epoch, workdir, val_loss, val_mean, val_median
+                ))
+            except KeyboardInterrupt: exit()
             except:
                 print("[pruned] exception")
                 raise optuna.exceptions.TrialPruned()
 
-            if np.isnan(val_loss): test_loss = 9.9
+            if np.isnan(val_loss): val_loss = 9.9
             trial.report(val_loss, epoch)
 
             if trial.should_prune():
