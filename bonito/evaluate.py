@@ -15,6 +15,9 @@ from bonito.util import decode_ctc, decode_ref, accuracy, poa, print_alignment
 
 from torch.utils.data import DataLoader
 
+try: from apex import amp
+except ImportError: pass
+
 
 def main(args):
 
@@ -29,6 +32,13 @@ def main(args):
 
         print("* loading model", w)
         model = load_model(args.model_directory, args.device, weights=w)
+
+        if args.amp:
+            try:
+                model = amp.initialize(model, opt_level="O1", verbosity=0)
+            except NameError:
+                print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
+                exit(1)
 
         print("* calling")
         predictions = []
@@ -77,6 +87,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--chunks", default=500, type=int)
