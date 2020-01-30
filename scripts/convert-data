@@ -10,7 +10,7 @@ import random
 import numpy as np
 from bisect import bisect_left
 from argparse import ArgumentParser
-from itertools import chain, zip_longest
+from itertools import chain, zip_longest, groupby
 
 
 def align(samples, pointers, reference):
@@ -66,10 +66,13 @@ def main(args):
     chunk_idx = 0
     chunk_count = 0
 
+    min_run = 5
+
     min_bases = 0
     max_bases = 0
     off_the_end_ref = 0
     off_the_end_sig = 0
+    min_run_count = 0
     homopolymer_boundary = 0
 
     total_reads = num_reads(args.chunkify_file)
@@ -150,6 +153,12 @@ def main(args):
                 off_the_end_sig += 1
                 continue
 
+            longest_run = max(len(list(run)) for label, run in groupby(reference[start:end]))
+
+            if longest_run < min_run:
+                min_run_count += 1
+                continue
+
             if boundary(reference[start:end]):
                 homopolymer_boundary += 1
                 # continue - include the chunk anyway
@@ -170,14 +179,15 @@ def main(args):
             break
 
     skipped = chunk_idx - chunk_count
-    percent = (skipped / chunk_count * 100) if skipped else 0
+    percent = (skipped / chunk_idx * 100) if skipped else 0
 
     print("Processed %s reads of out %s [%.2f%%]" % (read_idx, total_reads, read_idx / total_reads * 100))
-    print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
+    print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_idx, percent))
     print("Reason for skipping:")
     print("  - off the end (signal)          ", off_the_end_sig)
     print("  - off the end (sequence)        ", off_the_end_ref)
     print("  - homopolymer chunk boundary    ", homopolymer_boundary)
+    print("  - longest run too short         ", min_run_count)
     print("  - minimum number of bases       ", min_bases)
     print("  - maximum number of bases       ", max_bases)
 
@@ -206,8 +216,8 @@ if __name__ == "__main__":
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--chunks", default=10000000, type=int)
-    parser.add_argument("--min-seq-len", default=100, type=int)
-    parser.add_argument("--max-seq-len", default=200, type=int)
+    parser.add_argument("--min-seq-len", default=200, type=int)
+    parser.add_argument("--max-seq-len", default=400, type=int)
     parser.add_argument("--min-samples-per-base", default=8, type=int)
     parser.add_argument("--max-samples-per-base", default=12, type=int)
     main(parser.parse_args())
