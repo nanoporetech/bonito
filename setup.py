@@ -29,7 +29,7 @@ setup(
     install_requires=[
         'toml==0.10.0',
         'tqdm==4.31.1',
-        'torch==1.3.1',
+        'torch==1.4.0',
         'parasail==1.1.19',
         'ont-fast5-api==2.0.0',
     ]
