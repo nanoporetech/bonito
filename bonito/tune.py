@@ -55,7 +55,7 @@ def main(args):
 
     def objective(trial):
 
-        config = toml.load('config/quartznet5x5.toml')
+        config = toml.load(args.config)
 
         lr = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
 
@@ -157,7 +157,7 @@ def argparser():
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--epochs", default=12, type=int)
+    parser.add_argument("--epochs", default=10, type=int)
     parser.add_argument("--batch", default=32, type=int)
     parser.add_argument("--trials", default=100, type=int)
     parser.add_argument("--chunks", default=100000, type=int)
