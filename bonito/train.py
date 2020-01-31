@@ -112,7 +112,7 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--epochs", default=400, type=int)
     parser.add_argument("--batch", default=32, type=int)
     parser.add_argument("--chunks", default=1000000, type=int)
     parser.add_argument("--validation_split", default=0.99, type=float)
