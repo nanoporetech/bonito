@@ -1,6 +1,6 @@
 #!/bin/bash
 
-url="https://nanoporetech.box.com/shared/static/bk6y9evhwmomh4t2jblm9uesvti5x5ft.zip"
+url="https://nanoporetech.box.com/shared/static/7dhhis7m86dl7z91jtphpf82eceycvn0.zip"
 outfile="bonito/models/quartz5x5-s3-4000.zip"
 wget -q --show-progress --max-redirect=9 -O "$outfile" "$url"
 unzip "$outfile" -d "$(dirname $outfile)"
