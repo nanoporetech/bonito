@@ -4,17 +4,18 @@ Bonito utils
 
 import re
 import os
+import random
 from glob import glob
-from itertools import groupby
 from collections import defaultdict
 
 from bonito.model import Model
 
 import toml
 import torch
-import random
 import parasail
 import numpy as np
+from ont_fast5_api.fast5_interface import get_fast5_file
+
 
 try:
     from claragenomics.bindings import cuda
@@ -42,19 +43,97 @@ def init(seed, device):
     assert(torch.cuda.is_available())
 
 
-def decode_ref(encoded, labels):
+def med_mad(x, factor=1.4826):
     """
-    Convert a integer encoded reference into a string and remove blanks
+    Calculate signal median and median absolute deviation
     """
-    return ''.join(labels[e] for e in encoded if e)
+    med = np.median(x)
+    mad = np.median(np.absolute(x - med)) * factor
+    return med, mad
 
 
-def decode_ctc(predictions, labels):
+def trim(signal, window_size=40, threshold_factor=3.0, min_elements=3):
+
+    med, mad = med_mad(signal[-(window_size*25):])
+    threshold = med + mad * threshold_factor
+    num_windows = len(signal) // window_size
+
+    for pos in range(num_windows):
+
+        start = pos * window_size
+        end = start + window_size
+
+        window = signal[start:end]
+
+        if len(window[window > threshold]) > min_elements:
+            if window[-1] > threshold:
+                continue
+            return end, len(signal)
+
+    return 0, len(signal)
+
+
+def preprocess(x, min_samples=1000):
+    start, end = trim(x)
+    # REVISIT: we can potentially trim all the signal if this goes wrong
+    if end - start < min_samples:
+        start = 0
+        end = len(x)
+        #sys.stderr.write("badly trimmed read\n")
+
+    med, mad = med_mad(x[start:end])
+    norm_signal = (x[start:end] - med) / mad
+    return norm_signal
+
+
+def get_raw_data(fast5_filepath):
     """
-    Argmax decoder with collapsing repeats
+    Get the raw signal and read id from the fast5 files
     """
-    path = np.argmax(predictions, axis=1)
-    return ''.join([labels[b] for b, g in groupby(path) if b])
+    with get_fast5_file(fast5_filepath, mode="r") as f5:
+        for read_id in f5.get_read_ids():
+            read = f5.get_read(read_id)
+            raw_data = read.get_raw_data(scale=True)
+            raw_data = preprocess(raw_data)
+            yield read_id, raw_data
+
+
+def window(data, size, stepsize=1, padded=False, axis=-1):
+    """
+    Segment data in `size` chunks with overlap
+    """
+    shape = list(data.shape)
+    shape[axis] = np.floor(data.shape[axis] / stepsize - size / stepsize + 1).astype(int)
+    shape.append(size)
+
+    strides = list(data.strides)
+    strides[axis] *= stepsize
+    strides.append(data.strides[axis])
+
+    return np.lib.stride_tricks.as_strided(data, shape=shape, strides=strides)
+
+
+def chunk_data(raw_data, chunksize, overlap):
+    """
+    Break reads into chunks before calling
+    """
+    if len(raw_data) <= chunksize:
+        chunks = np.expand_dims(raw_data, axis=0)
+    else:
+        chunks = window(raw_data, chunksize, stepsize=chunksize - overlap)
+    return np.expand_dims(chunks, axis=1)
+
+
+def stitch(predictions, overlap):
+    """
+    Stitch predictions together with a given overlap
+    """
+    if len(predictions) == 1:
+        return np.squeeze(predictions, axis=0)
+    stitched = [predictions[0, 0:-overlap]]
+    for i in range(1, predictions.shape[0] - 1): stitched.append(predictions[i][overlap:-overlap])
+    stitched.append(predictions[-1][overlap:])
+    return np.concatenate(stitched)
 
 
 def load_data(shuffle=False, limit=None, directory=None):

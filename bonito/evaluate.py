@@ -2,7 +2,6 @@
 Bonito model evaluator
 """
 
-
 import time
 import torch
 import numpy as np
@@ -10,8 +9,9 @@ from itertools import starmap
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.training import ChunkDataSet
+from bonito.decode import decode, decode_ref
 from bonito.util import init, load_data, load_model
-from bonito.util import decode_ctc, decode_ref, accuracy, poa, print_alignment
+from bonito.util import  accuracy, poa, print_alignment
 
 from torch.utils.data import DataLoader
 
@@ -52,7 +52,7 @@ def main(args):
         duration = time.perf_counter() - t0
 
         references = [decode_ref(target, model.alphabet) for target in dataloader.dataset.targets]
-        sequences = [decode_ctc(post, model.alphabet) for post in np.concatenate(predictions)]
+        sequences = [decode(post, model.alphabet, args.beamsize) for post in np.concatenate(predictions)]
         accuracies = list(starmap(accuracy, zip(references, sequences)))
 
         if args.poa: poas.append(sequences)
@@ -68,10 +68,8 @@ def main(args):
         t0 = time.perf_counter()
         # group each sequence prediction per model together
         poas = [list(seq) for seq in zip(*poas)]
-
         consensuses = poa(poas)
         duration = time.perf_counter() - t0
-
         accuracies = list(starmap(accuracy, zip(references, consensuses)))
 
         print("* mean      %.2f%%" % np.mean(accuracies))
@@ -92,6 +90,7 @@ def argparser():
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--chunks", default=500, type=int)
     parser.add_argument("--batchsize", default=100, type=int)
+    parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
     parser.add_argument("--shuffle", action="store_true", default=True)
     return parser
