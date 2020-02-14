@@ -6,7 +6,7 @@ import time
 from itertools import starmap
 
 from bonito.util import accuracy
-from bonito.decode import decode
+from bonito.decode import decode, decode_ref
 
 import torch
 import numpy as np
