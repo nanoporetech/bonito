@@ -77,8 +77,8 @@ def main(args):
         config['block'][-2]['filters'] = trial.suggest_int('c2_filters', 1, 1024)
 
         # C3
-        config['block'][-1]['kernel'] = [int(trial.suggest_discrete_uniform('c2_kernel', 1, 99, 2))]
-        config['block'][-1]['filters'] = trial.suggest_int('c2_filters', 1, 1024)
+        config['block'][-1]['kernel'] = [int(trial.suggest_discrete_uniform('c3_kernel', 1, 99, 2))]
+        config['block'][-1]['filters'] = trial.suggest_int('c3_filters', 1, 1024)
 
         model = Model(config)
         num_params = sum(p.numel() for p in model.parameters())
