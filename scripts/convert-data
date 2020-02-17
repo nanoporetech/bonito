@@ -66,8 +66,6 @@ def main(args):
     chunk_idx = 0
     chunk_count = 0
 
-    min_run = 5
-
     min_bases = 0
     max_bases = 0
     off_the_end_ref = 0
@@ -155,7 +153,7 @@ def main(args):
 
             longest_run = max(len(list(run)) for label, run in groupby(reference[start:end]))
 
-            if longest_run < min_run:
+            if longest_run < args.min_run:
                 min_run_count += 1
                 continue
 
@@ -216,6 +214,7 @@ if __name__ == "__main__":
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--chunks", default=10000000, type=int)
+    parser.add_argument("--min-run", default=5, type=int)
     parser.add_argument("--min-seq-len", default=200, type=int)
     parser.add_argument("--max-seq-len", default=400, type=int)
     parser.add_argument("--min-samples-per-base", default=8, type=int)
