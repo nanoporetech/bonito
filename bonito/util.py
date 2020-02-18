@@ -6,7 +6,7 @@ import re
 import os
 import random
 from glob import glob
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 from bonito.model import Model
 
@@ -15,7 +15,6 @@ import torch
 import parasail
 import numpy as np
 from ont_fast5_api.fast5_interface import get_fast5_file
-
 
 try:
     from claragenomics.bindings import cuda
@@ -177,7 +176,14 @@ def load_model(dirname, device, weights=None):
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
     model = Model(toml.load(config))
     model.to(device)
-    model.load_state_dict(torch.load(weights, map_location=device))
+
+    state_dict = torch.load(weights, map_location=device)
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k.replace('module.', '')
+        new_state_dict[name] = v
+
+    model.load_state_dict(new_state_dict)
     model.eval()
     return model
 
