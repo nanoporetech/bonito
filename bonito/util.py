@@ -85,16 +85,17 @@ def preprocess(x, min_samples=1000):
     return norm_signal
 
 
-def get_raw_data(fast5_filepath):
+def get_raw_data(filename):
     """
     Get the raw signal and read id from the fast5 files
     """
-    with get_fast5_file(fast5_filepath, mode="r") as f5:
-        for read_id in f5.get_read_ids():
-            read = f5.get_read(read_id)
-            raw_data = read.get_raw_data(scale=True)
-            raw_data = preprocess(raw_data)
-            yield read_id, raw_data
+    with get_fast5_file(filename, 'r') as f5_fh:
+        for read in f5_fh.get_reads():
+            raw = read.handle[read.raw_dataset_name][:]
+            channel_info = read.handle[read.global_key + 'channel_id'].attrs
+            scaling = channel_info['range'] / channel_info['digitisation']
+            offset = int(channel_info['offset'])
+            yield read.read_id, np.array(scaling * (raw + offset), dtype=np.float32)
 
 
 def window(data, size, stepsize=1, padded=False, axis=-1):

@@ -12,12 +12,15 @@ if mo:
 else:
     raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
 
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
 
 setup(
     name="ont-%s" % __pkg_name__,
     version=__version__,
     packages=find_packages(),
     include_package_data=True,
+    install_requires=requirements,
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
@@ -26,12 +29,5 @@ setup(
             '{0} = {0}:main'.format(__pkg_name__)
         ]
     },
-    install_requires=[
-        'toml==0.10.0',
-        'tqdm==4.31.1',
-        'torch==1.4.0',
-        'parasail==1.1.19',
-        'ont-fast5-api==2.0.0',
-    ]
 )
 
