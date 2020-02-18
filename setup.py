@@ -15,12 +15,17 @@ else:
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
+with open('README.md', encoding='utf-8') as f:
+    long_description = f.read()
+
 setup(
     name="ont-%s" % __pkg_name__,
     version=__version__,
     packages=find_packages(),
     include_package_data=True,
     install_requires=requirements,
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
@@ -30,4 +35,3 @@ setup(
         ]
     },
 )
-
