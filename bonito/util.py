@@ -163,7 +163,7 @@ def load_data(shuffle=False, limit=None, directory=None):
     return chunks, chunk_lengths, targets, target_lengths
 
 
-def load_model(dirname, device, weights=None):
+def load_model(dirname, device, weights=None, half=False):
     """
     Load a model from disk
     """
@@ -184,6 +184,8 @@ def load_model(dirname, device, weights=None):
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
+
+    if half: model = model.half()
     model.eval()
     return model
 

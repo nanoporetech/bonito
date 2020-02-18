@@ -15,9 +15,6 @@ from bonito.util import  accuracy, poa, print_alignment
 
 from torch.utils.data import DataLoader
 
-try: from apex import amp
-except ImportError: pass
-
 
 def main(args):
 
@@ -25,29 +22,28 @@ def main(args):
     init(args.seed, args.device)
 
     print("* loading data")
-    testdata = ChunkDataSet(*load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory))
+    testdata = ChunkDataSet(
+        *load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory)
+    )
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
 
     for w in [int(i) for i in args.weights.split(',')]:
 
         print("* loading model", w)
-        model = load_model(args.model_directory, args.device, weights=w)
-
-        if args.amp:
-            try:
-                model = amp.initialize(model, opt_level="O1", verbosity=0)
-            except NameError:
-                print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
-                exit(1)
+        model = load_model(args.model_directory, args.device, weights=w, half=args.half)
 
         print("* calling")
         predictions = []
         t0 = time.perf_counter()
 
-        for data, *_ in dataloader:
-            with torch.no_grad():
-                log_probs = model(data.to(args.device))
-                predictions.append(log_probs.exp().cpu().numpy())
+        with torch.no_grad():
+            for data, *_ in dataloader:
+                if args.half:
+                    data = data.type(torch.float16).to(args.device)
+                else:
+                    data = data.to(args.device)
+                log_probs = model(data)
+                predictions.append(log_probs.exp().cpu().numpy().astype(np.float32))
 
         duration = time.perf_counter() - t0
 
@@ -85,7 +81,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("--half", action="store_true", default=False)
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--chunks", default=500, type=int)
