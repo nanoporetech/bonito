@@ -33,7 +33,7 @@ $ source venv3/bin/activate
 (venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml --amp --batch 64 --chunks 1000000
 ```
 
-Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
+Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
 
 Pretrained models can be downloaded by running `./scripts/get-models`.
 
