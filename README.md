@@ -13,8 +13,8 @@ A convolutional basecaller inspired by QuartzNet.
 
 # Installation
 
-```
-pip install ont-bonito
+```bash
+$ pip install ont-bonito
 ```
 
 ## Scripts
