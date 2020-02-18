@@ -8,6 +8,8 @@ from textwrap import wrap
 from itertools import groupby
 from multiprocessing import Process, Queue
 
+import numpy as np
+
 from fast_ctc_decode import beam_search
 
 
@@ -26,12 +28,12 @@ def greedy_ctc_decode(predictions, labels):
     return ''.join([labels[b] for b, g in groupby(path) if b])
 
 
-def decode(predictions, alphabet, beam_size=5, threshold=0.001):
+def decode(predictions, alphabet, beam_size=5, threshold=0.1):
     """
     Decode model posteriors to sequence
     """
     if beam_size == 1:
-        return greedy_ctc_decode(predictions, model.alphabet)
+        return greedy_ctc_decode(predictions, alphabet)
     return beam_search(predictions, ''.join(alphabet), beam_size, threshold)
 
 
