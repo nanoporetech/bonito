@@ -21,37 +21,32 @@ def main(args):
     sys.stderr.write("> loading model\n")
     model = load_model(args.model_directory, args.device, weights=int(args.weights), half=args.half)
 
+    samples = 0
     num_reads = 0
-    num_chunks = 0
+    max_read_size = 1e9
+    dtype = np.float16 if args.half else np.float32
+
     t0 = time.perf_counter()
 
     sys.stderr.write("> calling\n")
 
-    with DecoderWriter(model.alphabet, args.beamsize) as decoder:
+    with DecoderWriter(model.alphabet, args.beamsize) as decoder, torch.no_grad():
         for fast5 in tqdm(glob("%s/*fast5" % args.reads_directory), ascii=True, ncols=100):
             for read_id, raw_data in get_raw_data(fast5):
 
-                predictions = []
-                chunks = chunk_data(raw_data, args.chunksize, args.overlap)
+                if len(raw_data) > max_read_size:
+                    sys.stderr.write("> skipping %s: %s too long\n" % (len(raw_data), read_id))
+                    pass
+
                 num_reads += 1
-                num_chunks += chunks.shape[0]
+                samples += len(raw_data)
 
-                with torch.no_grad():
-                    for i in range(ceil(len(chunks) / args.batchsize)):
-                        batch = chunks[i*args.batchsize: (i+1)*args.batchsize]
-                        if args.half:
-                            tchunks = torch.tensor(batch).type(torch.half).to(args.device)
-                        else:
-                            tchunks = torch.tensor(batch).to(args.device)
-                        probs = torch.exp(model(tchunks))
-                        predictions.append(probs.cpu())
+                raw_data = raw_data[np.newaxis, np.newaxis, :].astype(dtype)
+                gpu_data = torch.tensor(raw_data).to(args.device)
+                posteriors = model(gpu_data).exp().cpu().numpy().squeeze()
 
-                predictions = np.concatenate(predictions).astype(np.float32)
-                predictions = stitch(predictions, int(args.overlap / model.stride / 2))
+                decoder.queue.put((read_id, posteriors))
 
-                decoder.queue.put((read_id, predictions))
-
-    samples = num_chunks * args.chunksize
     duration = time.perf_counter() - t0
 
     sys.stderr.write("> completed reads: %s\n" % num_reads)
@@ -69,8 +64,5 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)
-    parser.add_argument("--batchsize", default=64, type=int)
-    parser.add_argument("--overlap", default=100, type=int)
-    parser.add_argument("--chunksize", default=10000, type=int)
     parser.add_argument("--half", action="store_true", default=False)
     return parser
