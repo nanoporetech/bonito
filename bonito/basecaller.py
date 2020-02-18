@@ -59,8 +59,8 @@ def argparser():
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
     )
-    parser.add_argument("reads_directory")
     parser.add_argument("model_directory")
+    parser.add_argument("reads_directory")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)

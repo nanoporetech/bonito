@@ -40,8 +40,10 @@ Pretrained models can be downloaded by running `./scripts/get-models`.
 ## Basecalling
 
 ```bash
-(venv3) $ bonito basecaller <READ_DIR> <MODEL_DIR> > basecalls.fasta
+(venv3) $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
 ```
+
+If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
 
 ## Scripts
 

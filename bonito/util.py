@@ -2,8 +2,8 @@
 Bonito utils
 """
 
-import re
 import os
+import re
 import random
 from glob import glob
 from collections import defaultdict, OrderedDict
@@ -23,6 +23,7 @@ except ImportError:
     pass
 
 
+__dir__ = os.path.dirname(os.path.realpath(__file__))
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 
 
@@ -142,7 +143,7 @@ def load_data(shuffle=False, limit=None, directory=None):
     Load the training data
     """
     if directory is None:
-        directory = os.path.join(os.path.dirname(__file__), "data")
+        directory = os.path.join(__dir__, "data")
 
     chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
     chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"), mmap_mode='r')
@@ -169,8 +170,13 @@ def load_model(dirname, device, weights=None, half=False):
     """
     Load a model from disk
     """
+    if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__dir__, "models", dirname)):
+        dirname = os.path.join(__dir__, "models", dirname)
+
     if not weights: # take the latest checkpoint
         weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+        if not weight_files:
+            raise FileNotFoundError("no model weights found in '%s'" % dirname)
         weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
     device = torch.device(device)

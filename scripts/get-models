@@ -1,7 +1,7 @@
 #!/bin/bash
 
-url="https://nanoporetech.box.com/shared/static/3xwsapva4c0gjg9f3kn9ergtxo7nnueo.zip"
-outfile="bonito/models/dna_r941.zip"
+url="https://nanoporetech.box.com/shared/static/iatumku2snun5xfwn70wyym9cdo548mv.zip"
+outfile="bonito/models/models.zip"
 wget -q --show-progress --max-redirect=9 -O "$outfile" "$url"
 unzip "$outfile" -d "$(dirname $outfile)"
 rm -f "$outfile"
