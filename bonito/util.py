@@ -95,7 +95,8 @@ def get_raw_data(filename):
             channel_info = read.handle[read.global_key + 'channel_id'].attrs
             scaling = channel_info['range'] / channel_info['digitisation']
             offset = int(channel_info['offset'])
-            yield read.read_id, np.array(scaling * (raw + offset), dtype=np.float32)
+            scaled = np.array(scaling * (raw + offset), dtype=np.float32)
+            yield read.read_id, preprocess(scaled)
 
 
 def window(data, size, stepsize=1, padded=False, axis=-1):
