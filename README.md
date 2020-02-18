@@ -1,5 +1,7 @@
 # Bonito
 
+[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
+
 A convolutional basecaller inspired by QuartzNet.
 
 ## Features
@@ -9,17 +11,27 @@ A convolutional basecaller inspired by QuartzNet.
  - CTC training.
  - Small Python codebase.
 
-## Quickstart
+# Installation
 
 ```bash
-$ git clone https://github.com/nanoporetech/bonito.git
-$ cd bonito
-$ python3 -m venv venv3
-$ source venv3/bin/activate
-(venv3) $ pip install --upgrade pip
-(venv3) $ pip install -r requirements.txt
-(venv3) $ python setup.py develop
+$ pip install ont-bonito
 ```
+
+## Scripts
+
+ - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `bonito tune` - tune network hyperparameters.
+ - `bonito train` - train a bonito model.
+ - `bonito evaluate` - evaluate a model performance on a chunk basis.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
+
+## Basecalling
+
+```bash
+(venv3) $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
+```
+
+If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
 
 ## Training a model
 
@@ -27,28 +39,27 @@ $ source venv3/bin/activate
 (venv3) $ # download the training data and train a model with the default settings
 (venv3) $ ./scripts/get-training-data
 (venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml
-(venv3) $
-(venv3) $ # train on gpu 1, use mixed precision, larger batch size and use 1,000,000 chunks
-(venv3) $ export CUDA_VISIBLE_DEVICES=1
+(venv3) $ 
+(venv3) $ # train on the first gpu, use mixed precision, larger batch size and 1,000,000 chunks
+(venv3) $ export CUDA_VISIBLE_DEVICES=0
 (venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml --amp --batch 64 --chunks 1000000
 ```
 
-Automatic mixed precision can be used for speeding up training by passing the `--amp` flag to the training script, however the [apex](https://github.com/nvidia/apex#quick-start) package will need to be installed manually.
+Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
 
-Pretrained models can be downloaded by running `./scripts/get-models`.
-
-## Basecalling
+## Developer Quickstart
 
 ```bash
-(venv3) $ bonito basecaller <READ_DIR> <MODEL_DIR> > basecalls.fasta
+$ git clone https://github.com/nanoporetech/bonito.git
+$ cd bonito
+$ python3 -m venv venv3
+$ source venv3/bin/activate
+(venv3) $ pip install --upgrade pip wheel
+(venv3) $ pip install -r requirements.txt
+(venv3) $ python setup.py develop
 ```
 
-## Scripts
-
- - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito train` - train a bonito model.
- - `bonito evaluate` - evaluate a model performance on a chunk basis.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
+The pretrained models can be downloaded by running `./scripts/get-models`.
 
 ### References
 

@@ -3,11 +3,12 @@ Bonito Model template
 """
 
 import torch.nn as nn
-from torch.nn import ReLU, LeakyReLU
+from torch.nn import GELU, ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
 
 activations = {
+    "gelu": GELU,
     "relu": ReLU,
     "leaky_relu": LeakyReLU,
 }
@@ -173,7 +174,7 @@ class Decoder(Module):
     Decoder
     """
     def __init__(self, features, classes):
-        super(Decoder, self).__init__()        
+        super(Decoder, self).__init__()
         self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
 
     def forward(self, x):

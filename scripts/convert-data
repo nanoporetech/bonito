@@ -10,12 +10,17 @@ import random
 import numpy as np
 from bisect import bisect_left
 from argparse import ArgumentParser
-from itertools import chain, zip_longest
+from itertools import chain, zip_longest, groupby
 
 
-def align(samples, pointers):
+def align(samples, pointers, reference):
     """ align to the start of the mapping """
-    return samples[pointers[0]:pointers[-1]], pointers - pointers[0]
+    squiggle_duration = len(samples)
+    mapped_off_the_start = len(pointers[pointers < 0])
+    mapped_off_the_end = len(pointers[pointers >= squiggle_duration])
+    pointers = pointers[mapped_off_the_start:len(pointers) - mapped_off_the_end]
+    reference = reference[mapped_off_the_start:len(reference) - mapped_off_the_end]
+    return samples[pointers[0]:pointers[-1]], pointers - pointers[0], reference
 
 
 def scale(read, samples, normalise=True):
@@ -25,6 +30,11 @@ def scale(read, samples, normalise=True):
     if normalise:
         return (scaled - read.attrs['shift_frompA']) / read.attrs['scale_frompA']
     return scaled
+
+
+def boundary(sequence, r=5):
+    """ check if we are on a homopolymer boundary """
+    return len(set(sequence[-r:])) == 1
 
 
 def num_reads(tfile):
@@ -42,7 +52,7 @@ def get_reads(tfile):
             pointers = read['Ref_to_signal'][:]
             samples = read['Dacs'][:]
             samples = scale(read, samples)
-            samples, pointers = align(samples, pointers)
+            samples, pointers, reference = align(samples, pointers, reference)
             yield read_id, samples, reference, pointers
 
 
@@ -60,6 +70,8 @@ def main(args):
     max_bases = 0
     off_the_end_ref = 0
     off_the_end_sig = 0
+    min_run_count = 0
+    homopolymer_boundary = 0
 
     total_reads = num_reads(args.chunkify_file)
 
@@ -73,23 +85,41 @@ def main(args):
 
         read_idx += 1
 
-        sequence_length = len(reference)
         squiggle_duration = len(samples)
+        sequence_length = len(reference) - 1
 
-        # overlap chunks with +/- 2.5% of max seq len
-        overlap = np.int32(args.max_seq_len * 0.025)
+        if sequence_length < args.min_seq_len:
+            print(samples)
+            print(read_id, squiggle_duration, len(pointers), mapped_off_the_end, sequence_length)
 
         # first chunk
         seq_starts = 0
         seq_ends = np.random.randint(args.min_seq_len, args.max_seq_len)
 
+        repick = int((args.max_seq_len - args.min_seq_len) / 2)
+        while boundary(reference[seq_starts:seq_ends]) and repick:
+            seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
+            seq_ends = min(seq_ends, sequence_length)
+            repick -= 1
+
         chunk_idxs = [(seq_starts, seq_ends)]
 
         # variable size chunks with overlap
         while seq_ends < sequence_length - args.min_seq_len:
+
+            # overlap chunks with +/- 3% of max seq len
+            overlap = np.int32(args.max_seq_len * 0.03)
+
             seq_starts = seq_ends + np.random.randint(-overlap, overlap)
             seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
             seq_ends = min(seq_ends, sequence_length)
+
+            repick = int((args.max_seq_len - args.min_seq_len) / 2)
+            while boundary(reference[seq_starts:seq_ends]) and repick:
+                seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
+                seq_ends = min(seq_ends, sequence_length)
+                repick -= 1
+
             chunk_idxs.append((seq_starts, seq_ends))
 
         for start, end in chunk_idxs:
@@ -97,11 +127,12 @@ def main(args):
             chunk_idx += 1
 
             if end > sequence_length:
+                print(read_id, end, sequence_length)
                 off_the_end_ref += 1
                 continue
 
             squiggle_start = pointers[start]
-            squiggle_end = pointers[end]
+            squiggle_end = pointers[end + 1] # fence post mapping
             squiggle_length = squiggle_end - squiggle_start
 
             reference_length = end - start
@@ -120,6 +151,16 @@ def main(args):
                 off_the_end_sig += 1
                 continue
 
+            longest_run = max(len(list(run)) for label, run in groupby(reference[start:end]))
+
+            if longest_run < args.min_run:
+                min_run_count += 1
+                continue
+
+            if boundary(reference[start:end]):
+                homopolymer_boundary += 1
+                # continue - include the chunk anyway
+
             chunks[chunk_count, :squiggle_length] = samples[squiggle_start:squiggle_end]
             chunk_lengths[chunk_count] = squiggle_length
 
@@ -136,13 +177,15 @@ def main(args):
             break
 
     skipped = chunk_idx - chunk_count
-    percent = (skipped / chunk_count * 100) if skipped else 0
+    percent = (skipped / chunk_idx * 100) if skipped else 0
 
     print("Processed %s reads of out %s [%.2f%%]" % (read_idx, total_reads, read_idx / total_reads * 100))
-    print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_count, percent))
+    print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_idx, percent))
     print("Reason for skipping:")
     print("  - off the end (signal)          ", off_the_end_sig)
     print("  - off the end (sequence)        ", off_the_end_ref)
+    print("  - homopolymer chunk boundary    ", homopolymer_boundary)
+    print("  - longest run too short         ", min_run_count)
     print("  - minimum number of bases       ", min_bases)
     print("  - maximum number of bases       ", max_bases)
 
@@ -170,9 +213,10 @@ if __name__ == "__main__":
     parser.add_argument("chunkify_file")
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--chunks", default=2000000, type=int)
-    parser.add_argument("--min-seq-len", default=256, type=int)
-    parser.add_argument("--max-seq-len", default=512, type=int)
+    parser.add_argument("--chunks", default=10000000, type=int)
+    parser.add_argument("--min-run", default=5, type=int)
+    parser.add_argument("--min-seq-len", default=200, type=int)
+    parser.add_argument("--max-seq-len", default=400, type=int)
     parser.add_argument("--min-samples-per-base", default=8, type=int)
-    parser.add_argument("--max-samples-per-base", default=16, type=int)
+    parser.add_argument("--max-samples-per-base", default=12, type=int)
     main(parser.parse_args())

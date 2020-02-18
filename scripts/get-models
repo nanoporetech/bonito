@@ -1,7 +1,7 @@
 #!/bin/bash
 
-url="https://nanoporetech.box.com/shared/static/7dhhis7m86dl7z91jtphpf82eceycvn0.zip"
-outfile="bonito/models/quartz5x5-s3-4000.zip"
+url="https://nanoporetech.box.com/shared/static/iatumku2snun5xfwn70wyym9cdo548mv.zip"
+outfile="bonito/models/models.zip"
 wget -q --show-progress --max-redirect=9 -O "$outfile" "$url"
 unzip "$outfile" -d "$(dirname $outfile)"
 rm -f "$outfile"

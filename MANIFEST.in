@@ -1,0 +1,8 @@
+include README.md
+include LICENSE.txt
+include requirements.txt
+include scripts/get-models
+include scripts/get-training-data
+include scripts/convert-data
+include config/quartznet5x5.toml
+graft bonito/models/dna_r9.4.1/

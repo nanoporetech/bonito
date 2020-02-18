@@ -8,7 +8,14 @@ bonito/data/*.npy
 bonito/data/*.zip
 bonito/models/*
 dist/
-*.fa
+*.f[aq]
 *.csv
 *.fast*
 *.sam
+.ipynb_checkpoints/
+Untitled*.ipynb
+*.hdf5
+*.onnx
+*.log
+*.db
+*.sqlite3

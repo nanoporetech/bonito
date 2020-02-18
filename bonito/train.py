@@ -30,7 +30,7 @@ def main(args):
     workdir = os.path.expanduser(args.training_directory)
 
     if os.path.exists(workdir) and not args.force:
-        print("* error: %s exists." % workdir)
+        print("[error] %s exists." % workdir)
         exit(1)
 
     init(args.seed, args.device)
@@ -66,20 +66,25 @@ def main(args):
         try:
             model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
         except NameError:
-            print("* error: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
+            print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
             exit(1)
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
-    log_interval = np.floor(len(train_dataset) / args.batch * 0.05)
-
     for epoch in range(1, args.epochs + 1):
 
-        print("[Epoch %s]:" % epoch, workdir.strip('/').split('/')[-1])
-        train_loss, duration = train(
-            log_interval, model, device, train_loader, optimizer, epoch, use_amp=args.amp
-        )
-        test_loss, mean, median = test(model, device, test_loader)
+        try:
+            train_loss, duration = train(
+                model, device, train_loader, optimizer, use_amp=args.amp
+            )
+            val_loss, val_mean, val_median = test(model, device, test_loader)
+        except KeyboardInterrupt:
+            break
+
+        print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
+            epoch, workdir, val_loss, val_mean, val_median
+        ))
+
         torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
         with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
             csvw = csv.writer(csvfile, delimiter=',')
@@ -90,7 +95,7 @@ def main(args):
                 ])
             csvw.writerow([
                 datetime.today(), int(duration), epoch,
-                train_loss, test_loss, mean, median,
+                train_loss, val_loss, val_mean, val_median,
             ])
 
         schedular.step()
@@ -107,7 +112,7 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--epochs", default=400, type=int)
     parser.add_argument("--batch", default=32, type=int)
     parser.add_argument("--chunks", default=1000000, type=int)
     parser.add_argument("--validation_split", default=0.99, type=float)
