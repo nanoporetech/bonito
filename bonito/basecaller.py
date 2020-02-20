@@ -4,16 +4,13 @@ Bonito Basecaller
 
 import sys
 import time
-from math import ceil
-from glob import glob
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.decode import DecoderWriter
-from bonito.util import load_model, chunk_data, stitch, get_raw_data
+from bonito.util import load_model
+from bonito.io import DecoderWriter, PreprocessReader
 
 import torch
 import numpy as np
-from tqdm import tqdm
 
 
 def main(args):
@@ -25,27 +22,34 @@ def main(args):
     num_reads = 0
     max_read_size = 1e9
     dtype = np.float16 if args.half else np.float32
+    reader = PreprocessReader(args.reads_directory)
+    writer = DecoderWriter(model.alphabet, args.beamsize)
 
     t0 = time.perf_counter()
-
     sys.stderr.write("> calling\n")
 
-    with DecoderWriter(model.alphabet, args.beamsize) as decoder, torch.no_grad():
-        for fast5 in tqdm(glob("%s/*fast5" % args.reads_directory), ascii=True, ncols=100):
-            for read_id, raw_data in get_raw_data(fast5):
+    with writer, reader, torch.no_grad():
 
-                if len(raw_data) > max_read_size:
-                    sys.stderr.write("> skipping %s: %s too long\n" % (len(raw_data), read_id))
-                    pass
+        while True:
 
-                num_reads += 1
-                samples += len(raw_data)
+            read = reader.queue.get()
+            if read is None:
+                break
 
-                raw_data = raw_data[np.newaxis, np.newaxis, :].astype(dtype)
-                gpu_data = torch.tensor(raw_data).to(args.device)
-                posteriors = model(gpu_data).exp().cpu().numpy().squeeze()
+            read_id, raw_data = read
 
-                decoder.queue.put((read_id, posteriors))
+            if len(raw_data) > max_read_size:
+                sys.stderr.write("> skipping %s: %s too long\n" % (len(raw_data), read_id))
+                pass
+
+            num_reads += 1
+            samples += len(raw_data)
+
+            raw_data = raw_data[np.newaxis, np.newaxis, :].astype(dtype)
+            gpu_data = torch.tensor(raw_data).to(args.device)
+            posteriors = model(gpu_data).exp().cpu().numpy().squeeze()
+
+            writer.queue.put((read_id, posteriors))
 
     duration = time.perf_counter() - t0
 
