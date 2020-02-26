@@ -54,7 +54,7 @@ $ git clone https://github.com/nanoporetech/bonito.git
 $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
-(venv3) $ pip install --upgrade pip wheel
+(venv3) $ pip install --upgrade pip
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
 ```

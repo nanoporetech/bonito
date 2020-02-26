@@ -2,7 +2,7 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 from bonito import basecaller, evaluate, train, view, tune
 
-__version__ = '0.0.5'
+__version__ = '0.0.7'
 
 
 def main():
