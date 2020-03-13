@@ -11,7 +11,7 @@ A convolutional basecaller inspired by QuartzNet.
  - CTC training.
  - Small Python codebase.
 
-# Installation
+## Installation
 
 ```bash
 $ pip install ont-bonito
@@ -60,6 +60,26 @@ $ source venv3/bin/activate
 ```
 
 The pretrained models can be downloaded by running `./scripts/get-models`.
+
+## Medaka
+
+An pre-release Medaka can be downloaded from [here](https://nanoporetech.box.com/shared/static/oukeesfjc6406t5po0x2hlw97lnelkyl.hdf5).
+
+It has been trained on Zymo: *E. faecalis, P. aeruginosa, S. enterica1, S.aureus and E.coli (with L. monocytogenes and B. subtilis held out)*.
+
+
+| Coverage | B. subtilis | E. coli | E. faecalis | L. monocytogenes | S. aureus | S. enterica |
+| -------- |:-----------:|:-------:|:-----------:|:----------------:|:---------:|:-----------:|
+|       25 |       36.20 |   37.96 |       36.38 |            36.95 |     39.21 |       37.24 |
+|       50 |       40.63 |   42.22 |       40.97 |            43.01 |     45.23 |       41.55 |
+|       75 |       42.22 |   43.98 |       43.01 |            43.98 |     50.00 |       43.98 |
+|      100 |       45.23 |   45.23 |       44.56 |            45.23 |     50.00 |       45.23 |
+|      125 |       45.23 |   45.42 |       45.23 |            46.99 |     50.00 |       45.23 |
+|      150 |       45.23 |   45.23 |       46.99 |            46.99 |     50.00 |       46.99 |
+|      175 |       46.99 |   46.99 |       45.23 |            48.24 |     50.00 |       46.99 |
+|      200 |       45.23 |   45.23 |       46.99 |            46.99 |     50.00 |       46.99 |
+
+*Note: We working on training a full release model from a broader training set that we expect to generalises better.*
 
 ### References
 
