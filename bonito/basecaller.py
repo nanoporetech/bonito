@@ -20,7 +20,7 @@ def main(args):
 
     samples = 0
     num_reads = 0
-    max_read_size = 1e9
+    max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
     reader = PreprocessReader(args.reads_directory)
     writer = DecoderWriter(model.alphabet, args.beamsize)
@@ -39,8 +39,8 @@ def main(args):
             read_id, raw_data = read
 
             if len(raw_data) > max_read_size:
-                sys.stderr.write("> skipping %s: %s too long\n" % (len(raw_data), read_id))
-                pass
+                sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id, len(raw_data)))
+                continue
 
             num_reads += 1
             samples += len(raw_data)
