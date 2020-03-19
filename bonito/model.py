@@ -3,12 +3,11 @@ Bonito Model template
 """
 
 import torch.nn as nn
-from torch.nn import GELU, ReLU, LeakyReLU
+from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
 
 activations = {
-    "gelu": GELU,
     "relu": ReLU,
     "leaky_relu": LeakyReLU,
 }

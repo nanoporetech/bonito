@@ -29,5 +29,7 @@ def decode(predictions, alphabet, beam_size=5, threshold=0.1):
     """
     alphabet = ''.join(alphabet)
     if beam_size == 1:
-        return greedy_ctc_decode(predictions, alphabet)
-    return beam_search(predictions.astype(np.float32), alphabet, beam_size, threshold)
+        sequence = greedy_ctc_decode(predictions, alphabet)
+    else:
+        sequence, _ = beam_search(predictions.astype(np.float32), alphabet, beam_size, threshold)
+    return sequence
