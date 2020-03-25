@@ -48,6 +48,11 @@ def main(args):
     config = toml.load(args.config)
     argsdict = dict(training=vars(args))
 
+    chunk_config = {}
+    chunk_config_file = os.path.join(args.directory, 'config.toml')
+    if os.path.isfile(chunk_config_file):
+        chunk_config = toml.load(os.path.join(chunk_config_file))
+
     print("[loading model]")
     model = Model(config)
 
@@ -58,7 +63,7 @@ def main(args):
     model.train()
 
     os.makedirs(workdir, exist_ok=True)
-    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
+    toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
 

@@ -6,6 +6,7 @@ Convert a chunkify training file
 
 import os
 import h5py
+import toml
 import random
 import numpy as np
 from bisect import bisect_left
@@ -80,6 +81,9 @@ def main(args):
 
     targets = np.zeros((args.chunks, args.max_seq_len), dtype=np.uint8)
     target_lengths = np.zeros(args.chunks, dtype=np.uint16)
+
+    with open(os.path.join(args.output_directory, 'config.toml'), 'w') as conf:
+        toml.dump(dict(chunks=vars(args)), conf)
 
     for read_id, samples, reference, pointers in get_reads(args.chunkify_file):
 
