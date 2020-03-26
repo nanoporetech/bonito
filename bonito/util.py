@@ -24,6 +24,8 @@ except ImportError:
 
 
 __dir__ = os.path.dirname(os.path.realpath(__file__))
+__data__ = os.path.join(__dir__, "data")
+__models__ = os.path.join(__dir__, "models")
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 
 
@@ -143,7 +145,7 @@ def load_data(shuffle=False, limit=None, directory=None):
     Load the training data
     """
     if directory is None:
-        directory = os.path.join(__dir__, "data")
+        directory = __data__
 
     chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
     chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"), mmap_mode='r')
@@ -170,8 +172,8 @@ def load_model(dirname, device, weights=None, half=False):
     """
     Load a model from disk
     """
-    if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__dir__, "models", dirname)):
-        dirname = os.path.join(__dir__, "models", dirname)
+    if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
+        dirname = os.path.join(__models__, dirname)
 
     if not weights: # take the latest checkpoint
         weight_files = glob(os.path.join(dirname, "weights_*.tar"))
