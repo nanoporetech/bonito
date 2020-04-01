@@ -64,9 +64,12 @@ class DecoderWriter(Process):
             if job is None: return
             read_id, predictions = job
             sequence = decode(predictions, self.alphabet, self.beamsize)
-            sys.stdout.write(">%s\n" % read_id)
-            sys.stdout.write("%s\n" % os.linesep.join(wrap(sequence, self.wrap)))
-            sys.stdout.flush()
+            if sequence:
+                sys.stdout.write(">%s\n" % read_id)
+                sys.stdout.write("%s\n" % os.linesep.join(wrap(sequence, self.wrap)))
+                sys.stdout.flush()
+            else:
+                sys.stderr.write("> skippingempty sequnece %s\n" % read_id)
 
     def stop(self):
         self.queue.put(None)
