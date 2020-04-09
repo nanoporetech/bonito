@@ -17,14 +17,6 @@ A convolutional basecaller inspired by QuartzNet.
 $ pip install ont-bonito
 ```
 
-## Scripts
-
- - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito tune` - tune network hyperparameters.
- - `bonito train` - train a bonito model.
- - `bonito evaluate` - evaluate a model performance on a chunk basis.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
-
 ## Basecalling
 
 ```bash
@@ -47,6 +39,14 @@ If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase 
 
 Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
 
+## Scripts
+
+ - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `bonito tune` - tune network hyperparameters.
+ - `bonito train` - train a bonito model.
+ - `bonito evaluate` - evaluate a model performance on a chunk basis.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
+
 ## Developer Quickstart
 
 ```bash
@@ -59,7 +59,7 @@ $ source venv3/bin/activate
 (venv3) $ python setup.py develop
 ```
 
-The pretrained models can be downloaded by running `./scripts/get-models`.
+The pretrained models can be downloaded by running `./scripts/get-models` *(not required if installing from pip)*.
 
 ## Medaka
 
