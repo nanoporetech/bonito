@@ -11,8 +11,9 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
-from bonito.training import ChunkDataSet, train, test
-from bonito.util import load_data, load_training_state, init, __data__
+from bonito.util import load_data, init, __data__
+from bonito.training import ChunkDataSet, load_state, train, test
+
 
 import toml
 import torch
@@ -21,16 +22,13 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-try: from apex import amp
-except ImportError: pass
-
 
 def main(args):
 
     workdir = os.path.expanduser(args.training_directory)
 
     if os.path.exists(workdir) and not args.force:
-        print("[error] %s exists, use -f to override." % workdir)
+        print("[error] %s exists, use -f to force continue training." % workdir)
         exit(1)
 
     init(args.seed, args.device)
@@ -53,20 +51,19 @@ def main(args):
     if os.path.isfile(chunk_config_file):
         chunk_config = toml.load(os.path.join(chunk_config_file))
 
-    print("[loading model]")
-    model = Model(config)
-    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
-
-    last_epoch = load_training_state(workdir, args.device, model, optimizer, multi_gpu=args.multi_gpu)
     os.makedirs(workdir, exist_ok=True)
     toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
-    if args.amp:
-        try:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O1", verbosity=0)
-        except NameError:
-            print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
-            exit(1)
+    print("[loading model]")
+    model = Model(config)
+    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
+    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
+
+    if args.multi_gpu:
+        from torch.nn import DataParallel
+        model = DataParallel(model)
+        model.stride = model.module.stride
+        model.alphabet = model.module.alphabet
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
@@ -83,7 +80,8 @@ def main(args):
         print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
             epoch, workdir, val_loss, val_mean, val_median
         ))
-        model_state = model.module.state_dict() if args.multi_gpu else model.state_dict()
+
+        model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
         torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
         torch.save(optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
 
