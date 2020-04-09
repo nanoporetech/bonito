@@ -1,3 +1,4 @@
+import glob
 import os
 import re
 from setuptools import setup, find_packages
@@ -34,4 +35,5 @@ setup(
             '{0} = {0}:main'.format(__pkg_name__)
         ]
     },
+    scripts = glob.glob('scripts/*')
 )
