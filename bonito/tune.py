@@ -30,7 +30,7 @@ except ImportError: pass
 
 import optuna
 
-from optuna.pruners import HyperbandPruner
+from optuna.pruners import SuccessiveHalvingPruner
 
 
 def main(args):
@@ -59,9 +59,6 @@ def main(args):
         config = toml.load(args.config)
 
         lr = 1e-3
-        #lr = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
-
-        config['encoder']['activation'] = 'gelu'
         #config['block'][0]['stride'] = [trial.suggest_int('stride', 4, 6)]
 
         # C1
@@ -143,7 +140,7 @@ def main(args):
         storage='sqlite:///%s' % os.path.join(workdir, 'tune.db'),
         study_name='bonito-study',
         load_if_exists=True,
-        pruner=HyperbandPruner()
+        pruner=SuccessiveHalvingPruner()
     )
 
     study.optimize(objective, n_trials=args.trials)
@@ -159,10 +156,10 @@ def argparser():
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--epochs", default=8, type=int)
     parser.add_argument("--batch", default=128, type=int)
     parser.add_argument("--trials", default=100, type=int)
-    parser.add_argument("--chunks", default=1000000, type=int)
+    parser.add_argument("--chunks", default=250000, type=int)
     parser.add_argument("--max-params", default=7000000, type=int)
     parser.add_argument("--validation_split", default=0.90, type=float)
     parser.add_argument("-f", "--force", action="store_true", default=False)
