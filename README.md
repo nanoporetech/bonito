@@ -20,7 +20,7 @@ $ pip install ont-bonito
 ## Basecalling
 
 ```bash
-(venv3) $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
+$ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
 ```
 
 If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
@@ -28,24 +28,14 @@ If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase 
 ## Training a model
 
 ```bash
-(venv3) $ # download the training data and train a model with the default settings
-(venv3) $ ./scripts/get-training-data
-(venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml
-(venv3) $ 
-(venv3) $ # train on the first gpu, use mixed precision, larger batch size and 1,000,000 chunks
-(venv3) $ export CUDA_VISIBLE_DEVICES=0
-(venv3) $ bonito train ./data/model-dir ./config/quartznet5x5.toml --amp --batch 64 --chunks 1000000
+$ ./scripts/get-training-data
+$ bonito train --amp ./data/model-dir ./config/quartznet5x5.toml
+$
+$ export CUDA_VISIBLE_DEVICES=0,1,2,3
+$ bonito train --amp --multi-gpu --batch 256 ./data/model-dir ./config/quartznet5x5.toml
 ```
 
 Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
-
-## Scripts
-
- - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito tune` - tune network hyperparameters.
- - `bonito train` - train a bonito model.
- - `bonito evaluate` - evaluate a model performance on a chunk basis.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
 ## Developer Quickstart
 
@@ -60,6 +50,14 @@ $ source venv3/bin/activate
 ```
 
 The pretrained models can be downloaded by running `./scripts/get-models` *(not required if installing from pip)*.
+
+## Scripts
+
+ - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `bonito tune` - tune network hyperparameters.
+ - `bonito train` - train a bonito model.
+ - `bonito evaluate` - evaluate a model performance on a chunk basis.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
 ## Medaka
 
