@@ -11,8 +11,8 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
-from bonito.util import load_data, init, __data__
 from bonito.training import ChunkDataSet, train, test
+from bonito.util import load_data, load_training_state, init, __data__
 
 import toml
 import torch
@@ -30,7 +30,7 @@ def main(args):
     workdir = os.path.expanduser(args.training_directory)
 
     if os.path.exists(workdir) and not args.force:
-        print("[error] %s exists." % workdir)
+        print("[error] %s exists, use -f to override." % workdir)
         exit(1)
 
     init(args.seed, args.device)
@@ -55,17 +55,11 @@ def main(args):
 
     print("[loading model]")
     model = Model(config)
+    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
 
-    weights = os.path.join(workdir, 'weights.tar')
-    if os.path.exists(weights): model.load_state_dict(torch.load(weights))
-
-    model.to(device)
-    model.train()
-
+    last_epoch = load_training_state(workdir, args.device, model, optimizer)
     os.makedirs(workdir, exist_ok=True)
     toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
-
-    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
 
     if args.amp:
         try:
@@ -76,7 +70,7 @@ def main(args):
 
     schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):
 
         try:
             train_loss, duration = train(
@@ -89,8 +83,9 @@ def main(args):
         print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
             epoch, workdir, val_loss, val_mean, val_median
         ))
-
         torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
+        torch.save(optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
+
         with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
             csvw = csv.writer(csvfile, delimiter=',')
             if epoch == 1:

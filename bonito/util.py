@@ -185,7 +185,6 @@ def load_model(dirname, device, weights=None, half=False):
     config = os.path.join(dirname, 'config.toml')
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
     model = Model(toml.load(config))
-    model.to(device)
 
     state_dict = torch.load(weights, map_location=device)
     new_state_dict = OrderedDict()
@@ -197,7 +196,41 @@ def load_model(dirname, device, weights=None, half=False):
 
     if half: model = model.half()
     model.eval()
+    model.to(device)
     return model
+
+
+def load_training_state(dirname, device, model, optim):
+    """
+    Load a model and optimizer state dict from disk
+    """
+    weight_no = optim_no = None
+
+    weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+    if weight_files:
+        weight_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+
+    optim_files = glob(os.path.join(dirname, "optim_*.tar"))
+    if optim_files:
+        optim_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in optim_files])
+
+    if weight_no and optim_no and weight_no == optim_no:
+        print("[picking up from epoch %s]" % optim_no)
+        model_dict = torch.load(
+            os.path.join(dirname, 'weights_%s.tar' % weight_no), map_location=device
+        )
+        model.load_state_dict(model_dict)
+        optim_dict = torch.load(
+            os.path.join(dirname, 'optim_%s.tar' % optim_no), map_location=device
+        )
+        optim.load_state_dict(optim_dict)
+        epoch = weight_no
+    else:
+        epoch = 0
+
+    model.to(device)
+    model.train()
+    return epoch
 
 
 def parasail_to_sam(result, seq):
