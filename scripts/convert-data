@@ -92,10 +92,6 @@ def main(args):
         squiggle_duration = len(samples)
         sequence_length = len(reference) - 1
 
-        if sequence_length < args.min_seq_len:
-            print(samples)
-            print(read_id, squiggle_duration, len(pointers), mapped_off_the_end, sequence_length)
-
         # first chunk
         seq_starts = 0
         seq_ends = np.random.randint(args.min_seq_len, args.max_seq_len)
