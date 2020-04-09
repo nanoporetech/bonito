@@ -200,10 +200,16 @@ def load_model(dirname, device, weights=None, half=False):
     return model
 
 
-def load_training_state(dirname, device, model, optim):
+def load_training_state(dirname, device, model, optim, multi_gpu=False):
     """
     Load a model and optimizer state dict from disk
     """
+    if multi_gpu:
+        from torch.nn import DataParallel
+        model = DataParallel(model)
+        model.stride = model.module.stride
+        model.alphabet = model.module.alphabet
+
     weight_no = optim_no = None
 
     weight_files = glob(os.path.join(dirname, "weights_*.tar"))

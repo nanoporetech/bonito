@@ -57,7 +57,7 @@ def main(args):
     model = Model(config)
     optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
 
-    last_epoch = load_training_state(workdir, args.device, model, optimizer)
+    last_epoch = load_training_state(workdir, args.device, model, optimizer, multi_gpu=args.multi_gpu)
     os.makedirs(workdir, exist_ok=True)
     toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
@@ -83,7 +83,8 @@ def main(args):
         print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
             epoch, workdir, val_loss, val_mean, val_median
         ))
-        torch.save(model.state_dict(), os.path.join(workdir, "weights_%s.tar" % epoch))
+        model_state = model.module.state_dict() if args.multi_gpu else model.state_dict()
+        torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
         torch.save(optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
 
         with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
@@ -117,5 +118,6 @@ def argparser():
     parser.add_argument("--chunks", default=1000000, type=int)
     parser.add_argument("--validation_split", default=0.99, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     return parser
