@@ -34,7 +34,7 @@ $ bonito download --all
 $ bonito train --amp /data/model-dir
 ```
 
-Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
+Automatic mixed precision can be used to speed up training with the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
 
 For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` enviroment variable to select which GPUs and add the `--multi-gpu` flag.
 
