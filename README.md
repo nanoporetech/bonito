@@ -38,7 +38,7 @@ Automatic mixed precision can be used to speed up training by passing the `--amp
 
 For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` enviroment variable to select which GPUs and add the `--multi-gpu` flag.
 
-```
+```bash
 $ export CUDA_VISIBLE_DEVICES=0,1,2,3
 $ bonito train --amp --multi-gpu --batch 256 /data/model-dir
 ```
