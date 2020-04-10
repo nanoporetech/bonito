@@ -27,8 +27,10 @@ __dir__ = os.path.dirname(os.path.realpath(__file__))
 __data__ = os.path.join(__dir__, "data")
 __models__ = os.path.join(__dir__, "models")
 __configs__ = os.path.join(__models__, "configs")
+__url__ = "https://nanoporetech.box.com/shared/static/"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
+default_data = os.path.join(__data__, "dna_r9.4.1")
 default_config = os.path.join(__configs__, "quartznet5x5.toml")
 
 

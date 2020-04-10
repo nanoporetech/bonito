@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Convert a chunkify training file
+Convert a Taiyaki chunkify training file to set of Bonito CTC .npy files
 """
 
 import os

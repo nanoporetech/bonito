@@ -27,16 +27,21 @@ If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase 
 
 ## Training a model
 
+To train a model first download the training data.
+
 ```bash
-$ ./scripts/get-training-data
-$ bonito train /data/model-dir
-$
-$ # train on multiple GPUs with mixed precision training and a larger batch size
-$ export CUDA_VISIBLE_DEVICES=0,1,2,3
-$ bonito train --amp --multi-gpu --batch 256 /data/model-dir
+$ bonito download --all
+$ bonito train --amp /data/model-dir
 ```
 
 Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
+
+For training on mutiple GPUs use the `$CUDA_VISIBLE_DEVICES` enviroment variable to select which GPUs to train on and add the `--multi-gpu` flag.
+
+```
+$ export CUDA_VISIBLE_DEVICES=0,1,2,3
+$ bonito train --amp --multi-gpu --batch 256 /data/model-dir
+```
 
 ## Developer Quickstart
 
@@ -48,9 +53,10 @@ $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
+(venv3) $ bonito download --all
 ```
 
-The pretrained models can be downloaded by running `./scripts/get-models` *(not required if installing from pip)*.
+The pretrained models can be downloaded by running `bonito download --models` *(not required if installing from pip)*.
 
 ## Scripts
 
@@ -58,6 +64,7 @@ The pretrained models can be downloaded by running `./scripts/get-models` *(not 
  - `bonito tune` - tune network hyperparameters.
  - `bonito train` - train a bonito model.
  - `bonito evaluate` - evaluate a model performance on a chunk basis.
+ - `bonito download` - download pretraining models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
 ## Medaka
