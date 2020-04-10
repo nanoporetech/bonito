@@ -29,10 +29,11 @@ If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase 
 
 ```bash
 $ ./scripts/get-training-data
-$ bonito train --amp ./data/model-dir ./config/quartznet5x5.toml
+$ bonito train /data/model-dir
 $
+$ # train on multiple GPUs with mixed precision training and a larger batch size
 $ export CUDA_VISIBLE_DEVICES=0,1,2,3
-$ bonito train --amp --multi-gpu --batch 256 ./data/model-dir ./config/quartznet5x5.toml
+$ bonito train --amp --multi-gpu --batch 256 /data/model-dir
 ```
 
 Automatic mixed precision can be used to speed up training by passing the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.

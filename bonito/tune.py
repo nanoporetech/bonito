@@ -4,7 +4,7 @@
 Bonito tuning.
 
   $ export CUDA_VISIBLE_DEVICES=0
-  $ bonito tune /data/models/bonito-tune config/quartznet5x5.toml
+  $ bonito tune /data/models/bonito-tune
 
 """
 
@@ -15,8 +15,8 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
-from bonito.util import load_data, init
 from bonito.training import ChunkDataSet, train, test
+from bonito.util import load_data, init, default_config
 
 import toml
 import torch
@@ -152,7 +152,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument("tuning_directory")
-    parser.add_argument("config")
+    parser.add_argument("--config", default=default_config)
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)

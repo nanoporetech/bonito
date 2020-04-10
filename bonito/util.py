@@ -26,7 +26,10 @@ except ImportError:
 __dir__ = os.path.dirname(os.path.realpath(__file__))
 __data__ = os.path.join(__dir__, "data")
 __models__ = os.path.join(__dir__, "models")
+__configs__ = os.path.join(__models__, "configs")
+
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
+default_config = os.path.join(__configs__, "quartznet5x5.toml")
 
 
 def init(seed, device):

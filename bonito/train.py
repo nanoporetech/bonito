@@ -11,7 +11,7 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
-from bonito.util import load_data, init, __data__
+from bonito.util import load_data, init, default_config, __data__
 from bonito.training import ChunkDataSet, load_state, train, test
 
 
@@ -47,7 +47,7 @@ def main(args):
     argsdict = dict(training=vars(args))
 
     chunk_config = {}
-    chunk_config_file = os.path.join(args.directory if args.directory else __data__, 'config.toml')
+    chunk_config_file = os.path.join(args.directory, 'config.toml')
     if os.path.isfile(chunk_config_file):
         chunk_config = toml.load(os.path.join(chunk_config_file))
 
@@ -106,8 +106,8 @@ def argparser():
         add_help=False
     )
     parser.add_argument("training_directory")
-    parser.add_argument("config")
-    parser.add_argument("--directory", default=None)
+    parser.add_argument("--config", default=default_config)
+    parser.add_argument("--directory", default=__data__)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
