@@ -52,8 +52,6 @@ For a model you have trainined yourself, replace `dna_r9.4.1` with the model dir
  - `bonito download` - download pretrained models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
-
-
 ## Developer Quickstart
 
 ```bash
