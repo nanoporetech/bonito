@@ -38,7 +38,9 @@ $ export CUDA_VISIBLE_DEVICES=0,1,2,3
 $ bonito train --amp --multi-gpu --batch 256 /data/model-dir
 ```
 
-To evaluate the pretrained model run `bonito evaluate dna_r9.4.1 --half`. For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
+To evaluate the pretrained model run `bonito evaluate dna_r9.4.1 --half`.
+
+For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
 
 ## Developer Quickstart
 
