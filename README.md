@@ -42,6 +42,18 @@ To evaluate the pretrained model run `bonito evaluate dna_r9.4.1 --half`.
 
 For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
 
+## Interface
+
+ - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
+ - `bonito tune` - distributed tuning of network hyperparameters.
+ - `bonito train` - train a bonito model.
+ - `bonito convert` - convert a hdf5 training file into a bonito format.
+ - `bonito evaluate` - evaluate a model performance.
+ - `bonito download` - download pretrained models and training datasets.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
+
+
+
 ## Developer Quickstart
 
 ```bash
@@ -54,15 +66,6 @@ $ source venv3/bin/activate
 (venv3) $ python setup.py develop
 (venv3) $ bonito download --all
 ```
-
-## Interface
-
- - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito tune` - distributed tuning of network hyperparameters.
- - `bonito train` - train a bonito model.
- - `bonito evaluate` - evaluate a model performance.
- - `bonito download` - download pretrained models and training datasets.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
 ## Medaka
 
