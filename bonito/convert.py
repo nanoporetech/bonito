@@ -196,28 +196,40 @@ def main(args):
         targets = np.delete(targets, np.s_[chunk_count:], axis=0)
         target_lengths = target_lengths[:chunk_count]
 
-    np.save(os.path.join(args.output_directory, "chunks.npy"), chunks)
-    np.save(os.path.join(args.output_directory, "chunk_lengths.npy"), chunk_lengths)
-    np.save(os.path.join(args.output_directory, "references.npy"), targets)
-    np.save(os.path.join(args.output_directory, "reference_lengths.npy"), target_lengths)
+    if args.chunks > args.validation_chunks:
+        split = args.validation_chunks
+        vdir = os.path.join(args.output_directory, "validation")
+        os.makedirs(vdir, exist_ok=True)
+        np.save(os.path.join(vdir, "chunks.npy"), chunks[:split])
+        np.save(os.path.join(vdir, "chunk_lengths.npy"), chunk_lengths[:split])
+        np.save(os.path.join(vdir, "references.npy"), targets[:split])
+        np.save(os.path.join(vdir, "reference_lengths.npy"), target_lengths[:split])
+    else:
+        split = 0
+
+    np.save(os.path.join(args.output_directory, "chunks.npy"), chunks[split:])
+    np.save(os.path.join(args.output_directory, "chunk_lengths.npy"), chunk_lengths[split:])
+    np.save(os.path.join(args.output_directory, "references.npy"), targets[split:])
+    np.save(os.path.join(args.output_directory, "reference_lengths.npy"), target_lengths[split:])
 
     print()
     print("Training data written to %s:" % args.output_directory)
-    print("  - chunks.npy with shape", chunks.shape)
-    print("  - chunk_lengths.npy with shape", chunk_lengths.shape)
-    print("  - references.npy with shape", targets.shape)
-    print("  - reference_lengths.npy shape", target_lengths.shape)
+    print("  - chunks.npy with shape", chunks[split:].shape)
+    print("  - chunk_lengths.npy with shape", chunk_lengths[split:].shape)
+    print("  - references.npy with shape", targets[split:].shape)
+    print("  - reference_lengths.npy shape", target_lengths[split:].shape)
 
 
 def argparser():
     parser = ArgumentParser(
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
-    )    
+    )
     parser.add_argument("chunkify_file")
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--chunks", default=10000000, type=int)
+    parser.add_argument("--validation-chunks", default=1000, type=int)
     parser.add_argument("--min-run", default=5, type=int)
     parser.add_argument("--min-seq-len", default=200, type=int)
     parser.add_argument("--max-seq-len", default=400, type=int)
