@@ -11,42 +11,41 @@ A convolutional basecaller inspired by QuartzNet.
  - CTC training.
  - Small Python codebase.
 
-## Installation
-
-```bash
-$ pip install ont-bonito
-```
-
 ## Basecalling
 
 ```bash
+$ pip install ont-bonito
 $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
 ```
 
 If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
 
-## Training a model
+## Training your own model
 
-To train a model first download the training data.
+To train your own model first download the training data.
 
 ```bash
-$ bonito download --all
+$ bonito download --training
 $ bonito train --amp /data/model-dir
 ```
 
 Automatic mixed precision can be used to speed up training with the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
 
-For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` enviroment variable to select which GPUs and add the `--multi-gpu` flag.
+For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` environment variable to select which GPUs and add the `--multi-gpu` flag.
 
 ```bash
 $ export CUDA_VISIBLE_DEVICES=0,1,2,3
 $ bonito train --amp --multi-gpu --batch 256 /data/model-dir
 ```
 
+To evaluate the pretrained model run `bonito evaluate dna_r9.4.1 --half`. For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
+
 ## Developer Quickstart
 
+If you just want to basecall or try training a model with your own data then installation via pip is recommended, otherwise follow the quickstart below.
+
 ```bash
-$ git clone https://github.com/nanoporetech/bonito.git
+$ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
 $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
@@ -56,15 +55,13 @@ $ source venv3/bin/activate
 (venv3) $ bonito download --all
 ```
 
-The pretrained models can be downloaded by running `bonito download --models` *(not required if installing from pip)*.
-
-## Scripts
+## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito tune` - tune network hyperparameters.
+ - `bonito tune` - distributed tuning of network hyperparameters.
  - `bonito train` - train a bonito model.
- - `bonito evaluate` - evaluate a model performance on a chunk basis.
- - `bonito download` - download pretraining models and training datasets.
+ - `bonito evaluate` - evaluate a model performance.
+ - `bonito download` - download pretrained models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
 
 ## Medaka
