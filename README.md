@@ -44,8 +44,6 @@ For a model you have trainined yourself, replace `dna_r9.4.1` with the model dir
 
 ## Developer Quickstart
 
-If you just want to basecall or try training a model with your own data then installation via pip is recommended, otherwise follow the quickstart below.
-
 ```bash
 $ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
 $ cd bonito
