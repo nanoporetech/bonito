@@ -145,12 +145,15 @@ def stitch(predictions, overlap):
     return np.concatenate(stitched)
 
 
-def load_data(shuffle=False, limit=None, directory=None):
+def load_data(shuffle=False, limit=None, directory=None, validation=False):
     """
     Load the training data
     """
     if directory is None:
-        directory = __data__
+        directory = default_data
+
+    if validation and os.path.exists(os.path.join(directory, 'validation')):
+        directory = os.path.join(directory, 'validation')
 
     chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
     chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"), mmap_mode='r')

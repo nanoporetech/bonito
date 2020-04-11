@@ -10,8 +10,8 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.training import ChunkDataSet
 from bonito.decode import decode, decode_ref
+from bonito.util import accuracy, poa
 from bonito.util import init, load_data, load_model
-from bonito.util import  accuracy, poa, print_alignment
 
 from torch.utils.data import DataLoader
 
@@ -23,7 +23,7 @@ def main(args):
 
     print("* loading data")
     testdata = ChunkDataSet(
-        *load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory)
+        *load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory, validation=True)
     )
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
 
