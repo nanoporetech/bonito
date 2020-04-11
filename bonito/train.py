@@ -11,9 +11,8 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
+from bonito.util import load_data, init, default_config
 from bonito.training import ChunkDataSet, load_state, train, test
-from bonito.util import load_data, init, default_config, default_data
-
 
 import toml
 import torch
@@ -107,7 +106,7 @@ def argparser():
     )
     parser.add_argument("training_directory")
     parser.add_argument("--config", default=default_config)
-    parser.add_argument("--directory", default=default_data)
+    parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=1e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
