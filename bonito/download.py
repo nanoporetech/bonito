@@ -4,20 +4,19 @@ Bonito Download
 
 import os
 import re
-from abc import ABC
 from zipfile import ZipFile
 from argparse import Namespace
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import __data__, __models__, __url__
 from bonito.convert import main as convert
 from bonito.convert import argparser as cargparser
+from bonito.util import __data__, __models__, __url__
 
 import requests
 from tqdm import tqdm
 
 
-class BoxFile:
+class File:
     """
     Small class for downloading models and training assets.
     """
@@ -32,24 +31,20 @@ class BoxFile:
         return os.path.exists(self.location(filename))
 
     def download(self):
+        """
+        Download the remote file
+        """
+        # create the requests for the file
         req = requests.get(self.url, stream=True)
         total = int(req.headers.get('content-length', 0))
         fname = re.findall('filename="([^"]+)', req.headers['content-disposition'])[0]
 
+        # skip download if local file is found
         if self.exists(fname.strip('.zip')):
             print("[skipping %s]" % fname)
-
-            # convert chunkify training files to bonito
-            if fname.endswith('.hdf5'):
-                print("[converting %s]" % fname)
-                args = cargparser().parse_args([
-                    self.location(fname),
-                    self.location(fname).strip('.hdf5')
-                ])
-                convert(args)
-
             return
 
+        # download the file
         with tqdm(total=total, unit='iB', ascii=True, ncols=100, unit_scale=True, leave=False) as t:
             with open(self.location(fname), 'wb') as f:
                 for data in req.iter_content(1024):
@@ -58,7 +53,7 @@ class BoxFile:
 
         print("[downloaded %s]" % fname)
 
-        # unzip model directories
+        # unzip .zip files
         if fname.endswith('.zip'):
             with ZipFile(self.location(fname), 'r') as zfile:
                 zfile.extractall(self.path)
@@ -75,11 +70,11 @@ class BoxFile:
 
 
 models = [
-    BoxFile(__models__, "iatumku2snun5xfwn70wyym9cdo548mv.zip"),
+    "iatumku2snun5xfwn70wyym9cdo548mv.zip",
 ]
 
 training = [
-    BoxFile(__data__, "cmh91cxupa0are1kc3z9aok425m75vrb.hdf5"),
+    "cmh91cxupa0are1kc3z9aok425m75vrb.hdf5",
 ]
 
 
@@ -90,12 +85,13 @@ def main(args):
     if args.models or args.all:
         print("[downloading models]")
         for model in models:
-            model.download()
+            File(__models__, model).download()
 
     if args.training or args.all:
         print("[downloading training data]")
         for train in training:
-            train.download()
+            File(__models__, train).download()
+
 
 
 def argparser():
