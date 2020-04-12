@@ -5,7 +5,6 @@ Bonito Download
 import os
 import re
 from zipfile import ZipFile
-from argparse import Namespace
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.convert import main as convert
@@ -91,7 +90,6 @@ def main(args):
         print("[downloading training data]")
         for train in training:
             File(__models__, train).download()
-
 
 
 def argparser():
