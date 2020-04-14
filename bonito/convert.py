@@ -73,6 +73,7 @@ def main(args):
     off_the_end_ref = 0
     off_the_end_sig = 0
     min_run_count = 0
+    read_too_short = 0
     homopolymer_boundary = 0
 
     total_reads = num_reads(args.chunkify_file)
@@ -91,11 +92,15 @@ def main(args):
         read_idx += 1
 
         squiggle_duration = len(samples)
-        sequence_length = len(reference) - 1
+        sequence_length = len(reference) - args.offset - 1
+
+        if sequence_length < args.max_seq_len + args.offset:
+            read_too_short += 1
+            continue
 
         # first chunk
-        seq_starts = 0
-        seq_ends = np.random.randint(args.min_seq_len, args.max_seq_len)
+        seq_starts = args.offset
+        seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
 
         repick = int((args.max_seq_len - args.min_seq_len) / 2)
         while boundary(reference[seq_starts:seq_ends]) and repick:
@@ -185,6 +190,7 @@ def main(args):
     print("Reason for skipping:")
     print("  - off the end (signal)          ", off_the_end_sig)
     print("  - off the end (sequence)        ", off_the_end_ref)
+    print("  - read too short (sequence)     ", read_too_short)
     print("  - homopolymer chunk boundary    ", homopolymer_boundary)
     print("  - longest run too short         ", min_run_count)
     print("  - minimum number of bases       ", min_bases)
@@ -230,6 +236,7 @@ def argparser():
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--chunks", default=10000000, type=int)
     parser.add_argument("--validation-chunks", default=1000, type=int)
+    parser.add_argument("--offset", default=200, type=int)
     parser.add_argument("--min-run", default=5, type=int)
     parser.add_argument("--min-seq-len", default=200, type=int)
     parser.add_argument("--max-seq-len", default=400, type=int)
