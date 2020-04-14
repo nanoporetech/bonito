@@ -3,13 +3,25 @@ Bonito Model template
 """
 
 import torch.nn as nn
+from torch import sigmoid
 from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
+
+
+class Swish(Module):
+    """
+    Swish Activation function
+
+    https://arxiv.org/abs/1710.05941
+    """
+    def forward(self, x):
+        return x * sigmoid(x)
 
 
 activations = {
     "relu": ReLU,
     "leaky_relu": LeakyReLU,
+    "swish": Swish,
 }
 
 
