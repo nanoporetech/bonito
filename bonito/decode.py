@@ -8,7 +8,7 @@ import numpy as np
 from fast_ctc_decode import beam_search
 
 
-def phred(prob, scale=2.0, bias=0.7):
+def phred(prob, scale=0.7, bias=2.0):
     """
     Converts `prob` into a ascii encoded phred quality score between 0 and 40.
     """
