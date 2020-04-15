@@ -6,12 +6,37 @@ import os
 import sys
 from glob import glob
 from textwrap import wrap
+from warnings import warn
+from logging import getLogger
 from multiprocessing import Process, Queue
 
 from tqdm import tqdm
 
 from bonito.decode import decode
 from bonito.util import get_raw_data
+
+
+logger = getLogger('bonito')
+
+
+def write_fasta(header, sequence, fd=sys.stdout, maxlen=100):
+    """
+    Write a fasta record to a file descriptor.
+    """
+    fd.write(">%s\n" % header)
+    fd.write("%s\n" % os.linesep.join(wrap(sequence, maxlen)))
+    fd.flush()
+
+
+def write_fastq(header, sequence, qstring, fd=sys.stdout):
+    """
+    Write a fastq record to a file descriptor.
+    """
+    fd.write("@%s\n" % header)
+    fd.write("%s\n" % sequence)
+    fd.write("+\n")
+    fd.write("%s\n" % qstring)
+    fd.flush()
 
 
 class PreprocessReader(Process):
@@ -44,10 +69,11 @@ class DecoderWriter(Process):
     """
     Decoder Process that writes fasta records to stdout
     """
-    def __init__(self, alphabet, beamsize=5, wrap=100):
+    def __init__(self, alphabet, fastq=False, beamsize=5, wrap=100):
         super().__init__()
         self.queue = Queue()
         self.wrap = wrap
+        self.fastq = fastq
         self.beamsize = beamsize
         self.alphabet = ''.join(alphabet)
 
@@ -63,13 +89,14 @@ class DecoderWriter(Process):
             job = self.queue.get()
             if job is None: return
             read_id, predictions = job
-            sequence = decode(predictions, self.alphabet, self.beamsize)
+            sequence, qstring, path = decode(
+                predictions, self.alphabet, self.beamsize, qscores=self.fastq
+            )
             if sequence:
-                sys.stdout.write(">%s\n" % read_id)
-                sys.stdout.write("%s\n" % os.linesep.join(wrap(sequence, self.wrap)))
-                sys.stdout.flush()
+                if self.fastq: write_fastq(read_id, sequence, qstring)
+                else: write_fasta(read_id, sequence, maxlen=self.wrap)
             else:
-                sys.stderr.write("> skippingempty sequnece %s\n" % read_id)
+                logger.warn("> skipping empty sequence %s", read_id)
 
     def stop(self):
         self.queue.put(None)

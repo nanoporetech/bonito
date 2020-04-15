@@ -11,6 +11,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.training import ChunkDataSet
 from bonito.decode import decode, decode_ref
 from bonito.util import accuracy, poa
+
 from bonito.util import init, load_data, load_model
 
 from torch.utils.data import DataLoader
