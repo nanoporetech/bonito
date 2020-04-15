@@ -8,16 +8,13 @@ import numpy as np
 from fast_ctc_decode import beam_search
 
 
-def phred(prob, scale=2.0, bias=0.7, offset=32):
+def phred(prob, scale=2.0, bias=0.7):
     """
-    Converts `prob` into a phred quality score between 1 and 40.
-
-    :returns: chr(qscore + offset)
+    Converts `prob` into a ascii encoded phred quality score between 0 and 40.
     """
-    if prob > 0.9999: q = 40
-    elif prob < 0.20: q = 1
-    else: q = -10 * np.log10(1 - prob) * scale + bias
-    return chr(int(max(min(q, 40), 1)) + offset)
+    p = max(1 - prob, 1e-4)
+    q = -10 * np.log10(p) * scale + bias
+    return chr(int(q + 33))
 
 
 def decode_ref(encoded, labels):
