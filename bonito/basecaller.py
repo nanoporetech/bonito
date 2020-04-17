@@ -23,7 +23,7 @@ def main(args):
     max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
     reader = PreprocessReader(args.reads_directory)
-    writer = DecoderWriter(alphabet=model.alphabet, beamsize=args.beamsize, fastq=args.fastq)
+    writer = DecoderWriter(model, beamsize=args.beamsize, fastq=args.fastq)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -49,7 +49,7 @@ def main(args):
             gpu_data = torch.tensor(raw_data).to(args.device)
             posteriors = model(gpu_data).exp().cpu().numpy().squeeze()
 
-            writer.queue.put((read_id, posteriors))
+            writer.queue.put((read_id, posteriors.astype(np.float32)))
 
     duration = time.perf_counter() - t0
 

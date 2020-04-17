@@ -8,8 +8,7 @@ import time
 from glob import glob
 from itertools import starmap
 
-from bonito.util import accuracy
-from bonito.decode import decode, decode_ref
+from bonito.util import accuracy, decode_ref
 
 import torch
 import numpy as np
@@ -141,7 +140,7 @@ def test(model, device, test_loader):
     lengths = np.concatenate(prediction_lengths)
 
     references = [decode_ref(target, model.alphabet) for target in test_loader.dataset.targets]
-    sequences = [decode(post[:n], model.alphabet) for post, n in zip(predictions, lengths)]
+    sequences = [model.decode(post[:n]) for post, n in zip(predictions, lengths)]
 
     if all(map(len, sequences)):
         accuracies = list(starmap(accuracy, zip(references, sequences)))

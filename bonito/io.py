@@ -12,7 +12,6 @@ from multiprocessing import Process, Queue
 
 from tqdm import tqdm
 
-from bonito.decode import decode
 from bonito.util import get_raw_data
 
 
@@ -69,13 +68,13 @@ class DecoderWriter(Process):
     """
     Decoder Process that writes fasta records to stdout
     """
-    def __init__(self, alphabet, fastq=False, beamsize=5, wrap=100):
+    def __init__(self, model, fastq=False, beamsize=5, wrap=100):
         super().__init__()
         self.queue = Queue()
+        self.model = model
         self.wrap = wrap
         self.fastq = fastq
         self.beamsize = beamsize
-        self.alphabet = ''.join(alphabet)
 
     def __enter__(self):
         self.start()
@@ -89,8 +88,8 @@ class DecoderWriter(Process):
             job = self.queue.get()
             if job is None: return
             read_id, predictions = job
-            sequence, path = decode(
-                predictions, self.alphabet, self.beamsize, qscores=self.fastq
+            sequence, path = self.model.decode(
+                predictions, beamsize=self.beamsize, qscores=self.fastq, return_path=True
             )
             if sequence:
                 if self.fastq: write_fastq(read_id, sequence[:len(path)], sequence[len(path):])
