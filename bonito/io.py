@@ -89,11 +89,11 @@ class DecoderWriter(Process):
             job = self.queue.get()
             if job is None: return
             read_id, predictions = job
-            sequence, qstring, path = decode(
+            sequence, path = decode(
                 predictions, self.alphabet, self.beamsize, qscores=self.fastq
             )
             if sequence:
-                if self.fastq: write_fastq(read_id, sequence, qstring)
+                if self.fastq: write_fastq(read_id, sequence[:len(path)], sequence[len(path):])
                 else: write_fasta(read_id, sequence, maxlen=self.wrap)
             else:
                 logger.warn("> skipping empty sequence %s", read_id)
