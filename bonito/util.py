@@ -50,6 +50,22 @@ def init(seed, device):
     assert(torch.cuda.is_available())
 
 
+def phred(prob, scale=1.0, bias=0.0):
+    """
+    Converts `prob` into a ascii encoded phred quality score between 0 and 40.
+    """
+    p = max(1 - prob, 1e-4)
+    q = -10 * np.log10(p) * scale + bias
+    return chr(int(np.round(q) + 33))
+
+
+def decode_ref(encoded, labels):
+    """
+    Convert a integer encoded reference into a string and remove blanks
+    """
+    return ''.join(labels[e] for e in encoded if e)
+
+
 def med_mad(x, factor=1.4826):
     """
     Calculate signal median and median absolute deviation

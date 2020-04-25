@@ -7,6 +7,8 @@ from torch import sigmoid
 from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
+from fast_ctc_decode import beam_search, viterbi_search
+
 
 class Swish(Module):
     """
@@ -33,6 +35,12 @@ class Model(Module):
     """
     def __init__(self, config):
         super(Model, self).__init__()
+        if 'qscores' not in config:
+            self.qbias = 0.0
+            self.qscale = 1.0
+        else:
+            self.qbias = config['qscores']['bias']
+            self.qscale = config['qscores']['scale']
         self.stride = config['block'][0]['stride'][0]
         self.alphabet = config['labels']['labels']
         self.features = config['block'][-1]['filters']
@@ -42,6 +50,14 @@ class Model(Module):
     def forward(self, x):
         encoded = self.encoder(x)
         return self.decoder(encoded)
+
+    def decode(self, x, beamsize=5, threshold=0.1, qscores=False, return_path=False):
+        if beamsize == 1 or qscores:
+            seq, path  = viterbi_search(x, self.alphabet, qscores, self.qscale, self.qbias)
+        else:
+            seq, path = beam_search(x, self.alphabet, beamsize, threshold)
+        if return_path: return seq, path
+        return seq
 
 
 class Encoder(Module):
