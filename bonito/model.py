@@ -35,12 +35,12 @@ class Model(Module):
     """
     def __init__(self, config):
         super(Model, self).__init__()
-        if 'qscores' not in config:
+        if 'qscore' not in config:
             self.qbias = 0.0
             self.qscale = 1.0
         else:
-            self.qbias = config['qscores']['bias']
-            self.qscale = config['qscores']['scale']
+            self.qbias = config['qscore']['bias']
+            self.qscale = config['qscore']['scale']
         self.stride = config['block'][0]['stride'][0]
         self.alphabet = config['labels']['labels']
         self.features = config['block'][-1]['filters']
