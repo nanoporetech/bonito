@@ -61,6 +61,7 @@ def main(args):
     if args.multi_gpu:
         from torch.nn import DataParallel
         model = DataParallel(model)
+        model.decode = model.module.decode
         model.stride = model.module.stride
         model.alphabet = model.module.alphabet
 
