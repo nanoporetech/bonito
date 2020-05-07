@@ -205,5 +205,5 @@ class Decoder(Module):
         self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
 
     def forward(self, x):
-        x = self.layers(x[-1])
+        x = self.layers(x)
         return nn.functional.log_softmax(x.transpose(1, 2), dim=2)
