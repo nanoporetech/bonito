@@ -88,7 +88,7 @@ class Encoder(Module):
         self.encoder = Sequential(*encoder_layers)
 
     def forward(self, x):
-        return self.encoder([x])
+        return self.encoder(x)
 
 
 class TCSConv1d(Module):
@@ -188,12 +188,12 @@ class Block(Module):
         ]
 
     def forward(self, x):
-        _x = x[0]
+        _x = x
         for layer in self.conv:
             _x = layer(_x)
         if self.use_res:
-            _x += self.residual(x[0])
-        return [self.activation(_x)]
+            _x += self.residual(x)
+        return self.activation(_x)
 
 
 class Decoder(Module):
