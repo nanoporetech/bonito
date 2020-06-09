@@ -11,7 +11,11 @@ $ bonito pair --half read-pairs.csv reads/ > basecalls.fasta
 import os
 import sys
 import time
+import json
+from glob import glob
 from textwrap import wrap
+from os.path import basename
+from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Process, Queue, Lock, cpu_count
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
@@ -20,9 +24,31 @@ import parasail
 import numpy as np
 from tqdm import tqdm
 
-from bonito.util import get_raw_data
 from bonito.util import accuracy, load_model
+from bonito.util import get_raw_data_for_read
 from fast_ctc_decode import beam_search, beam_search_2d
+from ont_fast5_api.fast5_interface import get_fast5_file
+
+
+def get_read_ids(filename):
+    """
+    Return a dictionary of read_id -> filename mappings.
+    """
+    with get_fast5_file(filename, 'r') as f5:
+        return {
+            read.read_id: basename(filename) for read in f5.get_reads()
+        }
+
+
+def build_index(files, workers=8):
+    """
+    Build an index of read ids to filename mappings
+    """
+    index = {}
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        for res in tqdm(pool.map(get_read_ids, files), ascii=True, ncols=100):
+            index.update(res)
+    return index
 
 
 def build_envelope(len1, seq1, path1, len2, seq2, path2, padding=15):
@@ -161,6 +187,17 @@ def main(args):
     max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
 
+    if args.index is not None:
+        sys.stderr.write("> loading read index\n")
+        index = json.load(open(args.index, 'r'))
+    else:
+        sys.stderr.write("> building read index\n")
+        files = list(glob(os.path.join(args.reads_directory, '*.fast5')))
+        index = build_index(files)
+        if args.save_index:
+            with open('bonito-read-id.idx', 'w') as f:
+                json.dump(index, f)
+
     sys.stderr.write("> loading model\n")
     model = load_model('dna_r9.4.1', args.device, half=args.half)
     decoders = PairDecoderWriterPool(model.alphabet, procs=args.num_procs)
@@ -172,19 +209,17 @@ def main(args):
 
         for pair in tqdm(pairs, ascii=True, ncols=100):
 
-            read_1, read_2 = pair.strip().split(args.sep)
-            read_1 = os.path.join(args.reads_directory, read_1)
-            read_2 = os.path.join(args.reads_directory, read_2)
+            read_id_1, read_id_2 = pair.strip().split(args.sep)
 
-            if not (os.path.exists(read_1) and os.path.exists(read_2)): continue
+            if read_id_1 not in index or read_id_2 not in index: continue
 
-            read_id_1, raw_data_1 = next(get_raw_data(read_1))
+            raw_data_1 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_1]), read_id_1)
 
             if len(raw_data_1) > max_read_size:
                 sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id_1, len(raw_data_1)))
                 continue
 
-            read_id_2, raw_data_2 = next(get_raw_data(read_2))
+            raw_data_2 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_2]), read_id_2)
 
             if len(raw_data_2) > max_read_size:
                 sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id_2, len(raw_data_2)))
@@ -224,4 +259,6 @@ def argparser():
     parser.add_argument("--half", action="store_true", default=False)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--num-procs", default=0, type=int)
+    parser.add_argument("--index", default=None)
+    parser.add_argument("--save-index", action="store_true", default=False)
     return parser
