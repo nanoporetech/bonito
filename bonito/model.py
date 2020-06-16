@@ -4,10 +4,16 @@ Bonito Model template
 
 import torch.nn as nn
 from torch import sigmoid
+from torch.jit import script
 from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
 from fast_ctc_decode import beam_search, viterbi_search
+
+
+@script
+def swish(x):
+    return x * sigmoid(x)
 
 
 class Swish(Module):
@@ -17,12 +23,11 @@ class Swish(Module):
     https://arxiv.org/abs/1710.05941
     """
     def forward(self, x):
-        return x * sigmoid(x)
+        return swish(x)
 
 
 activations = {
     "relu": ReLU,
-    "leaky_relu": LeakyReLU,
     "swish": Swish,
 }
 
@@ -41,6 +46,8 @@ class Model(Module):
         else:
             self.qbias = config['qscore']['bias']
             self.qscale = config['qscore']['scale']
+
+        self.config = config
         self.stride = config['block'][0]['stride'][0]
         self.alphabet = config['labels']['labels']
         self.features = config['block'][-1]['filters']
