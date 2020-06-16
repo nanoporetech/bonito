@@ -1,0 +1,98 @@
+model = "dna_r9.4.1"
+
+[labels]
+labels = [ "N", "A", "C", "G", "T"]
+
+[input]
+features = 1
+
+[encoder]
+activation = "swish"
+
+# C1
+[[block]]
+filters = 344
+repeat = 1
+kernel = [ 9,]
+stride = [ 3,]
+dilation = [ 1,]
+dropout = 0.05
+residual = false
+separable = false
+
+# B1
+[[block]]
+filters = 424
+repeat = 2
+kernel = [ 115,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = true
+separable = true
+
+# B2
+[[block]]
+filters = 464
+repeat = 7
+kernel = [ 5,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = true
+separable = true
+
+# B3
+[[block]]
+filters = 456
+repeat = 4
+kernel = [ 123,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = true
+separable = true
+
+# B4
+[[block]]
+filters = 440
+repeat = 9
+kernel = [ 9,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = true
+separable = true
+
+# B5
+[[block]]
+filters = 280
+repeat = 6
+kernel = [ 31,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = true
+separable = true
+
+# C2
+[[block]]
+filters = 384
+repeat = 1
+kernel = [ 67,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = false
+separable = true
+
+# C3
+[[block]]
+filters = 48
+repeat = 1
+kernel = [ 15,]
+stride = [ 1,]
+dilation = [ 1,]
+dropout = 0.05
+residual = false
+separable = false
