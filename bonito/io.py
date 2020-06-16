@@ -8,8 +8,9 @@ from glob import glob
 from textwrap import wrap
 from warnings import warn
 from logging import getLogger
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Lock, cpu_count
 
+import numpy as np
 from tqdm import tqdm
 
 from bonito.util import get_raw_data
@@ -64,39 +65,59 @@ class PreprocessReader(Process):
         self.join()
 
 
+class DecoderWriterPool:
+   """
+   Simple pool of decoder writers
+   """
+   def __init__(self, model, procs=4, **kwargs):
+       self.lock = Lock()
+       self.queue = Queue()
+       self.procs = procs if procs else cpu_count()
+       self.decoders = []
+       for _ in range(self.procs):
+           decoder = DecoderWriter(model, self.queue, self.lock, **kwargs)
+           decoder.start()
+           self.decoders.append(decoder)
+
+   def stop(self):
+       for decoder in self.decoders: self.queue.put(None)
+       for decoder in self.decoders: decoder.join()
+
+   def __enter__(self):
+       return self
+
+   def __exit__(self, exc_type, exc_val, exc_tb):
+       self.stop()
+
+
 class DecoderWriter(Process):
     """
     Decoder Process that writes fasta records to stdout
     """
-    def __init__(self, model, fastq=False, beamsize=5, wrap=100):
+    def __init__(self, model, queue, lock, fastq=False, beamsize=5, wrap=100):
         super().__init__()
-        self.queue = Queue()
+        self.queue = queue
+        self.lock = lock
         self.model = model
         self.wrap = wrap
         self.fastq = fastq
         self.beamsize = beamsize
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
 
     def run(self):
         while True:
             job = self.queue.get()
             if job is None: return
             read_id, predictions = job
+
+            # convert logprobs to probs
+            predictions = np.exp(predictions.astype(np.float32))
+
             sequence, path = self.model.decode(
                 predictions, beamsize=self.beamsize, qscores=self.fastq, return_path=True
             )
             if sequence:
-                if self.fastq: write_fastq(read_id, sequence[:len(path)], sequence[len(path):])
-                else: write_fasta(read_id, sequence, maxlen=self.wrap)
+                with self.lock:
+                    if self.fastq: write_fastq(read_id, sequence[:len(path)], sequence[len(path):])
+                    else: write_fasta(read_id, sequence, maxlen=self.wrap)
             else:
                 logger.warn("> skipping empty sequence %s", read_id)
-
-    def stop(self):
-        self.queue.put(None)
-        self.join()
