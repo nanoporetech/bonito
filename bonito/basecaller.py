@@ -6,8 +6,8 @@ import sys
 import time
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import load_model
-from bonito.io import DecoderWriter, PreprocessReader
+from bonito.util import load_model, chunk, stitch
+from bonito.io import DecoderWriterPool, PreprocessReader
 
 import torch
 import numpy as np
@@ -16,14 +16,18 @@ import numpy as np
 def main(args):
 
     sys.stderr.write("> loading model\n")
-    model = load_model(args.model_directory, args.device, weights=int(args.weights), half=args.half)
+
+    model = load_model(
+        args.model_directory, args.device, weights=int(args.weights),
+        half=args.half, chunksize=args.chunksize,
+    )
 
     samples = 0
     num_reads = 0
     max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
     reader = PreprocessReader(args.reads_directory)
-    writer = DecoderWriter(model, beamsize=args.beamsize, fastq=args.fastq)
+    writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -45,16 +49,18 @@ def main(args):
             num_reads += 1
             samples += len(raw_data)
 
-            raw_data = raw_data[np.newaxis, np.newaxis, :].astype(dtype)
-            gpu_data = torch.tensor(raw_data).to(args.device)
-            posteriors = model(gpu_data).exp().cpu().numpy().squeeze()
+            raw_data = torch.tensor(raw_data.astype(dtype))
+            chunks = chunk(raw_data, args.chunksize, args.overlap)
 
-            writer.queue.put((read_id, posteriors.astype(np.float32)))
+            posteriors = model(chunks.to(args.device)).cpu().numpy()
+            posteriors = stitch(posteriors, args.overlap // model.stride // 2)
+
+            writer.queue.put((read_id, posteriors[:raw_data.shape[0]]))
 
     duration = time.perf_counter() - t0
 
     sys.stderr.write("> completed reads: %s\n" % num_reads)
-    sys.stderr.write("> samples per second %.1E\n" % (samples  / duration))
+    sys.stderr.write("> samples per second %.1E\n" % (samples / duration))
     sys.stderr.write("> done\n")
 
 
@@ -68,6 +74,8 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)
+    parser.add_argument("--chunksize", default=0, type=int)
+    parser.add_argument("--overlap", default=0, type=int)
     parser.add_argument("--half", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     return parser

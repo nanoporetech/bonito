@@ -32,7 +32,7 @@ __url__ = "https://nanoporetech.box.com/shared/static/"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "quartznet5x5.toml")
+default_config = os.path.join(__configs__, "dna_r9.4.1.toml")
 
 
 def init(seed, device):
@@ -114,38 +114,24 @@ def get_raw_data(filename):
             yield read.read_id, norm_by_noisiest_section(scaled)
 
 
-def window(data, size, stepsize=1, padded=False, axis=-1):
+def chunk(raw_data, chunksize, overlap):
     """
-    Segment data in `size` chunks with overlap
+    Convert a read into overlapping chunks before calling
     """
-    shape = list(data.shape)
-    shape[axis] = np.floor(data.shape[axis] / stepsize - size / stepsize + 1).astype(int)
-    shape.append(size)
-
-    strides = list(data.strides)
-    strides[axis] *= stepsize
-    strides.append(data.strides[axis])
-
-    return np.lib.stride_tricks.as_strided(data, shape=shape, strides=strides)
-
-
-def chunk_data(raw_data, chunksize, overlap):
-    """
-    Break reads into chunks before calling
-    """
-    if len(raw_data) <= chunksize:
-        chunks = np.expand_dims(raw_data, axis=0)
-    else:
-        chunks = window(raw_data, chunksize, stepsize=chunksize - overlap)
-    return np.expand_dims(chunks, axis=1)
+    if chunksize > 0 and raw_data.shape[0] > chunksize:
+        num_chunks = raw_data.shape[0] // (chunksize - overlap) + 1
+        tmp = torch.zeros(num_chunks * (chunksize - overlap)).type(raw_data.dtype)
+        tmp[:raw_data.shape[0]] = raw_data
+        return tmp.unfold(0, chunksize, chunksize - overlap).unsqueeze(1)
+    return raw_data.unsqueeze(0).unsqueeze(0)
 
 
 def stitch(predictions, overlap):
     """
     Stitch predictions together with a given overlap
     """
-    if len(predictions) == 1:
-        return np.squeeze(predictions, axis=0)
+    if predictions.shape[0] == 1:
+        return predictions.squeeze(0)
     stitched = [predictions[0, 0:-overlap]]
     for i in range(1, predictions.shape[0] - 1): stitched.append(predictions[i][overlap:-overlap])
     stitched.append(predictions[-1][overlap:])
@@ -183,7 +169,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, chunk_lengths, targets, target_lengths
 
 
-def load_model(dirname, device, weights=None, half=False):
+def load_model(dirname, device, weights=None, half=False, chunksize=0):
     """
     Load a model from disk
     """
