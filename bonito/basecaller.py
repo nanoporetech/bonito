@@ -19,7 +19,7 @@ def main(args):
 
     model = load_model(
         args.model_directory, args.device, weights=int(args.weights),
-        half=args.half, chunksize=args.chunksize,
+        half=args.half, chunksize=args.chunksize, use_rt=args.cudart,
     )
 
     samples = 0
@@ -78,4 +78,5 @@ def argparser():
     parser.add_argument("--overlap", default=0, type=int)
     parser.add_argument("--half", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
+    parser.add_argument("--cudart", action="store_true", default=False)
     return parser

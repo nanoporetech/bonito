@@ -9,6 +9,7 @@ from glob import glob
 from collections import defaultdict, OrderedDict
 
 from bonito.model import Model
+from bonito_cuda_runtime import CuModel
 
 import toml
 import torch
@@ -183,7 +184,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, chunk_lengths, targets, target_lengths
 
 
-def load_model(dirname, device, weights=None, half=False, chunksize=0):
+def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=False):
     """
     Load a model from disk
     """
@@ -208,6 +209,9 @@ def load_model(dirname, device, weights=None, half=False, chunksize=0):
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
+
+    if use_rt:
+        model = CuModel(model.config, chunksize, new_state_dict)
 
     if half: model = model.half()
     model.eval()
