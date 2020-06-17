@@ -100,6 +100,20 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
     return (signal - med) / mad
 
 
+def get_raw_data_for_read(filename, read_id):
+    """
+    Get the raw signal from the fast5 file for a given read_id
+    """
+    with get_fast5_file(filename, 'r') as f5_fh:
+        read = f5_fh.get_read(read_id)
+        raw = read.handle[read.raw_dataset_name][:]
+        channel_info = read.handle[read.global_key + 'channel_id'].attrs
+        scaling = channel_info['range'] / channel_info['digitisation']
+        offset = int(channel_info['offset'])
+        scaled = np.array(scaling * (raw + offset), dtype=np.float32)
+        return norm_by_noisiest_section(scaled)
+
+
 def get_raw_data(filename):
     """
     Get the raw signal and read id from the fast5 files
