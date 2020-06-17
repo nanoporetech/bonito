@@ -126,7 +126,7 @@ class PairDecoderWriter(Process):
     """
     Pairwise Decoder Process that writes the consensus fasta records to stdout
     """
-    def __init__(self, queue, lock, alphabet, beamsize=128, padding=20, match=60, threshold=0.05):
+    def __init__(self, queue, lock, alphabet, beamsize=128, padding=15, match=60, threshold=0.01):
         super().__init__()
         self.lock = lock
         self.queue = queue
