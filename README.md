@@ -17,8 +17,19 @@ A convolutional basecaller inspired by QuartzNet.
 $ pip install ont-bonito
 $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
 ```
+ 
+ If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
+ 
+## Pair Decoding
 
-If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
+Pair decoding takes a template and complement read to produce higher quaility calls.
+
+```
+$ bonito basecaller pairs.csv /data/reads > basecalls.fasta
+```
+
+The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
+
 
 ## Training your own model
 
@@ -89,7 +100,8 @@ It has been trained on Zymo: *E. faecalis, P. aeruginosa, S. enterica1, S.aureus
 
  - [Sequence Modeling With CTC](https://distill.pub/2017/ctc/)
  - [Quartznet: Deep Automatic Speech Recognition With 1D Time-Channel Separable Convolutions](https://arxiv.org/pdf/1910.10261.pdf)
-
+ - [Pair consensus decoding improves accuracy of neural network basecallers for nanopore sequencing](https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1.full.pdf)
+ 
 ### Licence and Copyright
 (c) 2019 Oxford Nanopore Technologies Ltd.
 
