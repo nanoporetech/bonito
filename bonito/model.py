@@ -5,6 +5,7 @@ Bonito Model template
 import torch.nn as nn
 from torch import sigmoid
 from torch.jit import script
+from torch.autograd import Function
 from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
@@ -12,8 +13,27 @@ from fast_ctc_decode import beam_search, viterbi_search
 
 
 @script
-def swish(x):
+def swish_jit_fwd(x):
     return x * sigmoid(x)
+
+
+@script
+def swish_jit_bwd(x, grad):
+    x_s = sigmoid(x)
+    return grad * (x_s * (1 + x * (1 - x_s)))
+
+
+class SwishAutoFn(Function):
+
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return swish_jit_fwd(x)
+
+    @staticmethod
+    def backward(ctx, grad):
+        x = ctx.saved_tensors[0]
+        return swish_jit_bwd(x, grad)
 
 
 class Swish(Module):
@@ -23,7 +43,7 @@ class Swish(Module):
     https://arxiv.org/abs/1710.05941
     """
     def forward(self, x):
-        return swish(x)
+        return SwishAutoFn.apply(x)
 
 
 activations = {
