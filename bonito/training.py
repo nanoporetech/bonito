@@ -14,6 +14,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
+from torch.optim.lr_scheduler import LambdaLR
 
 try: from apex import amp
 except ImportError: pass
@@ -39,6 +40,52 @@ class ChunkDataSet:
 
     def __len__(self):
         return len(self.chunks)
+
+
+def const_schedule(y):
+    """
+    Constant Scheduler
+    """
+    return lambda t: y
+
+
+def linear_schedule(y0, y1):
+    """
+    Linear Scheduler
+    """
+    return lambda t: y0 + (y1 - y0) * t
+
+
+def cosine_decay_schedule(y0, y1):
+    """
+    Cosine Decay Scheduler
+    """
+    return lambda t: y1 + 0.5 * (y0 - y1) * (np.cos(t * np.pi) + 1.0)
+
+
+def piecewise_schedule(knots, funcs):
+    """
+    Piecewise Scheduler
+    """
+    def f(t):
+        i = np.searchsorted(knots, t)
+        t0 = 0.0 if i == 0 else knots[i - 1]
+        t1 = 1.0 if i == len(knots) else knots[i]
+        return funcs[i]((t - t0) / (t1 - t0))
+    return f
+
+
+def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio=0.1, start_step=0):
+    """
+    Learning Rate Scheduler
+    """
+    if warmup_steps:
+        y0 = func(0.0)
+        func = piecewise_schedule(
+            [warmup_steps / total_steps],
+            [linear_schedule(warmup_ratio * y0, y0), func]
+        )
+    return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
 
 def load_state(dirname, device, model, optim, use_amp=False):
@@ -81,7 +128,7 @@ def load_state(dirname, device, model, optim, use_amp=False):
     return epoch
 
 
-def train(model, device, train_loader, optimizer, use_amp=False):
+def train(model, device, train_loader, optimizer, use_amp=False, lr_scheduler=None):
 
     chunks = 0
     model.train()
@@ -113,6 +160,8 @@ def train(model, device, train_loader, optimizer, use_amp=False):
                 loss.backward()
 
             optimizer.step()
+
+            if lr_scheduler is not None: lr_scheduler.step()
 
             progress_bar.set_postfix(loss='%.4f' % loss.item())
             progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
