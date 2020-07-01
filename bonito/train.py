@@ -11,15 +11,14 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.model import Model
-from bonito.training import ChunkDataSet, load_state, train, test
 from bonito.util import load_data, init, default_config, default_data
+from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
 
 import toml
 import torch
 import numpy as np
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 def main(args):
@@ -58,6 +57,11 @@ def main(args):
     optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
 
+    lr_scheduler = func_scheduler(
+        optimizer, cosine_decay_schedule(1.0, 0.1), args.epochs * len(train_loader),
+        warmup_steps=500, start_step=last_epoch*len(train_loader)
+    )
+
     if args.multi_gpu:
         from torch.nn import DataParallel
         model = DataParallel(model)
@@ -65,13 +69,11 @@ def main(args):
         model.stride = model.module.stride
         model.alphabet = model.module.alphabet
 
-    schedular = CosineAnnealingLR(optimizer, args.epochs * len(train_loader))
-
     for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):
 
         try:
             train_loss, duration = train(
-                model, device, train_loader, optimizer, use_amp=args.amp
+                model, device, train_loader, optimizer, use_amp=args.amp, lr_scheduler=lr_scheduler
             )
             val_loss, val_mean, val_median = test(model, device, test_loader)
         except KeyboardInterrupt:
@@ -96,8 +98,6 @@ def main(args):
                 datetime.today(), int(duration), epoch,
                 train_loss, val_loss, val_mean, val_median,
             ])
-
-        schedular.step()
 
 
 def argparser():
