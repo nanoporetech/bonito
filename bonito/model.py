@@ -2,6 +2,7 @@
 Bonito Model template
 """
 
+import torch
 import torch.nn as nn
 from torch import sigmoid
 from torch.jit import script
@@ -95,9 +96,14 @@ class Encoder(Module):
         super(Encoder, self).__init__()
         self.config = config
 
-        features = self.config['input']['features']
+        if config['input'].get('embed'):
+            features = 64
+            encoder_layers = [Embed(size=64)]
+        else:
+            features = self.config['input']['features']
+            encoder_layers = []
+
         activation = activations[self.config['encoder']['activation']]()
-        encoder_layers = []
 
         for layer in self.config['block']:
             encoder_layers.append(
@@ -117,6 +123,48 @@ class Encoder(Module):
     def forward(self, x):
         return self.encoder(x)
 
+@script
+def gauss(x, mu, sig):
+    return (1.0 / sig) * torch.exp(-(((x-mu[:, None])**2) / (2*sig**2)))
+
+@script
+def diff_gauss(x, mu, sig1, sig2):
+    return 0.5 * (gauss(x, mu, sig1) - gauss(x, mu, sig2))
+
+
+class Embed(Module):
+    def __init__(self, sig1=0.2, sig2=None, size=64, range_min=-2.2, range_max=2.2):
+        super().__init__()
+        self.size=size
+        self.sig1, self.sig2 = [nn.Parameter(torch.tensor(x), requires_grad=False) for x in (sig1, (sig2 or 2*sig1))]
+        self.ys = nn.Parameter(torch.linspace(range_min, range_max, size), requires_grad=False)
+
+    def forward(self, x):
+        return diff_gauss(x, self.ys, self.sig1, self.sig2)
+
+
+class PixelShuffle1d(Module):
+    """
+    Upscales sample length, downscales channel length
+
+    https://arxiv.org/pdf/1609.05158.pdf
+    """
+    def __init__(self, factor):
+        super().__init__()
+        self.factor = factor
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        short_channel_len = x.shape[1]
+        short_width = x.shape[2]
+
+        long_channel_len = short_channel_len // self.factor
+        long_width = self.factor * short_width
+
+        x = x.contiguous().view([batch_size, self.factor, long_channel_len, short_width])
+        x = x.permute(0, 2, 3, 1).contiguous()
+        return x.view(batch_size, long_channel_len, long_width)
+
 
 class TCSConv1d(Module):
     """
@@ -134,7 +182,7 @@ class TCSConv1d(Module):
             )
 
             self.pointwise = Conv1d(
-                in_channels, out_channels, kernel_size=1, stride=stride,
+                in_channels, out_channels, 1, stride=1,
                 dilation=dilation, bias=bias, padding=0
             )
         else:
@@ -161,17 +209,28 @@ class Block(Module):
         super(Block, self).__init__()
 
         self.use_res = residual
+        self.unet = residual and stride[0] > 1
         self.conv = ModuleList()
 
-        _in_channels = in_channels
+        if self.unet:
+            out_channels *= stride[0]
+            _in_channels = out_channels
+            self.conv.extend([
+                Conv1d(in_channels, out_channels, 5, padding=2, stride=stride, bias=False),
+                BatchNorm1d(out_channels),
+                *self.get_activation(activation, dropout),
+            ])
+        else:
+            _in_channels = in_channels
+
         padding = self.get_padding(kernel_size[0], stride[0], dilation[0])
 
         # add the first n - 1 convolutions + activation
-        for _ in range(repeat - 1):
+        for idx in range(repeat - 1):
             self.conv.extend(
                 self.get_tcs(
                     _in_channels, out_channels, kernel_size=kernel_size,
-                    stride=stride, dilation=dilation,
+                    stride=stride if not self.unet and idx == 0 else 1, dilation=dilation,
                     padding=padding, separable=separable
                 )
             )
@@ -184,10 +243,17 @@ class Block(Module):
             self.get_tcs(
                 _in_channels, out_channels,
                 kernel_size=kernel_size,
-                stride=stride, dilation=dilation,
+                stride=stride if repeat == 1 else 1, dilation=dilation,
                 padding=padding, separable=separable
             )
         )
+
+        if self.unet:
+            self.conv.extend([
+                *self.get_activation(activation, dropout),
+                PixelShuffle1d(stride[0])
+            ])
+            out_channels //= stride[0]
 
         # add the residual connection
         if self.use_res:
