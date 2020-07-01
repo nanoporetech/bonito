@@ -55,7 +55,7 @@ def main(args):
 
     print("[loading model]")
     model = Model(config)
-    optimizer = AdamW(model.parameters(), amsgrad=True, lr=args.lr)
+    optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
 
     if args.multi_gpu:
