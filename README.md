@@ -78,23 +78,20 @@ $ source venv3/bin/activate
 
 ## Medaka
 
-An pre-release Medaka can be downloaded from [here](https://nanoporetech.box.com/shared/static/oukeesfjc6406t5po0x2hlw97lnelkyl.hdf5).
+The Medaka can be downloaded from [here](https://nanoporetech.box.com/shared/static/u5gncwjbtg2k3dkw26nmvdvck65ab3xh.hdf5).
 
 It has been trained on Zymo: *E. faecalis, P. aeruginosa, S. enterica1, S.aureus and E.coli (with L. monocytogenes and B. subtilis held out)*.
 
-
 | Coverage | B. subtilis | E. coli | E. faecalis | L. monocytogenes | S. aureus | S. enterica |
 | -------- |:-----------:|:-------:|:-----------:|:----------------:|:---------:|:-----------:|
-|       25 |       36.20 |   37.96 |       36.38 |            36.95 |     39.21 |       37.24 |
-|       50 |       40.63 |   42.22 |       40.97 |            43.01 |     45.23 |       41.55 |
-|       75 |       42.22 |   43.98 |       43.01 |            43.98 |     50.00 |       43.98 |
-|      100 |       45.23 |   45.23 |       44.56 |            45.23 |     50.00 |       45.23 |
-|      125 |       45.23 |   45.42 |       45.23 |            46.99 |     50.00 |       45.23 |
-|      150 |       45.23 |   45.23 |       46.99 |            46.99 |     50.00 |       46.99 |
-|      175 |       46.99 |   46.99 |       45.23 |            48.24 |     50.00 |       46.99 |
-|      200 |       45.23 |   45.23 |       46.99 |            46.99 |     50.00 |       46.99 |
-
-*Note: We working on training a full release model from a broader training set that we expect to generalises better.*
+|       25 |       36.92 |   39.51 |       36.68 |            37.33 |     36.87 |       37.70 |
+|       50 |       41.55 |   43.98 |       40.97 |            42.22 |     42.22 |       42.22 |
+|       75 |       43.01 |   45.23 |       42.22 |            43.01 |     43.01 |       43.98 |
+|      100 |       43.01 |   45.23 |       43.98 |            43.47 |     44.56 |       45.23 |
+|      125 |       45.23 |   46.99 |       43.98 |            45.23 |     45.23 |       45.23 |
+|      150 |       45.23 |   46.99 |       45.23 |            45.23 |     45.23 |       46.99 |
+|      175 |       46.12 |   46.99 |       45.23 |            46.99 |     46.99 |       46.99 |
+|      200 |       46.99 |   46.99 |       45.23 |            45.23 |     46.99 |       46.99 |
 
 ### References
 
