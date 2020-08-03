@@ -6,13 +6,15 @@ Convert a Taiyaki chunkify training file to set of Bonito CTC .npy files
 
 import os
 import h5py
-import toml
 import random
 import numpy as np
-from bisect import bisect_left
 from argparse import ArgumentParser
-from itertools import chain, zip_longest, groupby
+from collections import OrderedDict
+from itertools import islice as take
 from argparse import ArgumentDefaultsHelpFormatter
+
+from tqdm import tqdm
+from bonito.training import ChunkDataSet
 
 
 def align(samples, pointers, reference):
@@ -25,8 +27,9 @@ def align(samples, pointers, reference):
     return samples[pointers[0]:pointers[-1]], pointers - pointers[0], reference
 
 
-def scale(read, samples, normalise=True):
+def scale(read, normalise=True):
     """ scale and normalise a read """
+    samples = read['Dacs'][:]
     scaling = read.attrs['range'] / read.attrs['digitisation']
     scaled = (scaling * (samples + read.attrs['offset'])).astype(np.float32)
     if normalise:
@@ -34,196 +37,94 @@ def scale(read, samples, normalise=True):
     return scaled
 
 
-def boundary(sequence, r=5):
-    """ check if we are on a homopolymer boundary """
-    return len(set(sequence[-r:])) == 1
+def pad_lengths(ragged_array, max_len=None):
+    lengths = np.array([len(x) for x in ragged_array], dtype=np.uint16)
+    padded = np.zeros((len(ragged_array), max_len or np.max(lengths)), dtype=ragged_array[0].dtype)
+    for x, y in zip(ragged_array, padded):
+        y[:len(x)] = x
+    return padded, lengths
 
 
-def num_reads(tfile):
-    """ return the sample lengths for each read in the training file """
-    with h5py.File(tfile, 'r') as training_file:
-        return len(training_file['Reads'])
+def regular_break_points(n, chunk_len, overlap=0, align='mid'):
+    num_chunks, remainder = divmod(n - overlap, chunk_len - overlap)
+    start = {'left': 0, 'mid': remainder // 2, 'right': remainder}[align]
+    starts = np.arange(start, start + num_chunks*(chunk_len - overlap), (chunk_len - overlap))
+    return np.vstack([starts, starts + chunk_len]).T
 
 
-def get_reads(tfile):
-    """ get each dataset per read """
-    with h5py.File(tfile, 'r') as training_file:
-        for read_id in np.random.permutation(training_file['Reads']):
-            read = training_file['Reads/%s' % read_id]
-            reference = read['Reference'][:]
-            pointers = read['Ref_to_signal'][:]
-            samples = read['Dacs'][:]
-            samples = scale(read, samples)
-            samples, pointers, reference = align(samples, pointers, reference)
-            yield read_id, samples, reference, pointers
+def get_chunks(read, break_points):
+    sample = scale(read)
+    pointers = read['Ref_to_signal'][:]
+    target = read['Reference'][:] + 1  # CTC convention
+    return (
+        (sample[i:j], target[ti:tj]) for (i, j), (ti, tj)
+        in zip(break_points, np.searchsorted(pointers, break_points))
+    )
+
+
+def chunk_dataset(reads, chunk_len, num_chunks=None):
+    all_chunks = (
+        (chunk, target) for read in reads for chunk, target in
+        get_chunks(reads[read], regular_break_points(len(reads[read]['Dacs']), chunk_len))
+    )
+    chunks, targets = zip(*tqdm(take(all_chunks, num_chunks), total=num_chunks))
+    targets, target_lens = pad_lengths(targets) # convert refs from ragged arrray
+    chunk_lens = np.full(len(chunks), chunk_len, dtype=np.int16)
+    return ChunkDataSet(chunks, chunk_lens, targets, target_lens)
+
+
+def validation_split(reads, num_valid=1000):
+    reads = np.random.permutation(sorted(reads.items()))
+    return OrderedDict(reads[:-num_valid]), OrderedDict(reads[-num_valid:])
+
+
+def select_indices(ds, idx):
+    return ChunkDataSet(
+        ds.chunks.squeeze(1)[idx], ds.chunk_lengths[idx], ds.targets[idx], ds.target_lengths[idx]
+    )
+
+
+def filter_chunks(chunks):
+    mu, sd = np.mean(chunks.target_lengths), np.std(chunks.target_lengths)
+    idx = [
+        i for i, n in enumerate(chunks.target_lengths) if mu - 2.5 * sd < n < mu + 2.5 * sd
+    ]
+    filtered = select_indices(chunks, idx)
+    filtered.targets = filtered.targets[:, :filtered.target_lengths.max()]
+    return filtered
+
+
+def save_chunks(chunks, output_directory):
+    os.makedirs(output_directory, exist_ok=True)
+    np.save(os.path.join(output_directory, "chunks.npy"), chunks.chunks.squeeze(1))
+    np.save(os.path.join(output_directory, "chunk_lengths.npy"), chunks.chunk_lengths)
+    np.save(os.path.join(output_directory, "references.npy"), chunks.targets)
+    np.save(os.path.join(output_directory, "reference_lengths.npy"), chunks.target_lengths)
+    print()
+    print("> data written to %s:" % output_directory)
+    print("  - chunks.npy with shape", chunks.chunks.squeeze(1).shape)
+    print("  - chunk_lengths.npy with shape", chunks.chunk_lengths.shape)
+    print("  - references.npy with shape", chunks.targets.shape)
+    print("  - reference_lengths.npy shape", chunks.target_lengths.shape)
 
 
 def main(args):
 
     random.seed(args.seed)
     np.random.seed(args.seed)
-    os.makedirs(args.output_directory, exist_ok=True)
 
-    read_idx = 0
-    chunk_idx = 0
-    chunk_count = 0
+    reads = h5py.File(args.chunkify_file, 'r')['Reads']
+    training, validation = validation_split(reads, args.validation_reads)
 
-    min_bases = 0
-    max_bases = 0
-    off_the_end_ref = 0
-    off_the_end_sig = 0
-    min_run_count = 0
-    read_too_short = 0
-    homopolymer_boundary = 0
+    print("> preparing training chunks\n")
+    training_chunks = chunk_dataset(training, args.chunksize)
+    training_chunks = filter_chunks(training_chunks)
+    save_chunks(training_chunks, args.output_directory)
 
-    total_reads = num_reads(args.chunkify_file)
-
-    chunks = np.zeros((args.chunks, args.max_seq_len * args.max_samples_per_base), dtype=np.float32)
-    chunk_lengths = np.zeros(args.chunks, dtype=np.uint16)
-
-    targets = np.zeros((args.chunks, args.max_seq_len), dtype=np.uint8)
-    target_lengths = np.zeros(args.chunks, dtype=np.uint16)
-
-    with open(os.path.join(args.output_directory, 'config.toml'), 'w') as conf:
-        toml.dump(dict(chunks=vars(args)), conf)
-
-    for read_id, samples, reference, pointers in get_reads(args.chunkify_file):
-
-        read_idx += 1
-
-        squiggle_duration = len(samples)
-        sequence_length = len(reference) - args.offset - 1
-
-        if sequence_length < args.max_seq_len + args.offset:
-            read_too_short += 1
-            continue
-
-        # first chunk
-        seq_starts = args.offset
-        seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
-
-        repick = int((args.max_seq_len - args.min_seq_len) / 2)
-        while boundary(reference[seq_starts:seq_ends]) and repick:
-            seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
-            seq_ends = min(seq_ends, sequence_length)
-            repick -= 1
-
-        chunk_idxs = [(seq_starts, seq_ends)]
-
-        # variable size chunks with overlap
-        while seq_ends < sequence_length - args.min_seq_len:
-
-            # overlap chunks with +/- 3% of max seq len
-            overlap = np.int32(args.max_seq_len * 0.03)
-
-            seq_starts = seq_ends + np.random.randint(-overlap, overlap)
-            seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
-            seq_ends = min(seq_ends, sequence_length)
-
-            repick = int((args.max_seq_len - args.min_seq_len) / 2)
-            while boundary(reference[seq_starts:seq_ends]) and repick:
-                seq_ends = seq_starts + np.random.randint(args.min_seq_len, args.max_seq_len)
-                seq_ends = min(seq_ends, sequence_length)
-                repick -= 1
-
-            chunk_idxs.append((seq_starts, seq_ends))
-
-        for start, end in chunk_idxs:
-
-            chunk_idx += 1
-
-            if end > sequence_length:
-                print(read_id, end, sequence_length)
-                off_the_end_ref += 1
-                continue
-
-            squiggle_start = pointers[start]
-            squiggle_end = pointers[end + 1] # fence post mapping
-            squiggle_length = squiggle_end - squiggle_start
-
-            reference_length = end - start
-
-            samples_per_base = squiggle_length / reference_length
-
-            if samples_per_base < args.min_samples_per_base:
-                min_bases += 1
-                continue
-
-            if samples_per_base > args.max_samples_per_base:
-                max_bases += 1
-                continue
-
-            if squiggle_end > squiggle_duration:
-                off_the_end_sig += 1
-                continue
-
-            longest_run = max(len(list(run)) for label, run in groupby(reference[start:end]))
-
-            if longest_run < args.min_run:
-                min_run_count += 1
-                continue
-
-            if boundary(reference[start:end]):
-                homopolymer_boundary += 1
-                # continue - include the chunk anyway
-
-            chunks[chunk_count, :squiggle_length] = samples[squiggle_start:squiggle_end]
-            chunk_lengths[chunk_count] = squiggle_length
-
-            # index alphabet from 1 (ctc blank labels - 0)
-            targets[chunk_count, :reference_length] = reference[start:end] + 1
-            target_lengths[chunk_count] = reference_length
-
-            chunk_count += 1
-
-            if chunk_count == args.chunks:
-                break
-
-        if chunk_count == args.chunks:
-            break
-
-    skipped = chunk_idx - chunk_count
-    percent = (skipped / chunk_idx * 100) if skipped else 0
-
-    print("Processed %s reads of out %s [%.2f%%]" % (read_idx, total_reads, read_idx / total_reads * 100))
-    print("Skipped %s chunks out of %s due to bad chunks [%.2f%%].\n" % (skipped, chunk_idx, percent))
-    print("Reason for skipping:")
-    print("  - off the end (signal)          ", off_the_end_sig)
-    print("  - off the end (sequence)        ", off_the_end_ref)
-    print("  - read too short (sequence)     ", read_too_short)
-    print("  - homopolymer chunk boundary    ", homopolymer_boundary)
-    print("  - longest run too short         ", min_run_count)
-    print("  - minimum number of bases       ", min_bases)
-    print("  - maximum number of bases       ", max_bases)
-
-    if chunk_count < args.chunks:
-        chunks = np.delete(chunks, np.s_[chunk_count:], axis=0)
-        chunk_lengths = chunk_lengths[:chunk_count]
-        targets = np.delete(targets, np.s_[chunk_count:], axis=0)
-        target_lengths = target_lengths[:chunk_count]
-
-    if args.chunks > args.validation_chunks:
-        split = args.validation_chunks
-        vdir = os.path.join(args.output_directory, "validation")
-        os.makedirs(vdir, exist_ok=True)
-        np.save(os.path.join(vdir, "chunks.npy"), chunks[:split])
-        np.save(os.path.join(vdir, "chunk_lengths.npy"), chunk_lengths[:split])
-        np.save(os.path.join(vdir, "references.npy"), targets[:split])
-        np.save(os.path.join(vdir, "reference_lengths.npy"), target_lengths[:split])
-    else:
-        split = 0
-
-    np.save(os.path.join(args.output_directory, "chunks.npy"), chunks[split:])
-    np.save(os.path.join(args.output_directory, "chunk_lengths.npy"), chunk_lengths[split:])
-    np.save(os.path.join(args.output_directory, "references.npy"), targets[split:])
-    np.save(os.path.join(args.output_directory, "reference_lengths.npy"), target_lengths[split:])
-
-    print()
-    print("Training data written to %s:" % args.output_directory)
-    print("  - chunks.npy with shape", chunks[split:].shape)
-    print("  - chunk_lengths.npy with shape", chunk_lengths[split:].shape)
-    print("  - references.npy with shape", targets[split:].shape)
-    print("  - reference_lengths.npy shape", target_lengths[split:].shape)
+    print("\n> preparing validation chunks\n")
+    validation_chunks = chunk_dataset(validation, args.chunksize)
+    validation_chunks = filter_chunks(validation_chunks)
+    save_chunks(validation_chunks, os.path.join(args.output_directory, "validation"))
 
 
 def argparser():
@@ -234,12 +135,6 @@ def argparser():
     parser.add_argument("chunkify_file")
     parser.add_argument("output_directory")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--chunks", default=10000000, type=int)
-    parser.add_argument("--validation-chunks", default=1000, type=int)
-    parser.add_argument("--offset", default=200, type=int)
-    parser.add_argument("--min-run", default=5, type=int)
-    parser.add_argument("--min-seq-len", default=200, type=int)
-    parser.add_argument("--max-seq-len", default=400, type=int)
-    parser.add_argument("--min-samples-per-base", default=8, type=int)
-    parser.add_argument("--max-samples-per-base", default=12, type=int)
+    parser.add_argument("--chunksize", default=3600, type=int)
+    parser.add_argument("--validation-reads", default=1000, type=int)
     return parser
