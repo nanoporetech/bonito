@@ -213,13 +213,15 @@ def main(args):
 
             if read_id_1 not in index or read_id_2 not in index: continue
 
-            raw_data_1 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_1]), read_id_1)
+            read_1 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_1]), read_id_1)
+            raw_data_1 = read_1.signal
 
             if len(raw_data_1) > max_read_size:
                 sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id_1, len(raw_data_1)))
                 continue
 
-            raw_data_2 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_2]), read_id_2)
+            read_2 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_2]), read_id_2)
+            raw_data_2 = read_2.signal
 
             if len(raw_data_2) > max_read_size:
                 sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id_2, len(raw_data_2)))

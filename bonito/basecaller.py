@@ -40,22 +40,20 @@ def main(args):
             if read is None:
                 break
 
-            read_id, raw_data = read
-
-            if len(raw_data) > max_read_size:
-                sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id, len(raw_data)))
+            if len(read.signal) > max_read_size:
+                sys.stderr.write("> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal)))
                 continue
 
             num_reads += 1
-            samples += len(raw_data)
+            samples += len(read.signal)
 
-            raw_data = torch.tensor(raw_data.astype(dtype))
+            raw_data = torch.tensor(read.signal.astype(dtype))
             chunks = chunk(raw_data, args.chunksize, args.overlap)
 
             posteriors = model(chunks.to(args.device)).cpu().numpy()
             posteriors = stitch(posteriors, args.overlap // model.stride // 2)
 
-            writer.queue.put((read_id, posteriors[:raw_data.shape[0]]))
+            writer.queue.put((read, posteriors[:raw_data.shape[0]]))
 
     duration = time.perf_counter() - t0
 

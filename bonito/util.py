@@ -36,6 +36,35 @@ default_data = os.path.join(__data__, "dna_r9.4.1")
 default_config = os.path.join(__configs__, "dna_r9.4.1.toml")
 
 
+class Read:
+
+    def __init__(self, read, filename):
+
+        self.read_id = read.read_id
+        self.run_id = read.get_run_id().decode()
+        self.filename = os.path.basename(read.filename)
+
+        read_attrs = read.handle[read.raw_dataset_group_name].attrs
+        channel_info = read.handle[read.global_key + 'channel_id'].attrs
+
+        self.offset = int(channel_info['offset'])
+        self.sampling_rate = channel_info['sampling_rate']
+        self.scaling = channel_info['range'] / channel_info['digitisation']
+
+        self.mux = read_attrs['start_mux']
+        self.channel = channel_info['channel_number'].decode()
+        self.start = read_attrs['start_time'] / self.sampling_rate
+        self.duration = read_attrs['duration'] / self.sampling_rate
+
+        # no trimming
+        self.template_start = self.start
+        self.template_duration = self.duration
+
+        raw = read.handle[read.raw_dataset_name][:]
+        scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+        self.signal = norm_by_noisiest_section(scaled)
+
+
 def init(seed, device):
     """
     Initialise random libs and setup cudnn
@@ -59,6 +88,16 @@ def phred(prob, scale=1.0, bias=0.0):
     p = max(1 - prob, 1e-4)
     q = -10 * np.log10(p) * scale + bias
     return chr(int(np.round(q) + 33))
+
+
+def mean_qscore_from_qstring(qstring):
+    """
+    Convert qstring into a mean qscore
+    """
+    if len(qstring) == 0: return 0.0
+    err_probs = [10**((ord(c) - 33) / -10) for c in qstring]
+    mean_err = np.mean(err_probs)
+    return -10 * np.log10(max(mean_err, 1e-4))
 
 
 def decode_ref(encoded, labels):
@@ -101,32 +140,21 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
     return (signal - med) / mad
 
 
-def get_raw_data_for_read(filename, read_id):
-    """
-    Get the raw signal from the fast5 file for a given read_id
-    """
-    with get_fast5_file(filename, 'r') as f5_fh:
-        read = f5_fh.get_read(read_id)
-        raw = read.handle[read.raw_dataset_name][:]
-        channel_info = read.handle[read.global_key + 'channel_id'].attrs
-        scaling = channel_info['range'] / channel_info['digitisation']
-        offset = int(channel_info['offset'])
-        scaled = np.array(scaling * (raw + offset), dtype=np.float32)
-        return norm_by_noisiest_section(scaled)
-
-
 def get_raw_data(filename):
     """
     Get the raw signal and read id from the fast5 files
     """
     with get_fast5_file(filename, 'r') as f5_fh:
-        for read in f5_fh.get_reads():
-            raw = read.handle[read.raw_dataset_name][:]
-            channel_info = read.handle[read.global_key + 'channel_id'].attrs
-            scaling = channel_info['range'] / channel_info['digitisation']
-            offset = int(channel_info['offset'])
-            scaled = np.array(scaling * (raw + offset), dtype=np.float32)
-            yield read.read_id, norm_by_noisiest_section(scaled)
+        for res in f5_fh.get_reads():
+            yield Read(res, filename)
+
+
+def get_raw_data_for_read(filename, read_id):
+    """
+    Get the raw signal from the fast5 file for a given read_id
+    """
+    with get_fast5_file(filename, 'r') as f5_fh:
+        return Read(f5_fh.get_read(read_id), filename)
 
 
 def chunk(raw_data, chunksize, overlap):

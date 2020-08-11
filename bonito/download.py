@@ -70,7 +70,7 @@ class File:
 
 models = [
 #   "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
-    "f0age89la1byuf8f8jzrjlq5p06mo6jq.zip", # dna_r9.4.1@v2
+    "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip", # dna_r9.4.1@v2
 ]
 
 training = [
