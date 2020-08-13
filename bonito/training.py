@@ -162,7 +162,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             target = target.to(device)
             log_probs = model(data)
 
-            losses = criterion(log_probs.transpose(0, 1), target, out_lengths / model.stride, lengths)
+            losses = criterion(log_probs.transpose(0, 1), target, out_lengths // model.stride, lengths)
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}
@@ -199,9 +199,9 @@ def test(model, device, test_loader):
         for batch_idx, (data, out_lengths, target, lengths) in enumerate(test_loader, start=1):
             data, target = data.to(device), target.to(device)
             log_probs = model(data)
-            test_loss += ctc_loss(log_probs.transpose(1, 0), target, out_lengths / model.stride, lengths)
+            test_loss += ctc_loss(log_probs.transpose(1, 0), target, out_lengths // model.stride, lengths)
             predictions.append(torch.exp(log_probs).cpu())
-            prediction_lengths.append(out_lengths / model.stride)
+            prediction_lengths.append(out_lengths // model.stride)
 
     predictions = np.concatenate(predictions)
     lengths = np.concatenate(prediction_lengths)
