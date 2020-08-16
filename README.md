@@ -17,8 +17,14 @@ A convolutional basecaller inspired by QuartzNet.
 $ pip install ont-bonito
 $ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
 ```
- 
- If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
+
+If a reference is provided in either `.fasta` or `.mmi` format then bonito will output in `sam` format.
+
+```bash
+$ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
+```
+
+If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
  
 ## Pair Decoding
 
