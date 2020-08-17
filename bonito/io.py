@@ -159,7 +159,7 @@ def write_sam_header(aligner, fd=sys.stdout, sep='\t'):
     fd.flush()
 
 
-def write_sam(read_id, sequence, mapping, fd=sys.stdout, sep='\t'):
+def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, sep='\t'):
     """
     Write a sam record to a file descriptor.
     """
@@ -180,7 +180,7 @@ def write_sam(read_id, sequence, mapping, fd=sys.stdout, sep='\t'):
         0,
         0,
         sequence if mapping.strand == +1 else revcomp(sequence),
-        '*',
+        qstring,
         'NM:i:%s' % mapping.NM,
     ])))
     fd.flush()
@@ -276,9 +276,11 @@ class DecoderWriter(Process):
             sequence, path = self.model.decode(
                 predictions, beamsize=self.beamsize, qscores=True, return_path=True
             )
-            mean_qscore = mean_qscore_from_qstring(sequence[len(path):])
+            sequence, qstring = sequence[:len(path)], sequence[len(path):]
+            mean_qscore = mean_qscore_from_qstring(qstring)
 
             if not self.fastq:  # beam search
+                qstring = '*'
                 sequence, path = self.model.decode(
                     predictions, beamsize=self.beamsize, qscores=False, return_path=True
                 )
@@ -290,12 +292,12 @@ class DecoderWriter(Process):
                 with self.lock, open(summary_file(), 'a') as summary:
                     if self.aligner:
                         for mapping in self.aligner.map(sequence):
-                            write_sam(read.read_id, sequence, mapping)
+                            write_sam(read.read_id, sequence, qstring, mapping)
                             break
                         else:
                             mapping = None
                     elif self.fastq:
-                        write_fastq(read.read_id, sequence[:len(path)], sequence[len(path):])
+                        write_fastq(read.read_id, sequence, qstring)
                     else:
                         write_fasta(read.read_id, sequence)
                     write_summary_row(summary, read, len(sequence), mean_qscore, alignment=mapping)
