@@ -159,30 +159,32 @@ def write_sam_header(aligner, fd=sys.stdout, sep='\t'):
     fd.flush()
 
 
-def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, sep='\t'):
+def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=False, sep='\t'):
     """
     Write a sam record to a file descriptor.
     """
-    softclip = [
-        '%sS' % mapping.q_st if mapping.q_st else '',
-        mapping.cigar_str,
-        '%sS' % (len(sequence) - mapping.q_en) if len(sequence) - mapping.q_en else ''
-    ]
-
-    fd.write("%s\n" % sep.join(map(str, [
-        read_id,
-        0 if mapping.strand == +1 else 16,
-        mapping.ctg,
-        mapping.r_st + 1,
-        mapping.mapq,
-        ''.join(softclip if mapping.strand == +1 else softclip[::-1]),
-        '*',
-        0,
-        0,
-        sequence if mapping.strand == +1 else revcomp(sequence),
-        qstring,
-        'NM:i:%s' % mapping.NM,
-    ])))
+    if unaligned:
+        fd.write("%s\n" % sep.join(map(str, [
+            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
+        ])))
+    else:
+        softclip = [
+            '%sS' % mapping.q_st if mapping.q_st else '',
+            mapping.cigar_str,
+            '%sS' % (len(sequence) - mapping.q_en) if len(sequence) - mapping.q_en else ''
+        ]
+        fd.write("%s\n" % sep.join(map(str, [
+            read_id,
+            0 if mapping.strand == +1 else 16,
+            mapping.ctg,
+            mapping.r_st + 1,
+            mapping.mapq,
+            ''.join(softclip if mapping.strand == +1 else softclip[::-1]),
+            '*', 0, 0,
+            sequence if mapping.strand == +1 else revcomp(sequence),
+            qstring,
+            'NM:i:%s' % mapping.NM,
+        ])))
     fd.flush()
 
 
@@ -296,6 +298,7 @@ class DecoderWriter(Process):
                             break
                         else:
                             mapping = None
+                            write_sam(read.read_id, sequence, qstring, mapping, unaligned=True)
                     elif self.fastq:
                         write_fastq(read.read_id, sequence, qstring)
                     else:
