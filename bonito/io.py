@@ -30,11 +30,11 @@ def summary_file():
     return '%s_summary.tsv' % splitext(realpath('/dev/fd/1'))[0]
 
 
-def write_summary_header(fd, sep='\t'):
+def write_summary_header(fd, alignment=None, sep='\t'):
     """
     Write the summary tsv header.
     """
-    fd.write('%s\n' % sep.join((
+    fields = [
         'filename',
         'read_id',
         'run_id',
@@ -46,15 +46,34 @@ def write_summary_header(fd, sep='\t'):
         'template_duration',
         'sequence_length_template',
         'mean_qscore_template',
-    )))
+    ]
+    if alignment:
+        fields.extend([
+            'alignment_genome',
+            'alignment_genome_start',
+            'alignment_genome_end',
+            'alignment_strand_start',
+            'alignment_strand_end',
+            'alignment_direction',
+            'alignment_length',
+            'alignment_num_aligned',
+            'alignment_num_correct',
+            'alignment_num_insertions',
+            'alignment_num_deletions',
+            'alignment_num_substitutions',
+            'alignment_strand_coverage',
+            'alignment_identity',
+            'alignment_accuracy',
+        ])
+    fd.write('%s\n' % sep.join(fields))
     fd.flush()
 
 
-def write_summary_row(fd, read, seqlen, qscore=0, sep='\t'):
+def write_summary_row(fd, read, seqlen, qscore, alignment=False, sep='\t'):
     """
     Write a summary tsv row.
     """
-    fd.write('%s\n' % sep.join(map(str, [
+    fields = [str(field) for field in [
         read.filename,
         read.read_id,
         read.run_id,
@@ -66,7 +85,37 @@ def write_summary_row(fd, read, seqlen, qscore=0, sep='\t'):
         read.template_duration,
         seqlen,
         qscore,
-    ])))
+    ]]
+
+    if alignment:
+
+        ins = sum(count for count, op in alignment.cigar if op == 1)
+        dels = sum(count for count, op in alignment.cigar if op == 2)
+        subs = alignment.NM - ins - dels
+        length = alignment.blen
+        matches = length - ins - dels
+        correct = alignment.mlen
+
+        fields.extend([str(field) for field in [
+            alignment.ctg,
+            alignment.r_st,
+            alignment.r_en,
+            alignment.q_st if alignment.strand == +1 else seqlen - alignment.q_en,
+            alignment.q_en if alignment.strand == +1 else seqlen - alignment.q_st,
+            '+' if alignment.strand == +1 else '-',
+            length, matches, correct,
+            ins, dels, subs,
+            (alignment.q_en - alignment.q_st) / seqlen,
+            correct / matches,
+            correct / length,
+        ]])
+
+    elif alignment is None:
+        fields.extend([str(field) for field in
+            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
+        ])
+
+    fd.write('%s\n' % sep.join(fields))
     fd.flush()
 
 
@@ -184,7 +233,7 @@ class DecoderWriterPool:
            aligner = None
 
        with open(summary_file(), 'w') as summary:
-           write_summary_header(summary)
+           write_summary_header(summary, alignment=aligner)
 
        for _ in range(self.procs):
            decoder = DecoderWriter(model, self.queue, self.lock, aligner=aligner, **kwargs)
@@ -204,7 +253,7 @@ class DecoderWriterPool:
 
 class DecoderWriter(Process):
     """
-    Decoder Process that writes fasta records to stdout
+    Decoder Process that writes output records to stdout
     """
     def __init__(self, model, queue, lock, fastq=False, beamsize=5, aligner=None):
         super().__init__()
@@ -234,16 +283,21 @@ class DecoderWriter(Process):
                     predictions, beamsize=self.beamsize, qscores=False, return_path=True
                 )
 
+            if not self.aligner:
+                mapping = False
+
             if sequence:
                 with self.lock, open(summary_file(), 'a') as summary:
                     if self.aligner:
                         for mapping in self.aligner.map(sequence):
                             write_sam(read.read_id, sequence, mapping)
                             break
+                        else:
+                            mapping = None
                     elif self.fastq:
                         write_fastq(read.read_id, sequence[:len(path)], sequence[len(path):])
                     else:
                         write_fasta(read.read_id, sequence)
-                    write_summary_row(summary, read, len(sequence), mean_qscore)
+                    write_summary_row(summary, read, len(sequence), mean_qscore, alignment=mapping)
             else:
                 logger.warn("> skipping empty sequence %s", read.read_id)
