@@ -203,7 +203,7 @@ class PreprocessReader(Process):
         self.stop()
 
     def run(self):
-        for fast5 in tqdm(glob("%s/*fast5" % self.directory), ascii=True, ncols=100):
+        for fast5 in tqdm(glob("%s/*fast5" % self.directory), ascii=True, ncols=100, leave=False):
             for read in get_raw_data(fast5):
                 self.queue.put(read)
         self.queue.put(None)

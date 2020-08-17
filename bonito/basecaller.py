@@ -4,6 +4,7 @@ Bonito Basecaller
 
 import sys
 import time
+from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_model, chunk, stitch
@@ -58,6 +59,7 @@ def main(args):
     duration = time.perf_counter() - t0
 
     sys.stderr.write("> completed reads: %s\n" % num_reads)
+    sys.stderr.write("> duration: %s\n" % timedelta(seconds=np.round(duration)))
     sys.stderr.write("> samples per second %.1E\n" % (samples / duration))
     sys.stderr.write("> done\n")
 
