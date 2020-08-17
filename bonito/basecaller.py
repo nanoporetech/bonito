@@ -4,6 +4,7 @@ Bonito Basecaller
 
 import sys
 import time
+from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_model, chunk, stitch
@@ -27,7 +28,7 @@ def main(args):
     max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
     reader = PreprocessReader(args.reads_directory)
-    writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq)
+    writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq, reference=args.reference)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -58,6 +59,7 @@ def main(args):
     duration = time.perf_counter() - t0
 
     sys.stderr.write("> completed reads: %s\n" % num_reads)
+    sys.stderr.write("> duration: %s\n" % timedelta(seconds=np.round(duration)))
     sys.stderr.write("> samples per second %.1E\n" % (samples / duration))
     sys.stderr.write("> done\n")
 
@@ -69,6 +71,7 @@ def argparser():
     )
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
+    parser.add_argument("--reference")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)
