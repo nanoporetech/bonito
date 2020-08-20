@@ -1,6 +1,7 @@
 *.pyc
 *~
 .venv/
+build/
 venv3*/
 *.lprof
 *.egg-info/
