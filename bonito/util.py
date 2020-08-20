@@ -191,18 +191,16 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     if validation and os.path.exists(os.path.join(directory, 'validation')):
         directory = os.path.join(directory, 'validation')
 
-    chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
-    chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"), mmap_mode='r')
-    targets = np.load(os.path.join(directory, "references.npy"), mmap_mode='r')
-    target_lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
+    chunks = np.load(os.path.join(directory, "chunks.npy"))
+    chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"))
+    targets = np.load(os.path.join(directory, "references.npy"))
+    target_lengths = np.load(os.path.join(directory, "reference_lengths.npy"))
 
     if shuffle:
-        shuf = np.random.permutation(chunks.shape[0])
-        chunks = chunks[shuf]
-        chunk_lengths = chunk_lengths[shuf]
-        targets = targets[shuf]
-        target_lengths = target_lengths[shuf]
-
+        state = np.random.get_state()
+        for array in (chunks, chunk_lengths, targets, target_lengths):
+            np.random.set_state(state)
+            np.random.shuffle(array)
     if limit:
         chunks = chunks[:limit]
         chunk_lengths = chunk_lengths[:limit]
