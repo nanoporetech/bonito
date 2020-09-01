@@ -10,7 +10,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.training import ChunkDataSet
 from bonito.util import accuracy, poa, decode_ref
-from bonito.util import init, load_data, load_model
+from bonito.util import init, load_data, load_model, half_supported
 
 from torch.utils.data import DataLoader
 
@@ -80,7 +80,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("--directory", default=None)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--half", action="store_true", default=False)
+    parser.add_argument("--half", action="store_true", default=half_supported())
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--chunks", default=500, type=int)

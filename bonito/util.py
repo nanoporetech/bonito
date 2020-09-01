@@ -16,6 +16,7 @@ import torch
 import parasail
 import numpy as np
 from scipy.signal import find_peaks
+from torch.cuda import get_device_capability
 from ont_fast5_api.fast5_interface import get_fast5_file
 
 try:
@@ -79,6 +80,13 @@ def init(seed, device):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     assert(torch.cuda.is_available())
+
+
+def half_supported():
+    """
+    Returns whether FP16 is support on the GPU
+    """
+    return get_device_capability()[0] >= 7
 
 
 def phred(prob, scale=1.0, bias=0.0):
