@@ -275,6 +275,8 @@ class CTCWriter(Process):
                     ])
                     target_lens.append(len(refseq))
 
+        if len(chunks) == 0: return
+
         chunks = np.array(chunks, dtype=np.float32)
         chunk_lens = np.full(chunks.shape[0], chunks.shape[1], dtype=np.int16)
 
