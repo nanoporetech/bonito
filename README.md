@@ -2,16 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
 
-A convolutional basecaller inspired by QuartzNet.
-
-## Features
-
- - Raw signal input.
- - Simple 5 state output `{BLANK, A, C, G, T}`.
- - CTC training.
- - Small Python codebase.
-
-## Basecalling
+A PyTorch Basecaller for Oxford Nanopore Reads.
 
 ```bash
 $ pip install ont-bonito
@@ -23,27 +14,31 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 ```bash
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
-
-If you have a `turing` or `volta` GPU the `--half` flag can be uses to increase performance.
  
 ## Pair Decoding
 
 Pair decoding takes a template and complement read to produce higher quaility calls.
 
-```
+```bash
 $ bonito basecaller pairs.csv /data/reads > basecalls.fasta
 ```
 
 The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
 
-
 ## Training your own model
 
-To train your own model first download the training data.
+To train a model using your own reads, first basecall the reads with the additional `--save-ctc` flag and use the output directory as the input directory for training.
+
+```bash
+$ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads > /data/training/ctc-data/basecalls.sam
+$ bonito train --amp --directory /data/training/ctc-data /data/training/model-dir
+```
+
+If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
 
 ```bash
 $ bonito download --training
-$ bonito train --amp /data/model-dir
+$ bonito train --amp /data/training/model-dir
 ```
 
 Automatic mixed precision can be used to speed up training with the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
@@ -55,7 +50,7 @@ $ export CUDA_VISIBLE_DEVICES=0,1,2,3
 $ bonito train --amp --multi-gpu --batch 256 /data/model-dir
 ```
 
-To evaluate the pretrained model run `bonito evaluate dna_r9.4.1 --half`.
+To evaluate the pretrained model run `bonito evaluate dna_r9.4.1`.
 
 For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
 
