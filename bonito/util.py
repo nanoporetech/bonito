@@ -66,20 +66,53 @@ class Read:
         self.signal = norm_by_noisiest_section(scaled)
 
 
+from openvino.inference_engine import IECore
+
 class OpenVINOModel:
+
     def __init__(self, model, dirname):
-        inp = torch.randn(1, 1, 1000)
-        model.eval()
-        with torch.no_grad():
-            path = os.path.join(dirname, model.config['model'] + '.onnx')
-            torch.onnx.export(model, inp, path,
-                              input_names=['input'],
-                              output_names=['output'],
-                              operator_export_type=torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK)
+        self.model = model
+        self.alphabet = model.alphabet
+
+        # Convert to ONNX
+        onnx_path = os.path.join(dirname, model.config['model'] + '.onnx')
+
+        if not os.path.exists(onnx_path):
+            inp = torch.randn(100, 1, 3600)
+            model.eval()
+            with torch.no_grad():
+                torch.onnx.export(model, inp, onnx_path,
+                                input_names=['input'],
+                                output_names=['output'],
+                                operator_export_type=torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK)
+
+        # Convert to IR
+        xml_path = os.path.splitext(onnx_path)[0] + '.xml'
+        bin_path = os.path.splitext(onnx_path)[0] + '.bin'
+        if not os.path.exists(xml_path):
+            import mo_onnx
+            import subprocess
+            subprocess.call([mo_onnx.__file__, '--input_model', onnx_path, '--extension=mo_extension', '--output_dir', dirname])
+        self.ie = IECore()
+        self.net = self.ie.read_network(xml_path, bin_path)
 
 
-    # def eval():
-    #     pass
+    def eval(self):
+        pass
+
+
+    def to(self, device):
+        self.exec_net = self.ie.load_network(self.net, str(device).upper())
+        pass
+
+
+    def __call__(self, data):
+        out = self.exec_net.infer({'input': data})
+        return torch.tensor(out['output'])
+
+
+    def decode(self, post, beamsize):
+        return self.model.decode(post, beamsize=beamsize)
 
 
 def init(seed, device):

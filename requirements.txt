@@ -9,3 +9,8 @@ ont-fast5-api==3.0.1
 fast-ctc-decode==0.2.5
 bonito-cuda-runtime==0.0.2a2
 #pyclaragenomics-cuda-10-0==0.4.2
+# OpenVINO
+networkx
+defusedxml
+test-generator==0.1.1
+onnx==1.1.2
