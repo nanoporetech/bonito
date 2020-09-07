@@ -41,6 +41,7 @@ def main(args):
                     data = data.type(torch.float16).to(args.device)
                 else:
                     data = data.to(args.device)
+                print(data.shape)
                 log_probs = model(data)
                 predictions.append(log_probs.exp().cpu().numpy().astype(np.float32))
 

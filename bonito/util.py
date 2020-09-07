@@ -66,6 +66,22 @@ class Read:
         self.signal = norm_by_noisiest_section(scaled)
 
 
+class OpenVINOModel:
+    def __init__(self, model, dirname):
+        inp = torch.randn(1, 1, 1000)
+        model.eval()
+        with torch.no_grad():
+            path = os.path.join(dirname, model.config['model'] + '.onnx')
+            torch.onnx.export(model, inp, path,
+                              input_names=['input'],
+                              output_names=['output'],
+                              operator_export_type=torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK)
+
+
+    # def eval():
+    #     pass
+
+
 def init(seed, device):
     """
     Initialise random libs and setup cudnn
@@ -86,7 +102,10 @@ def half_supported():
     """
     Returns whether FP16 is support on the GPU
     """
-    return get_device_capability()[0] >= 7
+    try:
+        return get_device_capability()[0] >= 7
+    except:
+        return False
 
 
 def phred(prob, scale=1.0, bias=0.0):
@@ -218,7 +237,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, chunk_lengths, targets, target_lengths
 
 
-def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=False):
+def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=False, use_openvino=True):
     """
     Load a model from disk
     """
@@ -244,8 +263,11 @@ def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=Fa
 
     model.load_state_dict(new_state_dict)
 
+    assert(not use_rt or not use_openvino)
     if use_rt:
         model = CuModel(model.config, chunksize, new_state_dict)
+    elif use_openvino:
+        model = OpenVINOModel(model, dirname)
 
     if half: model = model.half()
     model.eval()
