@@ -253,7 +253,10 @@ class CTCWriter(Process):
 
             for chunk, pred in zip(chunks_, predictions):
 
-                sequence = self.model.decode(pred)
+                try:
+                    sequence = self.model.decode(pred)
+                except:
+                    continue
 
                 if not sequence:
                     continue
@@ -365,9 +368,12 @@ class DecoderWriter(Process):
 
             if not self.fastq:  # beam search
                 qstring = '*'
-                sequence, path = self.model.decode(
-                    predictions, beamsize=self.beamsize, qscores=False, return_path=True
-                )
+                try:
+                    sequence, path = self.model.decode(
+                        predictions, beamsize=self.beamsize, qscores=False, return_path=True
+                    )
+                except:
+                    pass
 
             if not self.aligner:
                 mapping = False
