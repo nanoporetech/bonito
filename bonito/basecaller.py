@@ -45,7 +45,9 @@ def main(args):
     num_reads = 0
     max_read_size = 4e6
     dtype = np.float16 if args.half else np.float32
-    ctc_writer = CTCWriter(model, aligner)
+    ctc_writer = CTCWriter(
+        model, aligner, min_coverage=args.ctc_min_coverage, min_accuracy=args.ctc_min_accuracy
+    )
     reader = PreprocessReader(args.reads_directory)
     writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq, aligner=aligner)
 
@@ -102,4 +104,6 @@ def argparser():
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--cudart", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
+    parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
+    parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
     return parser
