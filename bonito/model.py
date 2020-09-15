@@ -26,6 +26,10 @@ def swish_jit_bwd(x, grad):
 class SwishAutoFn(Function):
 
     @staticmethod
+    def symbolic(g, x):
+        return g.op('Swish', x)
+
+    @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
         return swish_jit_fwd(x)
