@@ -7,8 +7,8 @@ import time
 from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import load_model, chunk, stitch, half_supported
-from bonito.io import DecoderWriterPool, PreprocessReader, CTCWriter
+from bonito.io import DecoderWriterPool, ProcessIterator, CTCWriter
+from bonito.util import load_model, chunk, stitch, half_supported, get_reads, column_to_set
 
 import torch
 import numpy as np
@@ -44,11 +44,12 @@ def main(args):
     samples = 0
     num_reads = 0
     max_read_size = 4e6
+    read_ids = column_to_set(args.read_ids)
     dtype = np.float16 if args.half else np.float32
     ctc_writer = CTCWriter(
         model, aligner, min_coverage=args.ctc_min_coverage, min_accuracy=args.ctc_min_accuracy
     )
-    reader = PreprocessReader(args.reads_directory)
+    reader = ProcessIterator(get_reads(args.reads_directory, read_ids=read_ids), progress=True)
     writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq, aligner=aligner)
 
     t0 = time.perf_counter()
@@ -95,6 +96,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
+    parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)

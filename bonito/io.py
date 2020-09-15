@@ -4,7 +4,6 @@ Bonito Input/Output
 
 import os
 import sys
-from glob import glob
 from warnings import warn
 from logging import getLogger
 from os.path import realpath, splitext, dirname
@@ -17,7 +16,7 @@ from mappy import revcomp
 import bonito
 from bonito.training import ChunkDataSet
 from bonito.convert import filter_chunks
-from bonito.util import get_raw_data, mean_qscore_from_qstring
+from bonito.util import mean_qscore_from_qstring
 
 
 logger = getLogger('bonito')
@@ -190,13 +189,14 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
     fd.flush()
 
 
-class PreprocessReader(Process):
+class ProcessIterator(Process):
     """
-    Reader Processor that reads and processes fast5 files
+    Runs an iterator in a separate process
     """
-    def __init__(self, directory, maxsize=5):
+    def __init__(self, iterator, maxsize=5, progress=False):
         super().__init__()
-        self.directory = directory
+        self.progress = progress
+        self.iterator = iterator
         self.queue = Queue(maxsize)
 
     def __enter__(self):
@@ -207,9 +207,10 @@ class PreprocessReader(Process):
         self.stop()
 
     def run(self):
-        for fast5 in tqdm(glob("%s/*fast5" % self.directory), ascii=True, ncols=100, leave=False):
-            for read in get_raw_data(fast5):
-                self.queue.put(read)
+        if self.progress:
+            self.iterator = tqdm(self.iterator, ascii=True, ncols=100, leave=False)
+        for item in self.iterator:
+            self.queue.put(item)
         self.queue.put(None)
 
     def stop(self):
