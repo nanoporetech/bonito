@@ -286,13 +286,19 @@ def parasail_to_sam(result, seq):
     return rstart, new_cigstr
 
 
-def accuracy(ref, seq, balanced=False):
+def accuracy(ref, seq, balanced=False, min_coverage=0.0):
     """
     Calculate the accuracy between `ref` and `seq`
     """
-    alignment = parasail.sw_trace_striped_32(ref, seq, 8, 4, parasail.dnafull)
+    alignment = parasail.sw_trace_striped_32(seq, ref, 8, 4, parasail.dnafull)
     counts = defaultdict(int)
     _, cigar = parasail_to_sam(alignment, seq)
+
+    q_coverage = len(alignment.traceback.query) / len(seq)
+    r_coverage = len(alignment.traceback.ref) / len(ref)
+
+    if r_coverage < min_coverage:
+        return 0.0
 
     for count, op  in re.findall(split_cigar, cigar):
         counts[op] += int(count)
@@ -308,10 +314,11 @@ def print_alignment(ref, seq):
     """
     Print the alignment between `ref` and `seq`
     """
-    alignment = parasail.sw_trace_striped_32(ref, seq, 8, 4, parasail.dnafull)
-    print(alignment.traceback.query)
-    print(alignment.traceback.comp)
+    alignment = parasail.sw_trace_striped_32(seq, ref, 8, 4, parasail.dnafull)
     print(alignment.traceback.ref)
+    print(alignment.traceback.comp)
+    print(alignment.traceback.query)
+
     print("  Score=%s" % alignment.score)
     return alignment.score
 
