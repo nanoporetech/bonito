@@ -188,12 +188,13 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
     return smoothed_loss['loss'], time.perf_counter() - t0
 
 
-def test(model, device, test_loader):
+def test(model, device, test_loader, min_coverage=0.5):
 
     model.eval()
     test_loss = 0
     predictions = []
     prediction_lengths = []
+    accuracy_with_coverage_filter = lambda ref, seq: accuracy(ref, seq, min_coverage=min_coverage)
 
     with torch.no_grad():
         for batch_idx, (data, out_lengths, target, lengths) in enumerate(test_loader, start=1):
@@ -210,7 +211,7 @@ def test(model, device, test_loader):
     sequences = [model.decode(post[:n]) for post, n in zip(predictions, lengths)]
 
     if all(map(len, sequences)):
-        accuracies = list(starmap(accuracy, zip(references, sequences)))
+        accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))
     else:
         accuracies = [0]
 

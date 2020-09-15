@@ -25,6 +25,7 @@ def main(args):
         *load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory, validation=True)
     )
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
+    accuracy_with_coverage_filter = lambda ref, seq: accuracy(ref, seq, min_coverage=args.min_coverage)
 
     for w in [int(i) for i in args.weights.split(',')]:
 
@@ -48,7 +49,7 @@ def main(args):
 
         references = [decode_ref(target, model.alphabet) for target in dataloader.dataset.targets]
         sequences = [model.decode(post, beamsize=args.beamsize) for post in np.concatenate(predictions)]
-        accuracies = list(starmap(accuracy, zip(references, sequences)))
+        accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))
 
         if args.poa: poas.append(sequences)
 
@@ -65,7 +66,7 @@ def main(args):
         poas = [list(seq) for seq in zip(*poas)]
         consensuses = poa(poas)
         duration = time.perf_counter() - t0
-        accuracies = list(starmap(accuracy, zip(references, consensuses)))
+        accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, consensuses)))
 
         print("* mean      %.2f%%" % np.mean(accuracies))
         print("* median    %.2f%%" % np.median(accuracies))
@@ -88,4 +89,5 @@ def argparser():
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
     parser.add_argument("--shuffle", action="store_true", default=True)
+    parser.add_argument("--min-coverage", default=0.5, type=float)
     return parser
