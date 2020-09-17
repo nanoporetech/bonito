@@ -217,6 +217,32 @@ class ProcessIterator(Process):
         self.join()
 
 
+class ConsumerPool:
+   """
+   Simple pool of consumers
+   """
+   def __init__(self, consumer, procs=4, **kwargs):
+       self.lock = Lock()
+       self.queue = Queue()
+       self.procs = procs if procs else cpu_count()
+       self.consumers = []
+
+       for _ in range(self.procs):
+           consume = consumer(self.queue, self.lock, **kwargs)
+           consume.start()
+           self.consumers.append(consume)
+
+   def stop(self):
+       for consumer in self.consumers: self.queue.put(None)
+       for consumer in self.consumers: consumer.join()
+
+   def __enter__(self):
+       return self
+
+   def __exit__(self, exc_type, exc_val, exc_tb):
+       self.stop()
+
+
 class CTCWriter(Process):
     """
     CTC writer process that writes output numpy training data
@@ -307,43 +333,11 @@ class CTCWriter(Process):
         self.join()
 
 
-class DecoderWriterPool:
-   """
-   Simple pool of decoder writers
-   """
-   def __init__(self, model, procs=4, aligner=None, **kwargs):
-       self.lock = Lock()
-       self.queue = Queue()
-       self.procs = procs if procs else cpu_count()
-       self.aligner = aligner
-       self.decoders = []
-
-       if aligner: write_sam_header(aligner)
-
-       with open(summary_file(), 'w') as summary:
-           write_summary_header(summary, alignment=aligner)
-
-       for _ in range(self.procs):
-           decoder = DecoderWriter(model, self.queue, self.lock, aligner=aligner, **kwargs)
-           decoder.start()
-           self.decoders.append(decoder)
-
-   def stop(self):
-       for decoder in self.decoders: self.queue.put(None)
-       for decoder in self.decoders: decoder.join()
-
-   def __enter__(self):
-       return self
-
-   def __exit__(self, exc_type, exc_val, exc_tb):
-       self.stop()
-
-
 class DecoderWriter(Process):
     """
     Decoder Process that writes output records to stdout
     """
-    def __init__(self, model, queue, lock, fastq=False, beamsize=5, aligner=None):
+    def __init__(self, queue, lock, model=None, aligner=None, fastq=False, beamsize=5):
         super().__init__()
         self.queue = queue
         self.lock = lock

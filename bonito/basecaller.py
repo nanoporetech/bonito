@@ -7,7 +7,8 @@ import time
 from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.io import DecoderWriterPool, ProcessIterator, CTCWriter
+from bonito.io import write_sam_header, write_summary_header, summary_file
+from bonito.io import ConsumerPool, ProcessIterator, CTCWriter, DecoderWriter
 from bonito.util import load_model, chunk, stitch, half_supported, get_reads, column_to_set
 
 import torch
@@ -38,8 +39,12 @@ def main(args):
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             sys.exit(1)
+        write_sam_header(aligner)
     else:
         aligner = None
+
+    with open(summary_file(), 'w') as summary:
+        write_summary_header(summary, alignment=aligner)
 
     samples = 0
     num_reads = 0
@@ -49,8 +54,9 @@ def main(args):
     ctc_writer = CTCWriter(
         model, aligner, min_coverage=args.ctc_min_coverage, min_accuracy=args.ctc_min_accuracy
     )
+
     reader = ProcessIterator(get_reads(args.reads_directory, read_ids=read_ids), progress=True)
-    writer = DecoderWriterPool(model, beamsize=args.beamsize, fastq=args.fastq, aligner=aligner)
+    writer = ConsumerPool(DecoderWriter, model=model, aligner=aligner, beamsize=args.beamsize, fastq=args.fastq)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
