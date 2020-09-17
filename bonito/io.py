@@ -217,30 +217,29 @@ class ProcessIterator(Process):
         self.join()
 
 
-class ConsumerPool:
-   """
-   Simple pool of consumers
-   """
-   def __init__(self, consumer, procs=4, **kwargs):
-       self.lock = Lock()
-       self.queue = Queue()
-       self.procs = procs if procs else cpu_count()
-       self.consumers = []
+class ProcessPool:
+    """
+    Simple Process pool
+    """
+    def __init__(self, process, procs=4, **kwargs):
+        self.lock = Lock()
+        self.queue = Queue()
+        self.procs = procs if procs else cpu_count()
+        self.processes = [process(self.queue, self.lock, **kwargs) for _ in range(procs)]
 
-       for _ in range(self.procs):
-           consume = consumer(self.queue, self.lock, **kwargs)
-           consume.start()
-           self.consumers.append(consume)
+    def start(self):
+        for process in self.processes: process.start()
 
-   def stop(self):
-       for consumer in self.consumers: self.queue.put(None)
-       for consumer in self.consumers: consumer.join()
+    def stop(self):
+        for process in self.processes: self.queue.put(None)
+        for process in self.processes: process.join()
 
-   def __enter__(self):
-       return self
+    def __enter__(self):
+        self.start()
+        return self
 
-   def __exit__(self, exc_type, exc_val, exc_tb):
-       self.stop()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
 
 class CTCWriter(Process):

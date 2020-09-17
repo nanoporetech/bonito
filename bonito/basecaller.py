@@ -8,7 +8,7 @@ from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.io import write_sam_header, write_summary_header, summary_file
-from bonito.io import ConsumerPool, ProcessIterator, CTCWriter, DecoderWriter
+from bonito.io import ProcessPool, ProcessIterator, CTCWriter, DecoderWriter
 from bonito.util import load_model, chunk, stitch, half_supported, get_reads, column_to_set
 
 import torch
@@ -56,7 +56,7 @@ def main(args):
     )
 
     reader = ProcessIterator(get_reads(args.reads_directory, read_ids=read_ids), progress=True)
-    writer = ConsumerPool(DecoderWriter, model=model, aligner=aligner, beamsize=args.beamsize, fastq=args.fastq)
+    writer = ProcessPool(DecoderWriter, model=model, aligner=aligner, beamsize=args.beamsize, fastq=args.fastq)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
