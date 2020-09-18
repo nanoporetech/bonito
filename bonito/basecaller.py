@@ -51,12 +51,15 @@ def main(args):
     max_read_size = 4e6
     read_ids = column_to_set(args.read_ids)
     dtype = np.float16 if args.half else np.float32
+    reader = ProcessIterator(
+        get_reads(args.reads_directory, read_ids=read_ids, skip=args.skip), progress=True
+    )
+    writer = ProcessPool(
+        DecoderWriter, model=model, aligner=aligner, beamsize=args.beamsize, fastq=args.fastq
+    )
     ctc_writer = CTCWriter(
         model, aligner, min_coverage=args.ctc_min_coverage, min_accuracy=args.ctc_min_accuracy
     )
-
-    reader = ProcessIterator(get_reads(args.reads_directory, read_ids=read_ids), progress=True)
-    writer = ProcessPool(DecoderWriter, model=model, aligner=aligner, beamsize=args.beamsize, fastq=args.fastq)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -109,6 +112,7 @@ def argparser():
     parser.add_argument("--chunksize", default=0, type=int)
     parser.add_argument("--overlap", default=0, type=int)
     parser.add_argument("--half", action="store_true", default=half_supported())
+    parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--cudart", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)

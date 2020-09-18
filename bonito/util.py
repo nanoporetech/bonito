@@ -148,13 +148,13 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
     return (signal - med) / mad
 
 
-def get_raw_data(filename, read_ids=None):
+def get_raw_data(filename, read_ids=None, skip=False):
     """
     Get the raw signal and read id from the fast5 files
     """
     with get_fast5_file(filename, 'r') as f5_fh:
         for read_id in f5_fh.get_read_ids():
-            if read_ids is None or read_id in read_ids:
+            if read_ids is None or (read_id in read_ids) ^ skip:
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
@@ -166,12 +166,12 @@ def get_raw_data_for_read(filename, read_id):
         return Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None):
+def get_reads(directory, read_ids=None, skip=False):
     """
     Get all reads in a given `directory`.
     """
     for fast5 in glob("%s/*fast5" % directory):
-        yield from get_raw_data(fast5, read_ids=read_ids)
+        yield from get_raw_data(fast5, read_ids=read_ids, skip=skip)
 
 
 def chunk(raw_data, chunksize, overlap):
