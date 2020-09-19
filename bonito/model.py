@@ -138,7 +138,7 @@ class TCSConv1d(Module):
             )
 
             self.pointwise = Conv1d(
-                in_channels, out_channels, kernel_size=1, stride=stride,
+                in_channels, out_channels, kernel_size=1, stride=1,
                 dilation=dilation, bias=bias, padding=0
             )
         else:
