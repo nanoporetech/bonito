@@ -86,7 +86,10 @@ def half_supported():
     """
     Returns whether FP16 is support on the GPU
     """
-    return get_device_capability()[0] >= 7
+    try:
+        return get_device_capability()[0] >= 7
+    except:
+        return False
 
 
 def phred(prob, scale=1.0, bias=0.0):
