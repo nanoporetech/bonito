@@ -48,7 +48,7 @@ def main(args):
             min_accuracy=args.ctc_min_accuracy, min_coverage=args.ctc_min_coverage
         )
         writer = CTCWriter(
-            tqdm(data, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
+            tqdm(data, desc="> calling", unit=" reads", leave=False), aligner
         )
     else:
         basecalls = basecall(
