@@ -5,119 +5,19 @@ Bonito Input/Output
 import os
 import sys
 from warnings import warn
+from threading import Thread
 from logging import getLogger
 from os.path import realpath, splitext, dirname
-from multiprocessing import Process, Queue, Lock, cpu_count
 
 import numpy as np
-from tqdm import tqdm
 from mappy import revcomp
 
 import bonito
 from bonito.training import ChunkDataSet
 from bonito.convert import filter_chunks
-from bonito.util import mean_qscore_from_qstring
 
 
 logger = getLogger('bonito')
-
-
-def summary_file():
-    """
-    Return the filename to use for the summary tsv.
-    """
-    if sys.stdout.isatty():
-        return 'summary.tsv'
-    return '%s_summary.tsv' % splitext(realpath('/dev/fd/1'))[0]
-
-
-def write_summary_header(fd, alignment=None, sep='\t'):
-    """
-    Write the summary tsv header.
-    """
-    fields = [
-        'filename',
-        'read_id',
-        'run_id',
-        'channel',
-        'mux',
-        'start_time',
-        'duration',
-        'template_start',
-        'template_duration',
-        'sequence_length_template',
-        'mean_qscore_template',
-    ]
-    if alignment:
-        fields.extend([
-            'alignment_genome',
-            'alignment_genome_start',
-            'alignment_genome_end',
-            'alignment_strand_start',
-            'alignment_strand_end',
-            'alignment_direction',
-            'alignment_length',
-            'alignment_num_aligned',
-            'alignment_num_correct',
-            'alignment_num_insertions',
-            'alignment_num_deletions',
-            'alignment_num_substitutions',
-            'alignment_strand_coverage',
-            'alignment_identity',
-            'alignment_accuracy',
-        ])
-    fd.write('%s\n' % sep.join(fields))
-    fd.flush()
-
-
-def write_summary_row(fd, read, seqlen, qscore, alignment=False, sep='\t'):
-    """
-    Write a summary tsv row.
-    """
-    fields = [str(field) for field in [
-        read.filename,
-        read.read_id,
-        read.run_id,
-        read.channel,
-        read.mux,
-        read.start,
-        read.duration,
-        read.template_start,
-        read.template_duration,
-        seqlen,
-        qscore,
-    ]]
-
-    if alignment:
-
-        ins = sum(count for count, op in alignment.cigar if op == 1)
-        dels = sum(count for count, op in alignment.cigar if op == 2)
-        subs = alignment.NM - ins - dels
-        length = alignment.blen
-        matches = length - ins - dels
-        correct = alignment.mlen
-
-        fields.extend([str(field) for field in [
-            alignment.ctg,
-            alignment.r_st,
-            alignment.r_en,
-            alignment.q_st if alignment.strand == +1 else seqlen - alignment.q_en,
-            alignment.q_en if alignment.strand == +1 else seqlen - alignment.q_st,
-            '+' if alignment.strand == +1 else '-',
-            length, matches, correct,
-            ins, dels, subs,
-            (alignment.q_en - alignment.q_st) / seqlen,
-            correct / matches,
-            correct / length,
-        ]])
-
-    elif alignment is None:
-        fields.extend([str(field) for field in
-            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
-        ])
-
-    fd.write('%s\n' % sep.join(fields))
-    fd.flush()
 
 
 def write_fasta(header, sequence, fd=sys.stdout):
@@ -189,78 +89,161 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
     fd.flush()
 
 
-class ProcessIterator(Process):
+def summary_file():
     """
-    Runs an iterator in a separate process
+    Return the filename to use for the summary tsv.
     """
-    def __init__(self, iterator, maxsize=5, progress=False):
+    if sys.stdout.isatty():
+        return 'summary.tsv'
+    return '%s_summary.tsv' % splitext(realpath('/dev/fd/1'))[0]
+
+
+def write_summary_header(fd=sys.stdout, alignment=False, sep='\t'):
+    """
+    Write the summary tsv header.
+    """
+    fields = [
+        'filename',
+        'read_id',
+        'run_id',
+        'channel',
+        'mux',
+        'start_time',
+        'duration',
+        'template_start',
+        'template_duration',
+        'sequence_length_template',
+        'mean_qscore_template',
+    ]
+    if alignment:
+        fields.extend([
+            'alignment_genome',
+            'alignment_genome_start',
+            'alignment_genome_end',
+            'alignment_strand_start',
+            'alignment_strand_end',
+            'alignment_direction',
+            'alignment_length',
+            'alignment_num_aligned',
+            'alignment_num_correct',
+            'alignment_num_insertions',
+            'alignment_num_deletions',
+            'alignment_num_substitutions',
+            'alignment_strand_coverage',
+            'alignment_identity',
+            'alignment_accuracy',
+        ])
+    fd.write('%s\n' % sep.join(fields))
+    fd.flush()
+
+
+def write_summary_row(read, seqlen, qscore, fd=sys.stdout, alignment=False, sep='\t'):
+    """
+    Write a summary tsv row.
+    """
+    fields = [str(field) for field in [
+        read.filename,
+        read.read_id,
+        read.run_id,
+        read.channel,
+        read.mux,
+        read.start,
+        read.duration,
+        read.template_start,
+        read.template_duration,
+        seqlen,
+        qscore,
+    ]]
+
+    if alignment:
+
+        ins = sum(count for count, op in alignment.cigar if op == 1)
+        dels = sum(count for count, op in alignment.cigar if op == 2)
+        subs = alignment.NM - ins - dels
+        length = alignment.blen
+        matches = length - ins - dels
+        correct = alignment.mlen
+
+        fields.extend([str(field) for field in [
+            alignment.ctg,
+            alignment.r_st,
+            alignment.r_en,
+            alignment.q_st if alignment.strand == +1 else seqlen - alignment.q_en,
+            alignment.q_en if alignment.strand == +1 else seqlen - alignment.q_st,
+            '+' if alignment.strand == +1 else '-',
+            length, matches, correct,
+            ins, dels, subs,
+            (alignment.q_en - alignment.q_st) / seqlen,
+            correct / matches,
+            correct / length,
+        ]])
+
+    elif alignment is None:
+        fields.extend([str(field) for field in
+            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
+        ])
+
+    fd.write('%s\n' % sep.join(fields))
+    fd.flush()
+
+
+class Writer(Thread):
+
+    def __init__(self, iterator, aligner, fd=sys.stdout, fastq=False):
         super().__init__()
-        self.progress = progress
+        self.fd = fd
+        self.log = []
+        self.fastq = fastq
+        self.aligner = aligner
         self.iterator = iterator
-        self.queue = Queue(maxsize)
+        self.write_headers()
 
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
+    def write_headers(self):
+        with open(summary_file(), 'w') as summary:
+            write_summary_header(summary, alignment=self.aligner)
+        if self.aligner:
+            write_sam_header(self.aligner, fd=self.fd)
 
     def run(self):
-        if self.progress:
-            self.iterator = tqdm(self.iterator, ascii=True, ncols=100, leave=False)
-        for item in self.iterator:
-            self.queue.put(item)
-        self.queue.put(None)
+        for read, res in self.iterator:
 
-    def stop(self):
-        self.join()
+            seq = res['sequence']
+            qstring = res['qstring']
+            mean_qscore = res['mean_qscore']
+            mapping = res.get('mapping', False)
+
+            if len(seq):
+                if self.aligner:
+                    write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                else:
+                    if self.fastq:
+                        write_fastq(read.read_id, seq, qstring, fd=self.fd)
+                    else:
+                        write_fasta(read.read_id, seq, fd=self.fd)
+                with open(summary_file(), 'a') as summary:
+                    write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
+                self.log.append((read.read_id, len(read.signal)))
+            else:
+                logger.warn("> skipping empty sequence %s", read.read_id)
 
 
-class ProcessPool:
+class CTCWriter(Thread):
     """
-    Simple Process pool
+    CTC writer process that writes output numpy training data.
     """
-    def __init__(self, process, procs=4, **kwargs):
-        self.lock = Lock()
-        self.queue = Queue()
-        self.procs = procs if procs else cpu_count()
-        self.processes = [process(self.queue, self.lock, **kwargs) for _ in range(procs)]
-
-    def start(self):
-        for process in self.processes: process.start()
-
-    def stop(self):
-        for process in self.processes: self.queue.put(None)
-        for process in self.processes: process.join()
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
-
-
-class CTCWriter(Process):
-    """
-    CTC writer process that writes output numpy training data
-    """
-    def __init__(self, model, aligner, min_coverage=0.90, min_accuracy=0.90):
+    def __init__(self, iterator, aligner, fd=sys.stdout):
         super().__init__()
-        self.model = model
-        self.queue = Queue()
+        self.fd = fd
+        self.log = []
         self.aligner = aligner
-        self.min_coverage = min_coverage
-        self.min_accuracy = min_accuracy
+        self.iterator = iterator
+        self.write_headers()
 
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.queue.put(None)
-        self.stop()
+    def write_headers(self):
+        with open(summary_file(), 'w') as summary:
+            write_summary_header(summary, alignment=self.aligner)
+        if self.aligner:
+            write_sam_header(self.aligner, fd=self.fd)
 
     def run(self):
 
@@ -268,43 +251,35 @@ class CTCWriter(Process):
         targets = []
         target_lens = []
 
-        while True:
+        for read, ctc_data in self.iterator:
 
-            job = self.queue.get()
-            if job is None: break
-            chunks_, predictions = job
+            seq = ctc_data['sequence']
+            qstring = ctc_data['qstring']
+            mean_qscore = ctc_data['mean_qscore']
+            mapping = ctc_data.get('mapping', False)
 
-            # convert logprobs to probs
-            predictions = np.exp(predictions.astype(np.float32))
+            if len(seq):
+                write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                with open(summary_file(), 'a') as summary:
+                    write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
+                self.log.append((read.read_id, len(read.signal)))
+            else:
+                logger.warn("> skipping empty sequence %s", read.read_id)
 
-            for chunk, pred in zip(chunks_, predictions):
-
-                try:
-                    sequence = self.model.decode(pred)
+            for chunk, target in zip(ctc_data['chunks'], ctc_data['targets']):
+                try: # FIX:
+                    if len(chunk):
+                        chunks.append(chunk)
+                        targets.append(target)
+                        target_lens.append(len(target))
                 except:
-                    continue
+                    pass
 
-                if not sequence:
-                    continue
+            self.log.append((read.read_id, len(read.signal)))
 
-                for mapping in self.aligner.map(sequence):
-                    cov = (mapping.q_en - mapping.q_st) / len(sequence)
-                    acc = mapping.mlen / mapping.blen
-                    refseq = self.aligner.seq(mapping.ctg, mapping.r_st + 1, mapping.r_en)
-                    if 'N' in refseq: continue
-                    if mapping.strand == -1: refseq = revcomp(refseq)
-                    break
-                else:
-                    continue
-
-                if acc > self.min_accuracy and cov > self.min_accuracy:
-                    chunks.append(chunk.squeeze())
-                    targets.append([
-                        int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})
-                    ])
-                    target_lens.append(len(refseq))
-
-        if len(chunks) == 0: return
+        if len(chunks) == 0:
+            sys.stderr.write("> no suitable ctc data to write\n")
+            return
 
         chunks = np.array(chunks, dtype=np.float32)
         chunk_lens = np.full(chunks.shape[0], chunks.shape[1], dtype=np.int16)
@@ -330,61 +305,3 @@ class CTCWriter(Process):
 
     def stop(self):
         self.join()
-
-
-class DecoderWriter(Process):
-    """
-    Decoder Process that writes output records to stdout
-    """
-    def __init__(self, queue, lock, model=None, aligner=None, fastq=False, beamsize=5):
-        super().__init__()
-        self.queue = queue
-        self.lock = lock
-        self.model = model
-        self.fastq = fastq
-        self.aligner = aligner
-        self.beamsize = beamsize
-
-    def run(self):
-        while True:
-            job = self.queue.get()
-            if job is None: return
-            read, predictions = job
-
-            # convert logprobs to probs
-            predictions = np.exp(predictions.astype(np.float32))
-
-            sequence, path = self.model.decode(
-                predictions, beamsize=self.beamsize, qscores=True, return_path=True
-            )
-            sequence, qstring = sequence[:len(path)], sequence[len(path):]
-            mean_qscore = mean_qscore_from_qstring(qstring)
-
-            if not self.fastq:  # beam search
-                qstring = '*'
-                try:
-                    sequence, path = self.model.decode(
-                        predictions, beamsize=self.beamsize, qscores=False, return_path=True
-                    )
-                except:
-                    pass
-
-            if not self.aligner:
-                mapping = False
-
-            if sequence:
-                with self.lock, open(summary_file(), 'a') as summary:
-                    if self.aligner:
-                        for mapping in self.aligner.map(sequence):
-                            write_sam(read.read_id, sequence, qstring, mapping)
-                            break
-                        else:
-                            mapping = None
-                            write_sam(read.read_id, sequence, qstring, mapping, unaligned=True)
-                    elif self.fastq:
-                        write_fastq(read.read_id, sequence, qstring)
-                    else:
-                        write_fasta(read.read_id, sequence)
-                    write_summary_row(summary, read, len(sequence), mean_qscore, alignment=mapping)
-            else:
-                logger.warn("> skipping empty sequence %s", read.read_id)
