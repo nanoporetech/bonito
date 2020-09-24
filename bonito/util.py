@@ -169,12 +169,16 @@ def get_raw_data_for_read(filename, read_id):
         return Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False):
+def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6):
     """
     Get all reads in a given `directory`.
     """
     for fast5 in glob("%s/*fast5" % directory):
-        yield from get_raw_data(fast5, read_ids=read_ids, skip=skip)
+        for read in get_raw_data(fast5, read_ids=read_ids, skip=skip):
+            if len(read.signal) > max_read_size:
+                sys.stderr.write("> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal)))
+                continue
+            yield read
 
 
 def chunk(raw_data, chunksize, overlap):
@@ -241,7 +245,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, chunk_lengths, targets, target_lengths
 
 
-def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=False):
     """
     Load a model from disk
     """
@@ -269,6 +273,9 @@ def load_model(dirname, device, weights=None, half=False, chunksize=0, use_rt=Fa
 
     if use_rt:
         model = CuModel(model.config, chunksize, new_state_dict)
+
+    if half is None:
+        half = half_supported()
 
     if half: model = model.half()
     model.eval()
