@@ -20,7 +20,7 @@ $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls
 Pair decoding takes a template and complement read to produce higher quaility calls.
 
 ```bash
-$ bonito pairs pairs.csv /data/reads > basecalls.fasta
+$ bonito pair pairs.csv /data/reads > basecalls.fasta
 ```
 
 The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
