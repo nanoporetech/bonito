@@ -82,6 +82,9 @@ def ctc_decoder(model, aligner, scores, min_accuracy=0.9, min_coverage=0.9):
     chunks = []
     targets = []
 
+    if scores['ctc_chunks'] is None:
+        return {'chunks': chunks, 'targets': targets, **decode(scores, model.decode)}
+
     for chunk, score in zip(scores['ctc_chunks'], scores['ctc_scores']):
 
         try:
