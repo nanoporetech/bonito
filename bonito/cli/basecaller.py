@@ -40,6 +40,7 @@ def main(args):
             batchsize=args.batchsize,
             quantize=args.quantize,
             use_koi=True,
+            use_openvino=args.use_openvino,
         )
     except FileNotFoundError:
         sys.stderr.write(f"> error: failed to load {args.model_directory}\n")
@@ -172,4 +173,5 @@ def argparser():
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument("--use_openvino", action="store_true", default=False)
     return parser

@@ -6,8 +6,9 @@ import torch
 import numpy as np
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
 
-import seqdist.sparse
-from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
+if torch.cuda.is_available():
+    import seqdist.sparse
+    from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
 
 
@@ -19,6 +20,58 @@ def get_stride(m):
     if isinstance(m, Serial):
         return int(np.prod([get_stride(x) for x in m]))
     return 1
+
+
+def logZ_fwd_cpu(Ms, idx, v0, vT, S):
+    T, N, C, NZ = Ms.shape
+    Ms_grad = torch.zeros(T, N, C, NZ)
+
+    a = v0
+    for t in range(T):
+        s = S.mul(a[:, idx], Ms[t])
+        a = S.sum(s, -1)
+        Ms_grad[t] = s
+    return S.sum(a + vT, dim=1), Ms_grad
+
+
+def logZ_bwd_cpu(Ms, idx, vT, S, K=1):
+    assert(K == 1)
+    T, N, C, NZ = Ms.shape
+    Ms = Ms.reshape(T, N, -1)
+    idx_T = idx.flatten().argsort().to(dtype=torch.long).reshape(C, NZ)
+
+    betas = torch.ones(T + 1, N, C)
+
+    a = vT
+    betas[T] = a
+    for t in reversed(range(T)):
+        s = S.mul(a[:, idx_T // NZ], Ms[t, :, idx_T])
+        a = S.sum(s, -1)
+        betas[t] = a
+    return betas
+
+
+class _LogZ(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, Ms, idx, v0, vT, S:semiring):
+        idx = idx.to(dtype=torch.long, device=Ms.device)
+        logZ, Ms_grad = logZ_fwd_cpu(Ms, idx, v0, vT, S)
+        ctx.save_for_backward(Ms_grad, Ms, idx, vT)
+        ctx.semiring = S
+        return logZ
+
+    @staticmethod
+    def backward(ctx, grad):
+        Ms_grad, Ms, idx, vT = ctx.saved_tensors
+        S = ctx.semiring
+        T, N, C, NZ = Ms.shape
+        betas = logZ_bwd_cpu(Ms, idx, vT, S)
+        Ms_grad = S.mul(Ms_grad, betas[1:,:,:,None])
+        Ms_grad = S.dsum(Ms_grad.reshape(T, N, -1), dim=2).reshape(T, N, C, NZ)
+        return grad[None, :, None, None] * Ms_grad, None, None, None, None, None
+
+def sparse_logZ(Ms, idx, v0, vT, S:semiring=Log):
+    return _LogZ.apply(Ms, idx, v0, vT, S)
 
 
 class CTC_CRF(SequenceDist):
@@ -43,7 +96,10 @@ class CTC_CRF(SequenceDist):
         Ms = scores.reshape(T, N, -1, len(self.alphabet))
         alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
+        if not Ms.device.index is None:
+            return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
+        else:
+            return sparse_logZ(Ms, self.idx, alpha_0, beta_T, S)
 
     def normalise(self, scores):
         return (scores - self.logZ(scores)[:, None] / len(scores))
@@ -58,7 +114,10 @@ class CTC_CRF(SequenceDist):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, self.n_base + 1)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
+        if not Ms.device.index is None:
+            return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
+        else:
+            return logZ_bwd_cpu(Ms, self.idx, beta_T, S, K=1)
 
     def compute_transition_probs(self, scores, betas):
         T, N, C = scores.shape

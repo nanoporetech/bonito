@@ -45,7 +45,7 @@ def main(args):
         seqs = []
 
         print("* loading model", w)
-        model = load_model(args.model_directory, args.device, weights=w)
+        model = load_model(args.model_directory, args.device, weights=w, use_openvino=args.use_openvino)
 
         print("* calling")
         t0 = time.perf_counter()
@@ -109,4 +109,5 @@ def argparser():
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
     parser.add_argument("--min-coverage", default=0.5, type=float)
+    parser.add_argument("--use_openvino", action="store_true", default=False)
     return parser

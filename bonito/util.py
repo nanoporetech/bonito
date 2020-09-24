@@ -19,6 +19,7 @@ import koi.lstm
 import parasail
 import numpy as np
 from torch.cuda import get_device_capability
+from bonito.openvino.model import load_openvino_model
 
 try:
     from claragenomics.bindings import cuda
@@ -46,7 +47,7 @@ def init(seed, device):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if device == "cpu": return
+    if not device.startswith('cuda'): return
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -251,7 +252,7 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False, use_openvino=False):
     """
     Load a model from disk
     """
@@ -264,7 +265,8 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
             raise FileNotFoundError("no model weights found in '%s'" % dirname)
         weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
-    device = torch.device(device)
+    if not use_openvino:
+        device = torch.device(device)
     config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
 
@@ -285,7 +287,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
             model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
 
-    state_dict = torch.load(weights, map_location=device)
+    state_dict = torch.load(weights, map_location=device if not use_openvino else 'cpu')
     state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
@@ -294,7 +296,10 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
 
     model.load_state_dict(new_state_dict)
 
-    if half is None:
+    if use_openvino:
+        model = load_openvino_model(model, dirname)
+
+    if half is None and device != torch.device('cpu'):
         half = half_supported()
 
     if half: model = model.half()
