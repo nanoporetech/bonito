@@ -205,7 +205,7 @@ def stitch(predictions, overlap):
     return np.concatenate(stitched)
 
 
-def column_to_set(filename, idx=0, sep=' ', skip_header=False):
+def column_to_set(filename, idx=0, skip_header=False):
     """
     Pull a column from a file and return a set of the values.
     """
@@ -213,7 +213,7 @@ def column_to_set(filename, idx=0, sep=' ', skip_header=False):
         with open(filename, 'r') as tsv:
             if skip_header:
                 next(tsv)
-            return {line.strip().split(sep)[idx] for line in tsv.readlines()}
+            return {line.strip().split()[idx] for line in tsv.readlines()}
 
 
 def load_data(shuffle=False, limit=None, directory=None, validation=False):
