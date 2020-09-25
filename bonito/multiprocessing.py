@@ -133,7 +133,6 @@ class MapWorkerThread(Thread):
 class ThreadMap(Thread):
     def __init__(self, worker_type, iterator, n_thread, output_queue=None):
         super().__init__()
-        self.key_map = {}
         self.iterator = iterator
         self.work_queue = queue.Queue(n_thread*2)
         self.output_queue = output_queue or queue.Queue()
