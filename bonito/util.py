@@ -182,22 +182,23 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6):
             yield read
 
 
-def chunk(raw_data, chunksize, overlap):
+def chunk(signal, chunksize, overlap):
     """
     Convert a read into overlapping chunks before calling
     """
-    if chunksize > 0 and raw_data.shape[0] > chunksize:
-        num_chunks = raw_data.shape[0] // (chunksize - overlap) + 1
-        tmp = torch.zeros(num_chunks * (chunksize - overlap)).type(raw_data.dtype)
-        tmp[:raw_data.shape[0]] = raw_data
-        return tmp.unfold(0, chunksize, chunksize - overlap).unsqueeze(1)
-    return raw_data.unsqueeze(0).unsqueeze(0)
+    T = signal.shape[0]
+    if chunksize > 0:
+        padded_size = T + (overlap - T) % (chunksize - overlap)
+        padded = torch.nn.functional.pad(signal, (0, padded_size - T))
+        return padded.unfold(0, chunksize, chunksize - overlap).unsqueeze(1)
+    return signal.unsqueeze(0).unsqueeze(0)
 
 
-def stitch(predictions, overlap):
+def stitch(predictions, overlap, stride=1):
     """
     Stitch predictions together with a given overlap
     """
+    overlap = overlap // stride // 2
     if predictions.shape[0] == 1:
         return predictions.squeeze(0)
     stitched = [predictions[0, 0:-overlap]]

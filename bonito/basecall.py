@@ -52,7 +52,7 @@ def compute_scores(read, model, chunksize=0, overlap=0, ctc_data=True):
         raw_data = torch.tensor(read.signal.astype(dtype))
         chunks = chunk(raw_data, chunksize, overlap)
         posteriors_ = model(chunks.to(device)).cpu().numpy()
-        posteriors = stitch(posteriors_, overlap // model.stride // 2)[:raw_data.shape[0]]
+        posteriors = stitch(posteriors_, overlap, model.stride)[:raw_data.shape[0] // model.stride]
         scores = np.exp(posteriors.astype(np.float32))
 
     if ctc_data and len(raw_data) > chunksize:
