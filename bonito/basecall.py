@@ -8,18 +8,42 @@ from mappy import revcomp
 from functools import partial
 from bonito.aligner import align_map
 from bonito.multiprocessing import process_map, thread_map
-from bonito.util import mean_qscore_from_qstring, half_supported, chunk, stitch
+from bonito.util import mean_qscore_from_qstring, half_supported
+from bonito.util import batch_reads, unbatch_reads, chunk, stitch
 
 
-def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0):
+def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1):
     """
     Basecalls at set of reads.
     """
-    scores = ((read, compute_scores(read, model, chunksize, overlap)) for read in reads)
+    scores = (
+        compute_scores(model, batch) for batch in
+        batch_reads(reads, chunksize, overlap, batchsize)
+    )
+    scores = (
+        (read, {'scores': score}) for read, score in
+        unbatch_reads(scores, overlap, model.stride)
+    )
     decoder = partial(decode, decode=model.decode, beamsize=beamsize)
-    basecalls = process_map(decoder, scores)
+    basecalls = process_map(decoder, scores, n_proc=4)
     if aligner: return align_map(aligner, basecalls)
     return basecalls
+
+
+def compute_scores(model, batches):
+    """
+    Compute scores for model.
+    """
+    res = []
+    batches, index = batches
+    device = next(model.parameters()).device
+
+    with torch.no_grad():
+        for chunks in batches:
+            chunks = chunks.type(torch.half).to(device)
+            posteriors = model(chunks)
+            res.append(torch.exp(posteriors).cpu())
+    return torch.cat(res), index
 
 
 def decode(scores, decode, beamsize=5):
@@ -42,7 +66,17 @@ def decode(scores, decode, beamsize=5):
     return {'sequence': seq, 'qstring': qstring, 'mean_qscore': mean_qscore, 'path': path}
 
 
-def compute_scores(read, model, chunksize=0, overlap=0, ctc_data=True):
+def ctc_data(model, reads, aligner, chunksize=3600, overlap=900, min_accuracy=0.9, min_coverage=0.9):
+    """
+    Convert reads into a format suitable for ctc training.
+    """
+    scores = ((read, ctc_compute_scores(read, model, chunksize, overlap)) for read in reads)
+    decoder = partial(ctc_decoder, model, aligner, min_accuracy=min_accuracy, min_coverage=min_coverage)
+    ctc_data = thread_map(decoder, scores, n_thread=1)
+    return align_map(aligner, ctc_data)
+
+
+def ctc_compute_scores(read, model, chunksize=0, overlap=0):
     """
     Compute score for model.
     """
@@ -55,7 +89,7 @@ def compute_scores(read, model, chunksize=0, overlap=0, ctc_data=True):
         posteriors = stitch(posteriors_, overlap, model.stride)[:raw_data.shape[0] // model.stride]
         scores = np.exp(posteriors.astype(np.float32))
 
-    if ctc_data and len(raw_data) > chunksize:
+    if len(raw_data) > chunksize:
         ctc_chunks = chunks.numpy().squeeze()
         ctc_scores = np.exp(posteriors_.astype(np.float32))
     else:
@@ -63,16 +97,6 @@ def compute_scores(read, model, chunksize=0, overlap=0, ctc_data=True):
         ctc_scores = None
 
     return {'scores': scores, 'ctc_scores': ctc_scores, 'ctc_chunks': ctc_chunks}
-
-
-def ctc_data(model, reads, aligner, chunksize=3600, overlap=900, min_accuracy=0.9, min_coverage=0.9):
-    """
-    Convert reads into a format suitable for ctc training.
-    """
-    scores = ((read, compute_scores(read, model, chunksize, overlap, ctc_data=True)) for read in reads)
-    decoder = partial(ctc_decoder, model, aligner, min_accuracy=min_accuracy, min_coverage=min_coverage)
-    ctc_data = thread_map(decoder, scores, n_thread=1)
-    return align_map(aligner, ctc_data)
 
 
 def ctc_decoder(model, aligner, scores, min_accuracy=0.9, min_coverage=0.9):
