@@ -182,14 +182,14 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6):
             yield read
 
 
-def chunk(signal, chunksize, overlap):
+def chunk(signal, chunksize, overlap, pad_start=False):
     """
     Convert a read into overlapping chunks before calling
     """
     T = signal.shape[0]
     if chunksize > 0:
-        padded_size = T + (overlap - T) % (chunksize - overlap)
-        padded = torch.nn.functional.pad(signal, (0, padded_size - T))
+        padding = chunksize - T if T < chunksize else (overlap - T) % (chunksize - overlap)
+        padded = torch.nn.functional.pad(signal, (padding, 0) if pad_start else (0, padding))
         return padded.unfold(0, chunksize, chunksize - overlap).unsqueeze(1)
     return signal.unsqueeze(0).unsqueeze(0)
 
