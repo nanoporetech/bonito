@@ -7,7 +7,7 @@ import re
 import sys
 import random
 from glob import glob
-from collections import defaultdict, OrderedDict
+from collections import deque, defaultdict, OrderedDict
 
 from bonito.model import Model
 from bonito_cuda_runtime import CuModel
@@ -205,6 +205,53 @@ def stitch(predictions, overlap, stride=1):
     for i in range(1, predictions.shape[0] - 1): stitched.append(predictions[i][overlap:-overlap])
     stitched.append(predictions[-1][overlap:])
     return np.concatenate(stitched)
+
+
+def batch_reads(reads, chunksize=0, overlap=0, batchsize=1):
+    """
+    Convert reads into stream in fixed size chunks.
+    """
+    stack = []; index = defaultdict(list)
+
+    for read in reads:
+
+        chunks = chunk(torch.tensor(read.signal), chunksize, overlap)
+        index['reads'].append(read)
+        index['chunks'].append(chunks.shape[0])
+
+        stack = torch.cat((stack, chunks)) if len(stack) else chunks
+        *batches, stack = torch.split(stack, batchsize)
+
+        if len(batches) or chunksize == 0:
+            yield batches, index
+            index = defaultdict(list)
+
+    if len(stack):
+        yield (stack, ), index
+
+
+def unbatch_reads(batches, overlap=0, stride=1):
+    """
+    Split batched reads
+    """
+    stack = []
+    reads = deque()
+    num_chunks = deque()
+
+    for batch, index in batches:
+
+        reads.extend(index['reads'])
+        num_chunks.extend(index['chunks'])
+        stack = torch.cat((stack, batch)) if len(stack) else batch
+
+        while num_chunks and stack.shape[0] >= num_chunks[0]:
+
+            n = num_chunks.popleft()
+            read = reads.popleft()
+            chunks, stack = torch.split(stack, [n, stack.shape[0] - n])
+
+            stitched = stitch(chunks.numpy(), overlap, stride)
+            yield read, stitched[:read.signal.shape[0] // stride].astype(np.float32)
 
 
 def column_to_set(filename, idx=0, skip_header=False):
