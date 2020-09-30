@@ -222,7 +222,11 @@ def batch_reads(reads, chunksize=0, overlap=0, batchsize=1):
         stack = torch.cat((stack, chunks)) if len(stack) else chunks
         *batches, stack = torch.split(stack, batchsize)
 
-        if len(batches) or chunksize == 0:
+        if chunksize == 0:
+            yield (stack, ), index
+            stack = []; index = defaultdict(list)
+
+        if len(batches):
             yield batches, index
             index = defaultdict(list)
 
