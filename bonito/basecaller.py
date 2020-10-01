@@ -74,6 +74,12 @@ def main(args):
 
 
 def argparser():
+    def check_chunksize(chunksize):
+        x = int(chunksize)
+        if x != 3 * (x // 3):
+            sys.stderr.write("> Warning: Recommended --chunksize is factor of 3\n")
+        return x
+
     parser = ArgumentParser(
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
@@ -86,8 +92,8 @@ def argparser():
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--batchsize", default=1, type=int)
-    parser.add_argument("--chunksize", default=0, type=int)
-    parser.add_argument("--overlap", default=0, type=int)
+    parser.add_argument("--chunksize", default=0, type=check_chunksize)
+    parser.add_argument("--overlap", default=2988, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--cudart", action="store_true", default=False)

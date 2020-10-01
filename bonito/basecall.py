@@ -39,8 +39,11 @@ def compute_scores(model, batches):
     device = next(model.parameters()).device
 
     with torch.no_grad():
+        use_half = half_supported()
         for chunks in batches:
-            chunks = chunks.type(torch.half).to(device)
+            if use_half:
+                chunks = chunks.type(torch.half)
+            chunks = chunks.to(device)
             posteriors = model(chunks)
             res.append(torch.exp(posteriors).cpu())
     return torch.cat(res), index
