@@ -51,10 +51,17 @@ def main(args):
             tqdm(data, desc="> calling", unit=" reads", leave=False), aligner
         )
     else:
+        try:
+            if not args.overlap is None:
+                overlap = args.overlap
+            else:
+                overlap = model.config['inference']['overlap']
+        except:
+            overlap = 0
         basecalls = basecall(
             model, reads, aligner=aligner,
             beamsize=1 if args.fastq else args.beamsize,
-            chunksize=args.chunksize, overlap=args.overlap,
+            chunksize=args.chunksize, overlap=overlap,
             batchsize=args.batchsize
         )
         writer = Writer(
@@ -76,7 +83,7 @@ def main(args):
 def argparser():
     def check_chunksize(chunksize):
         x = int(chunksize)
-        if x != 3 * (x // 3):
+        if x % 3:
             sys.stderr.write("> Warning: Recommended --chunksize is factor of 3\n")
         return x
 
@@ -93,7 +100,7 @@ def argparser():
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--batchsize", default=1, type=int)
     parser.add_argument("--chunksize", default=0, type=check_chunksize)
-    parser.add_argument("--overlap", default=2988, type=int)
+    parser.add_argument("--overlap", type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--cudart", action="store_true", default=False)
