@@ -234,7 +234,7 @@ def batch_reads(reads, chunksize=0, overlap=0, batchsize=1, pad_start=False):
         yield (stack, ), index
 
 
-def unbatch_reads(batches, overlap=0, stride=1, dtype=np.float32):
+def unbatch_reads(batches, overlap=0, stride=1, dtype=np.float32, trim_start=False):
     """
     Split batched reads
     """
@@ -252,10 +252,15 @@ def unbatch_reads(batches, overlap=0, stride=1, dtype=np.float32):
 
             n = num_chunks.popleft()
             read = reads.popleft()
+            padding = read.signal.shape[0] // stride
             chunks, stack = torch.split(stack, [n, stack.shape[0] - n])
 
             stitched = stitch(chunks.numpy(), overlap, stride)
-            yield read, stitched[:read.signal.shape[0] // stride].astype(dtype)
+
+            if trim_start:
+                yield read, stitched[-padding:].astype(dtype)
+            else:
+                yield read, stitched[:padding].astype(dtype)
 
 
 def column_to_set(filename, idx=0, skip_header=False):
