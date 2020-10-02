@@ -207,7 +207,7 @@ def stitch(predictions, overlap, stride=1):
     return np.concatenate(stitched)
 
 
-def batch_reads(reads, chunksize=0, overlap=0, batchsize=1):
+def batch_reads(reads, chunksize=0, overlap=0, batchsize=1, pad_start=False):
     """
     Convert reads into stream in fixed size chunks.
     """
@@ -215,7 +215,7 @@ def batch_reads(reads, chunksize=0, overlap=0, batchsize=1):
 
     for read in reads:
 
-        chunks = chunk(torch.tensor(read.signal), chunksize, overlap)
+        chunks = chunk(torch.tensor(read.signal), chunksize, overlap, pad_start)
         index['reads'].append(read)
         index['chunks'].append(chunks.shape[0])
 
@@ -234,7 +234,7 @@ def batch_reads(reads, chunksize=0, overlap=0, batchsize=1):
         yield (stack, ), index
 
 
-def unbatch_reads(batches, overlap=0, stride=1):
+def unbatch_reads(batches, overlap=0, stride=1, dtype=np.float32):
     """
     Split batched reads
     """
@@ -255,7 +255,7 @@ def unbatch_reads(batches, overlap=0, stride=1):
             chunks, stack = torch.split(stack, [n, stack.shape[0] - n])
 
             stitched = stitch(chunks.numpy(), overlap, stride)
-            yield read, stitched[:read.signal.shape[0] // stride].astype(np.float32)
+            yield read, stitched[:read.signal.shape[0] // stride].astype(dtype)
 
 
 def column_to_set(filename, idx=0, skip_header=False):
