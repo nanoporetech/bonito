@@ -4,10 +4,10 @@ Bonito train
 
 import os
 import re
-import time
 from glob import glob
 from functools import partial
 from itertools import starmap
+from time import perf_counter
 
 from bonito.util import accuracy, decode_ref, permute
 
@@ -133,7 +133,7 @@ def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
     return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
 
-def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, lr_scheduler=None):
+def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, lr_scheduler=None, loss_log=None):
 
     if criterion is None:
         C = len(model.alphabet)
@@ -142,7 +142,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
 
     chunks = 0
     model.train()
-    t0 = time.perf_counter()
+    t0 = perf_counter()
 
     progress_bar = tqdm(
         total=len(train_loader), desc='[0/{}]'.format(len(train_loader.dataset)),
@@ -185,7 +185,10 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
             progress_bar.update()
 
-    return smoothed_loss['loss'], time.perf_counter() - t0
+            if loss_log is not None:
+                loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, **smoothed_loss})
+
+    return smoothed_loss['loss'], perf_counter() - t0
 
 
 def test(model, device, test_loader, min_coverage=0.5, criterion=None):
