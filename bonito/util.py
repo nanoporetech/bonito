@@ -83,6 +83,16 @@ def init(seed, device):
     assert(torch.cuda.is_available())
 
 
+def permute(x, input_layout, output_layout):
+    """
+    Permute `x` from `input_layout` to `output_layout`
+
+    >>> permute(x, 'TNC', 'NTC')
+    """
+    if input_layout == output_layout: return x
+    return x.permute(*[input_layout.index(x) for x in output_layout])
+
+
 def half_supported():
     """
     Returns whether FP16 is support on the GPU
@@ -285,22 +295,20 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
         directory = os.path.join(directory, 'validation')
 
     chunks = np.load(os.path.join(directory, "chunks.npy"))
-    chunk_lengths = np.load(os.path.join(directory, "chunk_lengths.npy"))
     targets = np.load(os.path.join(directory, "references.npy"))
-    target_lengths = np.load(os.path.join(directory, "reference_lengths.npy"))
+    lengths = np.load(os.path.join(directory, "reference_lengths.npy"))
 
     if shuffle:
         state = np.random.get_state()
-        for array in (chunks, chunk_lengths, targets, target_lengths):
+        for array in (chunks, targets, lengths):
             np.random.set_state(state)
             np.random.shuffle(array)
     if limit:
         chunks = chunks[:limit]
-        chunk_lengths = chunk_lengths[:limit]
         targets = targets[:limit]
-        target_lengths = target_lengths[:limit]
+        lengths = lengths[:limit]
 
-    return chunks, chunk_lengths, targets, target_lengths
+    return chunks, targets, lengths
 
 
 def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=False):
