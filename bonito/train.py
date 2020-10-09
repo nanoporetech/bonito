@@ -33,11 +33,11 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    chunks, chunk_lengths, targets, target_lengths = load_data(limit=args.chunks, shuffle=True, directory=args.directory)
+    chunks, targets, lengths = load_data(limit=args.chunks, shuffle=True, directory=args.directory)
 
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
-    train_dataset = ChunkDataSet(chunks[:split], chunk_lengths[:split], targets[:split], target_lengths[:split])
-    test_dataset = ChunkDataSet(chunks[split:], chunk_lengths[split:], targets[split:], target_lengths[split:])
+    train_dataset = ChunkDataSet(chunks[:split], targets[:split], lengths[:split])
+    test_dataset = ChunkDataSet(chunks[split:], targets[split:], lengths[split:])
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
 
@@ -66,7 +66,6 @@ def main(args):
         from torch.nn import DataParallel
         model = DataParallel(model)
         model.decode = model.module.decode
-        model.stride = model.module.stride
         model.alphabet = model.module.alphabet
 
     for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):

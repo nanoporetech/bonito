@@ -282,13 +282,11 @@ class CTCWriter(Thread):
             return
 
         chunks = np.array(chunks, dtype=np.float32)
-        chunk_lens = np.full(chunks.shape[0], chunks.shape[1], dtype=np.int16)
-
         targets_ = np.zeros((chunks.shape[0], max(target_lens)), dtype=np.uint8)
         for idx, target in enumerate(targets): targets_[idx, :len(target)] = target
         target_lens = np.array(target_lens, dtype=np.uint16)
 
-        training = ChunkDataSet(chunks, chunk_lens, targets_, target_lens)
+        training = ChunkDataSet(chunks, targets_, target_lens)
         training = filter_chunks(training)
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))

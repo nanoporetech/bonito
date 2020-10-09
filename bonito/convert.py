@@ -69,8 +69,7 @@ def chunk_dataset(reads, chunk_len, num_chunks=None):
     )
     chunks, targets = zip(*tqdm(take(all_chunks, num_chunks), total=num_chunks))
     targets, target_lens = pad_lengths(targets) # convert refs from ragged arrray
-    chunk_lens = np.full(len(chunks), chunk_len, dtype=np.int16)
-    return ChunkDataSet(chunks, chunk_lens, targets, target_lens)
+    return ChunkDataSet(chunks, targets, target_lens)
 
 
 def validation_split(reads, num_valid=1000):
@@ -80,7 +79,7 @@ def validation_split(reads, num_valid=1000):
 
 def select_indices(ds, idx):
     return ChunkDataSet(
-        ds.chunks.squeeze(1)[idx], ds.chunk_lengths[idx], ds.targets[idx], ds.target_lengths[idx]
+        ds.chunks.squeeze(1)[idx], ds.targets[idx], ds.target_lengths[idx]
     )
 
 
@@ -97,13 +96,11 @@ def filter_chunks(chunks):
 def save_chunks(chunks, output_directory):
     os.makedirs(output_directory, exist_ok=True)
     np.save(os.path.join(output_directory, "chunks.npy"), chunks.chunks.squeeze(1))
-    np.save(os.path.join(output_directory, "chunk_lengths.npy"), chunks.chunk_lengths)
     np.save(os.path.join(output_directory, "references.npy"), chunks.targets)
     np.save(os.path.join(output_directory, "reference_lengths.npy"), chunks.target_lengths)
     print()
     print("> data written to %s:" % output_directory)
     print("  - chunks.npy with shape", chunks.chunks.squeeze(1).shape)
-    print("  - chunk_lengths.npy with shape", chunks.chunk_lengths.shape)
     print("  - references.npy with shape", chunks.targets.shape)
     print("  - reference_lengths.npy shape", chunks.target_lengths.shape)
 

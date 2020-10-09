@@ -8,6 +8,7 @@ from torch.jit import script
 from torch.autograd import Function
 from torch.nn import ReLU, LeakyReLU
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
+from torch.nn.functional import log_softmax
 
 from fast_ctc_decode import beam_search, viterbi_search
 
@@ -236,5 +237,5 @@ class Decoder(Module):
         self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
 
     def forward(self, x):
-        x = self.layers(x)
-        return nn.functional.log_softmax(x.transpose(1, 2), dim=2)
+        x = self.layers(x).permute(2, 0, 1)
+        return log_softmax(x, dim=2)

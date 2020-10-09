@@ -9,7 +9,7 @@ from glob import glob
 from functools import partial
 from itertools import starmap
 
-from bonito.util import accuracy, decode_ref
+from bonito.util import accuracy, decode_ref, permute
 
 import torch
 import numpy as np
@@ -23,22 +23,20 @@ except ImportError: pass
 
 
 class ChunkDataSet:
-    def __init__(self, chunks, chunk_lengths, targets, target_lengths):
+    def __init__(self, chunks, targets, lengths):
         self.chunks = np.expand_dims(chunks, axis=1)
-        self.chunk_lengths = chunk_lengths
         self.targets = targets
-        self.target_lengths = target_lengths
+        self.lengths = lengths
 
     def __getitem__(self, i):
         return (
             self.chunks[i],
-            self.chunk_lengths[i].astype(np.int32),
             self.targets[i].astype(np.int32),
-            self.target_lengths[i].astype(np.int32)
+            self.lengths[i].astype(np.int64),
         )
 
     def __len__(self):
-        return len(self.chunks)
+        return len(self.lengths)
 
 
 def const_schedule(y):
@@ -127,8 +125,10 @@ def load_state(dirname, device, model, optim, use_amp=False):
     return epoch
 
 
-def ctc_label_smoothing_loss(log_probs, targets, input_lengths, target_lengths, weights):
-    loss = ctc_loss(log_probs, targets, input_lengths, target_lengths, reduction='mean')
+def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
+    T, N, C = log_probs.shape
+    log_probs_lengths = torch.full(size=(N, ), fill_value=T, dtype=torch.int64)
+    loss = ctc_loss(log_probs.to(torch.float32), targets, log_probs_lengths, lengths, reduction='mean')
     label_smoothing_loss = -((log_probs * weights.to(log_probs.device)).mean())
     return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
@@ -152,7 +152,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
 
     with progress_bar:
 
-        for data, out_lengths, target, lengths in train_loader:
+        for data, target, lengths in train_loader:
 
             optimizer.zero_grad()
 
@@ -162,7 +162,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             target = target.to(device)
             log_probs = model(data)
 
-            losses = criterion(log_probs.transpose(0, 1), target, out_lengths // model.stride, lengths)
+            losses = criterion(log_probs, target, lengths)
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}
@@ -188,27 +188,29 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
     return smoothed_loss['loss'], time.perf_counter() - t0
 
 
-def test(model, device, test_loader, min_coverage=0.5):
+def test(model, device, test_loader, min_coverage=0.5, criterion=None):
+
+    if criterion is None:
+        C = len(model.alphabet)
+        weights = torch.cat([torch.tensor([0.4]), (0.1 / (C - 1)) * torch.ones(C - 1)]).to(device)
+        criterion = partial(ctc_label_smoothing_loss, weights=weights)
 
     model.eval()
     test_loss = 0
     predictions = []
-    prediction_lengths = []
     accuracy_with_coverage_filter = lambda ref, seq: accuracy(ref, seq, min_coverage=min_coverage)
 
     with torch.no_grad():
-        for batch_idx, (data, out_lengths, target, lengths) in enumerate(test_loader, start=1):
+        for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
             data, target = data.to(device), target.to(device)
             log_probs = model(data)
-            test_loss += ctc_loss(log_probs.transpose(1, 0), target, out_lengths // model.stride, lengths)
-            predictions.append(torch.exp(log_probs).cpu())
-            prediction_lengths.append(out_lengths // model.stride)
+            test_loss += criterion(log_probs, target, lengths)['ctc_loss']
 
-    predictions = np.concatenate(predictions)
-    lengths = np.concatenate(prediction_lengths)
+            probs = permute(log_probs.exp(), 'TNC', 'NTC')
+            predictions.append(probs.cpu().numpy().astype(np.float32))
 
     references = [decode_ref(target, model.alphabet) for target in test_loader.dataset.targets]
-    sequences = [model.decode(post[:n]) for post, n in zip(predictions, lengths)]
+    sequences = [model.decode(probs) for probs in np.concatenate(predictions)]
 
     if all(map(len, sequences)):
         accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))

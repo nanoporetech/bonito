@@ -9,7 +9,7 @@ from functools import partial
 from bonito.aligner import align_map
 from bonito.multiprocessing import process_map, thread_map
 from bonito.util import mean_qscore_from_qstring, half_supported
-from bonito.util import batch_reads, unbatch_reads, chunk, stitch
+from bonito.util import batch_reads, unbatch_reads, chunk, stitch, permute
 
 
 def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1):
@@ -41,7 +41,7 @@ def compute_scores(model, batches):
     with torch.no_grad():
         for chunks in batches:
             chunks = chunks.type(torch.half).to(device)
-            posteriors = model(chunks)
+            posteriors = permute(model(chunks), 'TNC', 'NTC')
             res.append(torch.exp(posteriors).cpu())
     return torch.cat(res), index
 
