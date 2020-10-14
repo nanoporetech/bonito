@@ -13,7 +13,6 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
 from bonito.basecall import basecall, ctc_data
-from bonito.multiprocessing import process_iter
 from bonito.util import column_to_set, get_reads, load_model
 
 
@@ -38,8 +37,8 @@ def main(args):
     else:
         aligner = None
 
-    reads = process_iter(
-        get_reads(args.reads_directory, read_ids=column_to_set(args.read_ids), skip=args.skip)
+    reads = get_reads(
+        args.reads_directory, n_proc=8, skip=args.skip, read_ids=column_to_set(args.read_ids)
     )
 
     if args.save_ctc:

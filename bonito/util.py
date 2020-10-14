@@ -7,6 +7,9 @@ import re
 import sys
 import random
 from glob import glob
+from functools import partial
+from multiprocessing import Pool
+from itertools import chain, starmap
 from collections import deque, defaultdict, OrderedDict
 
 from bonito.model import Model
@@ -64,7 +67,12 @@ class Read:
 
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
-        self.signal = norm_by_noisiest_section(scaled)
+
+        if len(scaled) > 8000:
+            med, mad = med_mad(scaled)
+            self.signal = (scaled - med) / mad
+        else:
+            self.signal = norm_by_noisiest_section(scaled)
 
 
 def init(seed, device):
@@ -172,6 +180,17 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
+def get_read_ids(filename, read_ids=None, skip=False):
+    """
+    Get all the read_ids from the file `filename`.
+    """
+    with get_fast5_file(filename, 'r') as f5_fh:
+        ids = [(filename, rid) for rid in f5_fh.get_read_ids()]
+        if read_ids is None:
+            return ids
+        return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
+
+
 def get_raw_data_for_read(filename, read_id):
     """
     Get the raw signal from the fast5 file for a given read_id
@@ -180,16 +199,20 @@ def get_raw_data_for_read(filename, read_id):
         return Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6):
+def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6, n_proc=1):
     """
     Get all reads in a given `directory`.
     """
-    for fast5 in glob("%s/*fast5" % directory):
-        for read in get_raw_data(fast5, read_ids=read_ids, skip=skip):
-            if len(read.signal) > max_read_size:
-                sys.stderr.write("> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal)))
-                continue
-            yield read
+    get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
+    with Pool(n_proc) as pool:
+        for job in chain(pool.imap(get_filtered_reads, glob("%s/*fast5" % directory))):
+            for read in pool.starmap(get_raw_data_for_read, job):
+                if len(read.signal) > max_read_size:
+                    sys.stderr.write(
+                        "> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal))
+                    )
+                    continue
+                yield read
 
 
 def chunk(signal, chunksize, overlap, pad_start=False):
