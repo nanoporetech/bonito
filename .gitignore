@@ -9,7 +9,7 @@ bonito/data/*
 bonito/models/*
 dist/
 *.f[aq]
-*.csv
+*.[ct]sv
 *.fast*
 *.sam
 .ipynb_checkpoints/
