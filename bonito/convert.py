@@ -79,17 +79,17 @@ def validation_split(reads, num_valid=1000):
 
 def select_indices(ds, idx):
     return ChunkDataSet(
-        ds.chunks.squeeze(1)[idx], ds.targets[idx], ds.target_lengths[idx]
+        ds.chunks.squeeze(1)[idx], ds.targets[idx], ds.lengths[idx]
     )
 
 
 def filter_chunks(chunks):
-    mu, sd = np.mean(chunks.target_lengths), np.std(chunks.target_lengths)
+    mu, sd = np.mean(chunks.lengths), np.std(chunks.lengths)
     idx = [
-        i for i, n in enumerate(chunks.target_lengths) if mu - 2.5 * sd < n < mu + 2.5 * sd
+        i for i, n in enumerate(chunks.lengths) if mu - 2.5 * sd < n < mu + 2.5 * sd
     ]
     filtered = select_indices(chunks, idx)
-    filtered.targets = filtered.targets[:, :filtered.target_lengths.max()]
+    filtered.targets = filtered.targets[:, :filtered.lengths.max()]
     return filtered
 
 
@@ -97,12 +97,12 @@ def save_chunks(chunks, output_directory):
     os.makedirs(output_directory, exist_ok=True)
     np.save(os.path.join(output_directory, "chunks.npy"), chunks.chunks.squeeze(1))
     np.save(os.path.join(output_directory, "references.npy"), chunks.targets)
-    np.save(os.path.join(output_directory, "reference_lengths.npy"), chunks.target_lengths)
+    np.save(os.path.join(output_directory, "reference_lengths.npy"), chunks.lengths)
     print()
     print("> data written to %s:" % output_directory)
     print("  - chunks.npy with shape", chunks.chunks.squeeze(1).shape)
     print("  - references.npy with shape", chunks.targets.shape)
-    print("  - reference_lengths.npy shape", chunks.target_lengths.shape)
+    print("  - reference_lengths.npy shape", chunks.lengths.shape)
 
 
 def main(args):
