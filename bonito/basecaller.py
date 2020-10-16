@@ -10,10 +10,11 @@ from time import perf_counter
 from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from bonito.fast5 import get_reads
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
 from bonito.basecall import basecall, ctc_data
-from bonito.util import column_to_set, get_reads, load_model
+from bonito.util import column_to_set, load_model
 
 
 def main(args):
