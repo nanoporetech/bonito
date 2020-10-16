@@ -62,6 +62,41 @@ def permute(x, input_layout, output_layout):
     return x.permute(*[input_layout.index(x) for x in output_layout])
 
 
+def concat(xs, dim=0):
+    """
+    Type agnostic concat.
+    """
+    if isinstance(xs[0], torch.Tensor):
+        return torch.cat(xs, dim=dim)
+    elif isinstance(xs[0], np.ndarray):
+        return np.concatenate(xs, axis=dim)
+    elif isinstance(xs[0], list):
+        return [x for l in xs for x in l]
+    elif isinstance(xs[0], str):
+        return ''.join(xs)
+    else:
+        raise TypeError
+
+
+def select_range(x, start, end, dim=0):
+    """
+    Type agnostic range select.
+    """
+    if dim == 0: return x[start:end]
+    return x[(*(slice(None),)*dim, slice(start, end))]
+
+
+def size(x, dim=0):
+    """
+    Type agnostic size.
+    """
+    if hasattr(x, 'shape'):
+        return x.shape[dim]
+    elif dim == 0:
+        return len(x)
+    raise TypeError
+
+
 def half_supported():
     """
     Returns whether FP16 is support on the GPU
