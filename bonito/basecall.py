@@ -122,7 +122,7 @@ def ctc_decoder(model, aligner, scores, min_accuracy=0.9, min_coverage=0.9):
         for mapping in aligner.map(sequence):
             cov = (mapping.q_en - mapping.q_st) / len(sequence)
             acc = mapping.mlen / mapping.blen
-            refseq = aligner.seq(mapping.ctg, mapping.r_st + 1, mapping.r_en)
+            refseq = aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
             if 'N' in refseq: continue
             if mapping.strand == -1: refseq = revcomp(refseq)
             break
