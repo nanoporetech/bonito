@@ -9,20 +9,21 @@ from functools import partial
 from bonito.aligner import align_map
 from bonito.multiprocessing import process_map, thread_map
 from bonito.util import mean_qscore_from_qstring, half_supported
-from bonito.util import batch_reads, unbatch_reads, chunk, stitch, permute
+from bonito.util import chunk, stitch, batchify, unbatchify, permute, concat
 
 
 def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1):
     """
     Basecalls at set of reads.
     """
-    scores = (
-        compute_scores(model, batch) for batch in
-        batch_reads(reads, chunksize, overlap, batchsize)
+    chunks = (
+        (read, chunk(torch.tensor(read.signal), chunksize, overlap)) for read in reads
+    )
+    scores = unbatchify(
+        (k, compute_scores(model, v)) for k, v in batchify(chunks, batchsize)
     )
     scores = (
-        (read, {'scores': score}) for read, score in
-        unbatch_reads(scores, overlap, model.stride)
+        (read, {'scores': stitch(v, overlap, model.stride)}) for read, v in scores
     )
     decoder = partial(decode, decode=model.decode, beamsize=beamsize)
     basecalls = process_map(decoder, scores, n_proc=4)
@@ -30,20 +31,15 @@ def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, bat
     return basecalls
 
 
-def compute_scores(model, batches):
+def compute_scores(model, batch):
     """
     Compute scores for model.
     """
-    res = []
-    batches, index = batches
-    device = next(model.parameters()).device
-
     with torch.no_grad():
-        for chunks in batches:
-            chunks = chunks.type(torch.half).to(device)
-            posteriors = permute(model(chunks), 'TNC', 'NTC')
-            res.append(torch.exp(posteriors).cpu())
-    return torch.cat(res), index
+        device = next(model.parameters()).device
+        chunks = batch.to(torch.half).to(device)
+        probs = torch.exp(permute(model(chunks), 'TNC', 'NTC'))
+    return probs.cpu().numpy().astype(np.float32)
 
 
 def decode(scores, decode, beamsize=5):

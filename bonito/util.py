@@ -7,6 +7,8 @@ import re
 import sys
 import random
 from glob import glob
+from itertools import groupby
+from operator import itemgetter
 from collections import deque, defaultdict, OrderedDict
 
 from bonito.model import Model
@@ -164,66 +166,47 @@ def stitch(predictions, overlap, stride=1):
     if predictions.shape[0] == 1:
         return predictions.squeeze(0)
     stitched = [predictions[0, 0:-overlap]]
-    for i in range(1, predictions.shape[0] - 1): stitched.append(predictions[i][overlap:-overlap])
+    for i in range(1, predictions.shape[0] - 1):
+        stitched.append(predictions[i][overlap:-overlap])
     stitched.append(predictions[-1][overlap:])
     return np.concatenate(stitched)
 
 
-def batch_reads(reads, chunksize=0, overlap=0, batchsize=1, pad_start=False):
+def batchify(items, batchsize, dim=0):
     """
-    Convert reads into stream in fixed size chunks.
+    Batch up items up to `batch_size`.
     """
-    stack = []; index = defaultdict(list)
-
-    for read in reads:
-
-        chunks = chunk(torch.tensor(read.signal), chunksize, overlap, pad_start)
-        index['reads'].append(read)
-        index['chunks'].append(chunks.shape[0])
-
-        stack = torch.cat((stack, chunks)) if len(stack) else chunks
-        *batches, stack = torch.split(stack, batchsize)
-
-        if chunksize == 0:
-            yield (stack, ), index
-            stack = []; index = defaultdict(list)
-
-        if len(batches):
-            yield batches, index
-            index = defaultdict(list)
+    stack, pos = [], 0
+    for k, v in items:
+        breaks = range(batchsize - pos, size(v, dim), batchsize)
+        for start, end in zip([0, *breaks], [*breaks, size(v, dim)]):
+            sub_batch = select_range(v, start, end, dim)
+            stack.append(((k, (pos, pos + end - start)), sub_batch))
+            if pos + end - start == batchsize:
+                ks, vs = zip(*stack)
+                yield ks, concat(vs, dim)
+                stack, pos = [], 0
+            else:
+                pos += end - start
 
     if len(stack):
-        yield (stack, ), index
+        ks, vs = zip(*stack)
+        yield ks, concat(vs, dim)
 
 
-def unbatch_reads(batches, overlap=0, stride=1, dtype=np.float32, trim_start=False):
+def unbatchify(batches, dim=0):
     """
-    Split batched reads
+    Reconstruct batches.
     """
-    stack = []
-    reads = deque()
-    num_chunks = deque()
-
-    for batch, index in batches:
-
-        reads.extend(index['reads'])
-        num_chunks.extend(index['chunks'])
-        stack = torch.cat((stack, batch)) if len(stack) else batch
-
-        while num_chunks and stack.shape[0] >= num_chunks[0]:
-
-            n = num_chunks.popleft()
-            read = reads.popleft()
-            padding = read.signal.shape[0] // stride
-            chunks, stack = torch.split(stack, [n, stack.shape[0] - n])
-
-            stitched = stitch(chunks.numpy(), overlap, stride)
-
-            if trim_start:
-                yield read, stitched[-padding:].astype(dtype)
-            else:
-                yield read, stitched[:padding].astype(dtype)
-
+    batches = (
+        (k, select_range(v, start, end, dim))
+        for sub_batches, v in batches
+        for k, (start, end) in sub_batches
+    )
+    return (
+        (k, concat([v for (k, v) in group], dim))
+        for k, group in groupby(batches, itemgetter(0))
+    )
 
 
 def load_data(shuffle=False, limit=None, directory=None, validation=False):
