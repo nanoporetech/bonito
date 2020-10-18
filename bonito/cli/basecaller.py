@@ -2,15 +2,12 @@
 Bonito Basecaller
 """
 
-import os
 import sys
-import toml
 import torch
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
 from datetime import timedelta
-from importlib import import_module
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.fast5 import get_reads
