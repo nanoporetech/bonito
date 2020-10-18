@@ -2,59 +2,12 @@
 Bonito Model template
 """
 
-import torch.nn as nn
-from torch import sigmoid
-from torch.jit import script
-from torch.autograd import Function
-from torch.nn import ReLU, LeakyReLU
-from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
+import numpy as np
+from bonito.nn import Permute, activations
 from torch.nn.functional import log_softmax
+from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
 from fast_ctc_decode import beam_search, viterbi_search
-
-
-@script
-def swish_jit_fwd(x):
-    return x * sigmoid(x)
-
-
-@script
-def swish_jit_bwd(x, grad):
-    x_s = sigmoid(x)
-    return grad * (x_s * (1 + x * (1 - x_s)))
-
-
-class SwishAutoFn(Function):
-
-    @staticmethod
-    def symbolic(g, x):
-        return g.op('Swish', x)
-
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad):
-        x = ctx.saved_tensors[0]
-        return swish_jit_bwd(x, grad)
-
-
-class Swish(Module):
-    """
-    Swish Activation function
-
-    https://arxiv.org/abs/1710.05941
-    """
-    def forward(self, x):
-        return SwishAutoFn.apply(x)
-
-
-activations = {
-    "relu": ReLU,
-    "swish": Swish,
-}
 
 
 class Model(Module):
@@ -224,7 +177,7 @@ class Block(Module):
         for layer in self.conv:
             _x = layer(_x)
         if self.use_res:
-            _x += self.residual(x)
+            _x = _x + self.residual(x)
         return self.activation(_x)
 
 
@@ -234,8 +187,10 @@ class Decoder(Module):
     """
     def __init__(self, features, classes):
         super(Decoder, self).__init__()
-        self.layers = Sequential(Conv1d(features, classes, kernel_size=1, bias=True))
+        self.layers = Sequential(
+            Conv1d(features, classes, kernel_size=1, bias=True),
+            Permute(2, 0, 1)
+        )
 
     def forward(self, x):
-        x = self.layers(x).permute(2, 0, 1)
-        return log_softmax(x, dim=2)
+        return log_softmax(self.layers(x), dim=2)

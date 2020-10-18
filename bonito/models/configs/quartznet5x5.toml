@@ -1,4 +1,7 @@
-model = "QuartzNet"
+# Baseline Quartznet5x5 model
+
+[model]
+package = "bonito.models.ctc"
 
 [labels]
 labels = ["N", "A", "C", "G", "T"]

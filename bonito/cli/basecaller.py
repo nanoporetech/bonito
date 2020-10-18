@@ -2,19 +2,21 @@
 Bonito Basecaller
 """
 
+import os
 import sys
+import toml
 import torch
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
 from datetime import timedelta
+from importlib import import_module
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.fast5 import get_reads
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
-from bonito.basecall import basecall, ctc_data
-from bonito.util import column_to_set, load_model
+from bonito.util import column_to_set, load_symbol, load_model
 
 
 def main(args):
@@ -41,6 +43,9 @@ def main(args):
     reads = get_reads(
         args.reads_directory, n_proc=8, skip=args.skip, read_ids=column_to_set(args.read_ids)
     )
+
+    ctc_data = load_symbol(args.model_directory, "basecall", "ctc_data")
+    basecall = load_symbol(args.model_directory, "basecall", "basecall")
 
     if args.save_ctc:
         data = ctc_data(

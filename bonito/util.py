@@ -9,9 +9,9 @@ import random
 from glob import glob
 from itertools import groupby
 from operator import itemgetter
+from importlib import import_module
 from collections import deque, defaultdict, OrderedDict
 
-from bonito.model import Model
 from bonito_cuda_runtime import CuModel
 
 import toml
@@ -29,8 +29,9 @@ except ImportError:
 
 __dir__ = os.path.dirname(os.path.realpath(__file__))
 __data__ = os.path.join(__dir__, "data")
-__models__ = os.path.join(__dir__, "models")
-__configs__ = os.path.join(__models__, "configs")
+__models__ = os.path.join(__dir__, "models/pretrained")
+__configs__ = os.path.join(__dir__, "models/configs")
+
 __url__ = "https://nanoporetech.box.com/shared/static/"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
@@ -236,6 +237,32 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, targets, lengths
 
 
+def load_symbol(config, module, symbol):
+    """
+    Dynamic load a symbol from module specified in model config.
+    """
+    if not isinstance(config, dict):
+        if not os.path.isdir(config) and os.path.isdir(os.path.join(__models__, config)):
+            dirname = os.path.join(__models__, config)
+        else:
+            dirname = config
+        config = toml.load(os.path.join(dirname, 'config.toml'))
+    imported = import_module("%s.%s" % (config['model']['package'], module))
+    return getattr(imported, symbol)
+
+
+def match_names(state_dict, model):
+    keys_and_shapes = lambda state_dict: zip(*[
+        (k, s) for s, i, k in sorted([(v.shape, i, k)
+        for i, (k, v) in enumerate(state_dict.items())])
+    ])
+    k1, s1 = keys_and_shapes(state_dict)
+    k2, s2 = keys_and_shapes(model.state_dict())
+    assert s1 == s2
+    remap = dict(zip(k1, k2))
+    return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
+
+
 def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=False):
     """
     Load a model from disk
@@ -250,11 +277,14 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=Fal
         weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
     device = torch.device(device)
-    config = os.path.join(dirname, 'config.toml')
+    config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
-    model = Model(toml.load(config))
+
+    Model = load_symbol(config, "model", "Model")
+    model = Model(config)
 
     state_dict = torch.load(weights, map_location=device)
+    state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k.replace('module.', '')
