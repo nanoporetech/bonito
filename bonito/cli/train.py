@@ -54,11 +54,8 @@ def main(args):
 
     print("[loading model]")
     model = Model(config)
-    #optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
+    optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
-    from adabelief_pytorch import AdaBelief
-    optimizer = AdaBelief(model.parameters(), lr=args.lr, eps=1e-12, betas=(0.9,0.999))
-    
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
 
     lr_scheduler = func_scheduler(
