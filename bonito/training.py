@@ -9,7 +9,7 @@ from functools import partial
 from itertools import starmap
 from time import perf_counter
 
-from bonito.util import accuracy, decode_ref, permute
+from bonito.util import accuracy, decode_ref, permute, concat
 
 import torch
 import numpy as np
@@ -213,7 +213,7 @@ def test(model, device, test_loader, min_coverage=0.5, criterion=None):
             predictions.append(probs.cpu().numpy().astype(np.float32))
 
     references = [decode_ref(target, model.alphabet) for target in test_loader.dataset.targets]
-    sequences = [model.decode(probs) for probs in np.concatenate(predictions)]
+    sequences = [model.decode(probs) for probs in concat(predictions)]
 
     if all(map(len, sequences)):
         accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))
