@@ -7,8 +7,8 @@ import re
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.convert import main as convert
-from bonito.convert import argparser as cargparser
+from bonito.cli.convert import main as convert
+from bonito.cli.convert import argparser as cargparser
 from bonito.util import __data__, __models__, __url__
 
 import requests

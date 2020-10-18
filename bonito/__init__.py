@@ -1,10 +1,10 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
-from bonito import basecaller, evaluate, view, convert, download, pair
+from bonito.cli import basecaller, evaluate, view, convert, download, pair
 modules = ['basecaller', 'pair', 'evaluate', 'view', 'convert', 'download']
 
 try:
-    from bonito import train, tune
+    from bonito.cli import train, tune
     modules.extend(['train', 'tune'])
 except ImportError:
     pass

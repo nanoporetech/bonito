@@ -24,8 +24,8 @@ import parasail
 import numpy as np
 from tqdm import tqdm
 
-from bonito.util import accuracy, load_model
-from bonito.util import get_raw_data_for_read
+from bonito.fast5 import get_raw_data_for_read
+from bonito.util import accuracy, load_model, half_supported
 from fast_ctc_decode import beam_search, beam_search_2d
 from ont_fast5_api.fast5_interface import get_fast5_file
 
@@ -185,7 +185,7 @@ def main(args):
     samples = 0
     num_pairs = 0
     max_read_size = 4e6
-    dtype = np.float16 if args.half else np.float32
+    dtype = np.float16 if half_supported() else np.float32
 
     if args.index is not None:
         sys.stderr.write("> loading read index\n")
@@ -199,8 +199,11 @@ def main(args):
                 json.dump(index, f)
 
     sys.stderr.write("> loading model\n")
-    model = load_model('dna_r9.4.1', args.device, half=args.half)
-    decoders = PairDecoderWriterPool(model.alphabet, procs=args.num_procs)
+
+    model_temp = load_model(args.temp_model_directory, args.device)
+    model_comp = load_model(args.comp_model_directory, args.device)
+
+    decoders = PairDecoderWriterPool(model_temp.alphabet, procs=args.num_procs)
 
     t0 = time.perf_counter()
     sys.stderr.write("> calling\n")
@@ -230,12 +233,12 @@ def main(args):
             # call the template strand
             raw_data_1 = raw_data_1[np.newaxis, np.newaxis, :].astype(dtype)
             gpu_data_1 = torch.tensor(raw_data_1).to(args.device)
-            logits_1 = model(gpu_data_1).cpu().numpy().squeeze().astype(np.float32)
+            logits_1 = model_temp(gpu_data_1).cpu().numpy().squeeze().astype(np.float32)
 
             # call the complement strand
             raw_data_2 = raw_data_2[np.newaxis, np.newaxis, :].astype(dtype)
             gpu_data_2 = torch.tensor(raw_data_2).to(args.device)
-            logits_2 = model(gpu_data_2).cpu().numpy().squeeze().astype(np.float32)
+            logits_2 = model_comp(gpu_data_2).cpu().numpy().squeeze().astype(np.float32)
 
             num_pairs += 1
             samples += raw_data_1.shape[-1] + raw_data_2.shape[-1]
@@ -255,10 +258,11 @@ def argparser():
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
     )
+    parser.add_argument("temp_model_directory")
+    parser.add_argument("comp_model_directory")
     parser.add_argument("pairs_file")
     parser.add_argument("reads_directory")
     parser.add_argument("--sep", default=' ')
-    parser.add_argument("--half", action="store_true", default=False)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--num-procs", default=0, type=int)
     parser.add_argument("--index", default=None)

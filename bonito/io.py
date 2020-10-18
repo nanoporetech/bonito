@@ -14,7 +14,7 @@ from mappy import revcomp
 
 import bonito
 from bonito.training import ChunkDataSet
-from bonito.convert import filter_chunks
+from bonito.cli.convert import filter_chunks
 
 
 logger = getLogger('bonito')
