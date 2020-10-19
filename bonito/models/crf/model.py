@@ -18,7 +18,7 @@ class Model(Module):
         super().__init__()
         self.config = config
         self.stride = config['encoder']['stride']
-        self.seqdist = SeqDist(config['global_norm']['state_len'], config['labels']['labels'])
+        self.seqdist = CTC_CRF(config['global_norm']['state_len'], config['labels']['labels'])
 
         insize = config['input']['features']
         winlen = config['encoder']['winlen']
@@ -65,7 +65,7 @@ class GlobalNorm(Module):
         return (scores - self.seq_dist.logZ(scores)[:, None] / len(scores)).to(x.dtype)
 
 
-class SeqDist(SequenceDist):
+class CTC_CRF(SequenceDist):
 
     def __init__(self, state_len, alphabet):
         super().__init__()
