@@ -20,4 +20,4 @@ rnn_type = "lstm"
 activation = "swish"
 
 [global_norm]
-seqlen = 6
+state_len = 5

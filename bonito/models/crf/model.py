@@ -18,7 +18,7 @@ class Model(Module):
         super().__init__()
         self.config = config
         self.stride = config['encoder']['stride']
-        self.seqdist = SeqDist(config['global_norm']['seqlen'], config['labels']['labels'])
+        self.seqdist = SeqDist(config['global_norm']['state_len'], config['labels']['labels'])
 
         insize = config['input']['features']
         winlen = config['encoder']['winlen']
@@ -67,24 +67,26 @@ class GlobalNorm(Module):
 
 class SeqDist(SequenceDist):
 
-    def __init__(self, seqlen, alphabet):
+    def __init__(self, state_len, alphabet):
         super().__init__()
-        self.seqlen = seqlen
         self.alphabet = alphabet
+        self.state_len = state_len
         self.n_base = len(alphabet[1:])
 
     def n_score(self):
-        return len(self.alphabet) * self.n_base**(self.seqlen - 1)
+        return len(self.alphabet) * self.n_base**(self.state_len)
 
     def logZ(self, scores, S:semiring=Log):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, len(self.alphabet))
         idx = torch.cat([
-            torch.arange(self.n_base**(self.seqlen - 1))[:, None],
-            torch.arange(self.n_base**(self.seqlen - 1)).repeat_interleave(self.n_base).reshape(4, -1).T
+            torch.arange(self.n_base**(self.state_len))[:, None],
+            torch.arange(
+                self.n_base**(self.state_len)
+            ).repeat_interleave(self.n_base).reshape(self.n_base, -1).T
         ], dim=1)
-        alpha_0 = Ms.new_full((N, self.n_base**(self.seqlen - 1)), S.one)
-        beta_T = Ms.new_full((N, self.n_base**(self.seqlen - 1)), S.one)
+        alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
+        beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.logZ(Ms, idx, alpha_0, beta_T, S)
 
     def viterbi(self, scores):
@@ -102,13 +104,13 @@ class SeqDist(SequenceDist):
         targets, target_lengths = targets.to(scores.device), target_lengths.to(scores.device)
         T, N, C = scores.shape
         scores = scores.to(torch.float)
-        n = targets.size(1) - (self.seqlen - 2)
+        n = targets.size(1) - (self.state_len - 1)
         stay_indices = sum(
-            targets[:, i:n + i] * (self.n_base**(self.seqlen - i - 2))
-            for i in range(self.seqlen - 1)
+            targets[:, i:n + i] * self.n_base ** (self.state_len - i - 1)
+            for i in range(self.state_len)
         ) * len(self.alphabet)
         move_indices = stay_indices[:, 1:] + targets[:, :n - 1] + 1
         stay_scores = scores.gather(2, stay_indices.expand(T, -1, -1))
         move_scores = scores.gather(2, move_indices.expand(T, -1, -1))
-        logz = logZ_cupy(stay_scores, move_scores, target_lengths + 2 - self.seqlen)
+        logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
         return - (logz / target_lengths).mean()
