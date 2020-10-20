@@ -237,7 +237,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, targets, lengths
 
 
-def load_symbol(config, module, symbol):
+def load_symbol(config, symbol):
     """
     Dynamic load a symbol from module specified in model config.
     """
@@ -247,7 +247,7 @@ def load_symbol(config, module, symbol):
         else:
             dirname = config
         config = toml.load(os.path.join(dirname, 'config.toml'))
-    imported = import_module("%s.%s" % (config['model']['package'], module))
+    imported = import_module(config['model']['package'])
     return getattr(imported, symbol)
 
 
@@ -280,7 +280,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=Fal
     config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
 
-    Model = load_symbol(config, "model", "Model")
+    Model = load_symbol(config, "Model")
     model = Model(config)
 
     state_dict = torch.load(weights, map_location=device)

@@ -104,7 +104,7 @@ class CTC_CRF(SequenceDist):
         targets, target_lengths = targets.to(scores.device), target_lengths.to(scores.device)
         T, N, C = scores.shape
         scores = scores.to(torch.float)
-        n = targets.size(1) - (self.state_len - 1)
+        n = targets.size(1) - self.state_len - 1
         stay_indices = sum(
             targets[:, i:n + i] * self.n_base ** (self.state_len - i - 1)
             for i in range(self.state_len)

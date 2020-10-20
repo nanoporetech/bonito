@@ -41,8 +41,8 @@ def main(args):
         args.reads_directory, n_proc=8, skip=args.skip, read_ids=column_to_set(args.read_ids)
     )
 
-    ctc_data = load_symbol(args.model_directory, "basecall", "ctc_data")
-    basecall = load_symbol(args.model_directory, "basecall", "basecall")
+    ctc_data = load_symbol(args.model_directory, "ctc_data")
+    basecall = load_symbol(args.model_directory, "basecall")
 
     if args.save_ctc:
         data = ctc_data(

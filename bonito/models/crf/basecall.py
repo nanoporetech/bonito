@@ -15,7 +15,7 @@ from bonito.aligner import Aligner, align_map
 from bonito.util import batchify, unbatchify, chunk, stitch
 
 
-def basecall(model, reads, aligner=None, beamsize=1, chunksize=4000, overlap=500, batchsize=96):
+def basecall(model, reads, aligner=None, beamsize=1, chunksize=4000, overlap=500, batchsize=32):
     """
     Basecalls at set of reads.
     """
