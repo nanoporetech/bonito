@@ -68,9 +68,9 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    try:
+    if hasattr(model, 'seqdist'):
         criterion = model.seqdist.ctc_loss
-    except:
+    else:
         criterion = None
 
     for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):

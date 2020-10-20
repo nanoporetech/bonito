@@ -101,8 +101,9 @@ class CTC_CRF(SequenceDist):
         return seq.tobytes().decode()
 
     def ctc_loss(self, scores, targets, target_lengths):
-        #targets are zero indexed
-        targets, target_lengths = targets.to(scores.device), target_lengths.to(scores.device)
+        # convert from CTC targets (with blank=0) to zero indexed
+        targets = torch.clamp(targets - 1, 0)
+
         T, N, C = scores.shape
         scores = scores.to(torch.float32)
         n = targets.size(1) - self.state_len - 1
