@@ -21,3 +21,9 @@ activation = "swish"
 
 [global_norm]
 state_len = 5
+
+[basecaller]
+beamsize = 5
+batchsize = 64
+chunksize = 4000
+overlap = 500
