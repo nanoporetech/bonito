@@ -18,7 +18,8 @@ class Model(Module):
         super().__init__()
         self.config = config
         self.stride = config['encoder']['stride']
-        self.seqdist = CTC_CRF(config['global_norm']['state_len'], config['labels']['labels'])
+        self.alphabet = config['labels']['labels']
+        self.seqdist = CTC_CRF(config['global_norm']['state_len'], self.alphabet)
 
         insize = config['input']['features']
         winlen = config['encoder']['winlen']
@@ -103,7 +104,7 @@ class CTC_CRF(SequenceDist):
         #targets are zero indexed
         targets, target_lengths = targets.to(scores.device), target_lengths.to(scores.device)
         T, N, C = scores.shape
-        scores = scores.to(torch.float)
+        scores = scores.to(torch.float32)
         n = targets.size(1) - self.state_len - 1
         stay_indices = sum(
             targets[:, i:n + i] * self.n_base ** (self.state_len - i - 1)

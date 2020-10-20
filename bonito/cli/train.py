@@ -10,8 +10,7 @@ from datetime import datetime
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
-from bonito.model import Model
-from bonito.util import load_data, init, default_config, default_data
+from bonito.util import load_data, load_symbol, init, default_config, default_data
 from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
 
 import toml
@@ -53,7 +52,7 @@ def main(args):
     toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     print("[loading model]")
-    model = Model(config)
+    model = load_symbol(config, 'Model')(config)
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
@@ -69,13 +68,21 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
+    try:
+        criterion = model.seqdist.ctc_loss
+    except:
+        criterion = None
+
     for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):
 
         try:
             train_loss, duration = train(
-                model, device, train_loader, optimizer, use_amp=args.amp, lr_scheduler=lr_scheduler
+                model, device, train_loader, optimizer, criterion=criterion,
+                use_amp=args.amp, lr_scheduler=lr_scheduler
             )
-            val_loss, val_mean, val_median = test(model, device, test_loader)
+            val_loss, val_mean, val_median = test(
+                model, device, test_loader, criterion=criterion
+            )
         except KeyboardInterrupt:
             break
 

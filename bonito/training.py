@@ -31,7 +31,7 @@ class ChunkDataSet:
     def __getitem__(self, i):
         return (
             self.chunks[i],
-            self.targets[i].astype(np.int32),
+            self.targets[i].astype(np.int64),
             self.lengths[i].astype(np.int64),
         )
 
@@ -152,17 +152,13 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
 
     with progress_bar:
 
-        for data, target, lengths in train_loader:
+        for data, targets, lengths in train_loader:
 
             optimizer.zero_grad()
 
             chunks += data.shape[0]
-
-            data = data.to(device)
-            target = target.to(device)
-            log_probs = model(data)
-
-            losses = criterion(log_probs, target, lengths)
+            log_probs = model(data.to(device))
+            losses = criterion(log_probs, targets.to(device), lengths.to(device))
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}

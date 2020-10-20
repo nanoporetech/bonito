@@ -36,7 +36,7 @@ __url__ = "https://nanoporetech.box.com/shared/static/"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "dna_r9.4.1.toml")
+default_config = os.path.join(__configs__, "dna_r9.4.1@v2.toml")
 
 
 def init(seed, device):
