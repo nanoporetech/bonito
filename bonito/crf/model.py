@@ -78,6 +78,12 @@ class CTC_CRF(SequenceDist):
         self.alphabet = alphabet
         self.state_len = state_len
         self.n_base = len(alphabet[1:])
+        self.idx = torch.cat([
+            torch.arange(self.n_base**(self.state_len))[:, None],
+            torch.arange(
+                self.n_base**(self.state_len)
+            ).repeat_interleave(self.n_base).reshape(self.n_base, -1).T
+        ], dim=1).to(torch.int32)
 
     def n_score(self):
         return len(self.alphabet) * self.n_base**(self.state_len)
@@ -85,15 +91,15 @@ class CTC_CRF(SequenceDist):
     def logZ(self, scores, S:semiring=Log):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, len(self.alphabet))
-        idx = torch.cat([
-            torch.arange(self.n_base**(self.state_len))[:, None],
-            torch.arange(
-                self.n_base**(self.state_len)
-            ).repeat_interleave(self.n_base).reshape(self.n_base, -1).T
-        ], dim=1)
         alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        return seqdist.sparse.logZ(Ms, idx, alpha_0, beta_T, S)
+        return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
+
+    def backward_scores(self, scores, S: semiring=Log):
+        T, N, _ = scores.shape
+        Ms = scores.reshape(T, N, -1, self.n_base + 1)
+        beta_T = Ms.new_full((N, self.n_base**(5)), S.one)
+        return seqdist.sparse.logZ_bwd_cupy(Ms, self.idx, beta_T, S, K=1)
 
     def viterbi(self, scores):
         traceback = self.posteriors(scores, Max)
