@@ -1,7 +1,7 @@
 # Modified Quartznet5x5 model better suited to dna_r9.4.1
 
 [model]
-package = "bonito.models.ctc"
+package = "bonito.ctc"
 
 [labels]
 labels = [ "N", "A", "C", "G", "T"]

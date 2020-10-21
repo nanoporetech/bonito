@@ -1,5 +1,5 @@
 [model]
-package = "bonito.models.crf"
+package = "bonito.crf"
 
 [labels]
 labels = [ "N", "A", "C", "G", "T" ]
