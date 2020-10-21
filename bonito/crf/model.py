@@ -38,7 +38,7 @@ class Model(Module):
             rnn(size, size, reverse=True),
             Linear(size, self.seqdist.n_score(), bias=True),
             Tanh(),
-            Scale(5.0),
+            Scale(config['encoder']['scale']),
         )
         self.global_norm = GlobalNorm(self.seqdist)
 
