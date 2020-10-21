@@ -14,9 +14,8 @@ from datetime import datetime
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
-from bonito.model import Model
 from bonito.training import ChunkDataSet, train, test
-from bonito.util import load_data, init, default_config
+from bonito.util import load_data, load_symbol, init, default_config
 
 import toml
 import torch
@@ -79,7 +78,7 @@ def main(args):
         config['block'][-1]['kernel'] = [int(trial.suggest_discrete_uniform('c3_kernel', 1, 129, 2))]
         config['block'][-1]['filters'] = trial.suggest_int('c3_filters', 1, 1024)
 
-        model = Model(config)
+        model = load_symbol(config, 'Model')(config)
         num_params = sum(p.numel() for p in model.parameters())
 
         print("[trial %s]" % trial.number)
