@@ -38,9 +38,8 @@ def compute_scores(model, batch):
     with torch.no_grad():
         device = next(model.parameters()).device
         chunks = batch.to(torch.half).to(device)
-        probs = torch.exp(permute(model(chunks), 'TNC', 'NTC'))
-    return probs.cpu().numpy().astype(np.float32)
-
+        probs = permute(model(chunks), 'TNC', 'NTC')
+    return probs.cpu().to(torch.float32)
 
 def decode(scores, decode, beamsize=5):
     """
