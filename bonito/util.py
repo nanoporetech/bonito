@@ -36,7 +36,7 @@ __url__ = "https://nanoporetech.box.com/shared/static/"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "dna_r9.4.1@v2.toml")
+default_config = os.path.join(__configs__, "dna_r9.4.1@v3.toml")
 
 
 def init(seed, device):
@@ -374,7 +374,7 @@ def print_alignment(ref, seq):
     return alignment.score
 
 
-def poa(groups, max_sequences_per_poa=100, gpu_mem_per_batch=0.9):
+def poa(groups, max_poa_sequences=100, gpu_mem_per_batch=0.9):
     """
     Generate consensus for POA groups.
 
@@ -383,7 +383,7 @@ def poa(groups, max_sequences_per_poa=100, gpu_mem_per_batch=0.9):
     """
     free, total = cuda.cuda_get_mem_info(cuda.cuda_get_device())
     gpu_mem_per_batch *= free
-    batch = CudaPoaBatch(max_sequences_per_poa, gpu_mem_per_batch, stream=None, output_type="consensus")
+    batch = CudaPoaBatch(max_poa_sequences, gpu_mem_per_batch, stream=None, output_type="consensus")
     results = []
 
     for i, group in enumerate(groups, start=1):

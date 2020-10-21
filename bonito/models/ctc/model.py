@@ -37,6 +37,7 @@ class Model(Module):
         return self.decoder(encoded)
 
     def decode(self, x, beamsize=5, threshold=1e-3, qscores=False, return_path=False):
+        x = x.exp().cpu().numpy().astype(np.float32)
         if beamsize == 1 or qscores:
             seq, path  = viterbi_search(x, self.alphabet, qscores, self.qscale, self.qbias)
         else:

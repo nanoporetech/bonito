@@ -22,18 +22,22 @@ def main(args):
 
     print("* loading data")
     testdata = ChunkDataSet(
-        *load_data(limit=args.chunks, shuffle=args.shuffle, directory=args.directory, validation=True)
+        *load_data(
+            limit=args.chunks, shuffle=args.shuffle,
+            directory=args.directory, validation=True
+        )
     )
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
-    accuracy_with_coverage_filter = lambda ref, seq: accuracy(ref, seq, min_coverage=args.min_coverage)
+    accuracy_with_cov = lambda ref, seq: accuracy(ref, seq, min_coverage=args.min_coverage)
 
     for w in [int(i) for i in args.weights.split(',')]:
+
+        seqs = []
 
         print("* loading model", w)
         model = load_model(args.model_directory, args.device, weights=w)
 
         print("* calling")
-        predictions = []
         t0 = time.perf_counter()
 
         with torch.no_grad():
@@ -44,13 +48,12 @@ def main(args):
                     data = data.to(args.device)
 
                 log_probs = permute(model(data), 'TNC', 'NTC')
-                predictions.append(log_probs.exp().cpu().numpy().astype(np.float32))
+                seqs.extend([model.decode(p) for p in log_probs])
 
         duration = time.perf_counter() - t0
 
-        references = [decode_ref(target, model.alphabet) for target in dataloader.dataset.targets]
-        sequences = [model.decode(probs, beamsize=args.beamsize) for probs in concat(predictions)]
-        accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))
+        refs = [decode_ref(target, model.alphabet) for target in dataloader.dataset.targets]
+        accuracies = [accuracy_with_cov(ref, seq) if len(seq) else 0. for ref, seq in zip(refs, seqs)]
 
         if args.poa: poas.append(sequences)
 
@@ -84,8 +87,8 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
-    parser.add_argument("--chunks", default=500, type=int)
-    parser.add_argument("--batchsize", default=100, type=int)
+    parser.add_argument("--chunks", default=1000, type=int)
+    parser.add_argument("--batchsize", default=96, type=int)
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
     parser.add_argument("--shuffle", action="store_true", default=True)
