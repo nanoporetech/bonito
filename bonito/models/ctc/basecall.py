@@ -41,6 +41,7 @@ def compute_scores(model, batch):
         probs = permute(model(chunks), 'TNC', 'NTC')
     return probs.cpu().to(torch.float32)
 
+
 def decode(scores, decode, beamsize=5):
     """
     Convert the network scores into a sequence.

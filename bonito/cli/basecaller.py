@@ -24,8 +24,7 @@ def main(args):
 
     sys.stderr.write("> loading model\n")
     model = load_model(
-        args.model_directory, args.device, weights=int(args.weights),
-        chunksize=args.chunksize, use_rt=args.cudart,
+        args.model_directory, args.device, weights=int(args.weights), use_rt=args.cudart
     )
 
     if args.reference:
@@ -56,8 +55,6 @@ def main(args):
         basecalls = basecall(
             model, reads, aligner=aligner,
             beamsize=1 if args.fastq else args.beamsize,
-            chunksize=args.chunksize, overlap=args.overlap,
-            batchsize=args.batchsize
         )
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
@@ -87,9 +84,6 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--beamsize", default=5, type=int)
-    parser.add_argument("--batchsize", default=1, type=int)
-    parser.add_argument("--chunksize", default=0, type=int)
-    parser.add_argument("--overlap", default=0, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--cudart", action="store_true", default=False)
