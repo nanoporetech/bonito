@@ -7,21 +7,24 @@ import re
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from bonito.util import __data__, __models__
 from bonito.cli.convert import main as convert
 from bonito.cli.convert import argparser as cargparser
-from bonito.util import __data__, __models__, __url__
 
 import requests
 from tqdm import tqdm
+
 
 
 class File:
     """
     Small class for downloading models and training assets.
     """
+    __url__ = "https://nanoporetech.box.com/shared/static/"
+
     def __init__(self, path, url_frag):
         self.path = path
-        self.url = os.path.join(__url__, url_frag)
+        self.url = os.path.join(self.__url__, url_frag)
 
     def location(self, filename):
         return os.path.join(self.path, filename)
@@ -69,8 +72,10 @@ class File:
 
 
 models = [
-#   "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
-    "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip", # dna_r9.4.1@v2
+    #"n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
+    #"nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
+    #"1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
+    "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
 ]
 
 training = [
