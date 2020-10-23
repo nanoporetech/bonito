@@ -23,9 +23,7 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
-    model = load_model(
-        args.model_directory, args.device, weights=int(args.weights), use_rt=args.cudart
-    )
+    model = load_model(args.model_directory, args.device, weights=int(args.weights))
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -86,7 +84,6 @@ def argparser():
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
-    parser.add_argument("--cudart", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
