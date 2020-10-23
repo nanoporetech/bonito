@@ -12,8 +12,6 @@ from operator import itemgetter
 from importlib import import_module
 from collections import deque, defaultdict, OrderedDict
 
-from bonito_cuda_runtime import CuModel
-
 import toml
 import torch
 import parasail
@@ -265,7 +263,7 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=0):
     """
     Load a model from disk
     """
@@ -293,9 +291,6 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=Fal
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
-
-    if use_rt:
-        model = CuModel(model.config, chunksize, new_state_dict)
 
     if half is None:
         half = half_supported()
