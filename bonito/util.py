@@ -75,6 +75,8 @@ def concat(xs, dim=0):
         return [x for l in xs for x in l]
     elif isinstance(xs[0], str):
         return ''.join(xs)
+    elif isinstance(xs[0], dict):
+        return {k: concat([x[k] for x in xs], dim) for k in xs[0].keys()}
     else:
         raise TypeError
 
@@ -83,7 +85,9 @@ def select_range(x, start, end, dim=0):
     """
     Type agnostic range select.
     """
-    if dim == 0: return x[start:end]
+    if isinstance(x, dict):
+        return {k: select_range(v, start, end, dim) for (k, v) in x.items()}
+    if dim == 0 or isinstance(x, list): return x[start:end]
     return x[(*(slice(None),)*dim, slice(start, end))]
 
 

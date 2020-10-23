@@ -6,6 +6,7 @@ optuna==1.1.0
 parasail==1.2
 seqdist==0.0.1
 requests==2.22.0
+crf-beam==0.0.1a0
 ont-fast5-api==3.1.6
 fast-ctc-decode==0.2.5
 #bonito-cuda-runtime==0.0.2a2
