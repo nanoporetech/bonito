@@ -2,15 +2,11 @@
 Bonito CRF basecall
 """
 
-import sys
 import torch
 import numpy as np
-from tqdm import tqdm
 from kbeam import beamsearch
 from itertools import groupby
-from time import perf_counter
 from functools import partial
-from datetime import timedelta
 from operator import itemgetter
 
 from bonito.io import Writer
