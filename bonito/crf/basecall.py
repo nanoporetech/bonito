@@ -75,7 +75,7 @@ def decode_int8(x, seq_dist, scale=127/5, beamsize=40, beamcut=100.0):
     }
 
 
-def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=128):
+def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=64):
     """
     Basecalls at set of reads.
     """
