@@ -13,7 +13,7 @@ from bonito.io import Writer
 from bonito.fast5 import get_reads
 from bonito.aligner import Aligner, align_map
 from bonito.multiprocessing import thread_map
-from bonito.util import concat, chunk, batchify, unbatchify
+from bonito.util import concat, chunk, batchify, unbatchify, half_supported
 
 
 def stitch(chunks, start, end):
@@ -33,12 +33,13 @@ def compute_scores(model, batch):
     """
     with torch.no_grad():
         device = next(model.parameters()).device
-        scores = model.encoder(batch.to(device).to(torch.float16))
+        dtype = torch.float16 if half_supported() else torch.float32
+        scores = model.encoder(batch.to(dtype).to(device))
         betas = model.seqdist.backward_scores(scores.to(torch.float32))
         betas -= (betas.max(2, keepdim=True)[0] - 5.0)
     return {
-        'scores': scores.to(torch.float16).transpose(0, 1),
-        'betas': betas.to(torch.float16).transpose(0, 1),
+        'scores': scores.transpose(0, 1),
+        'betas': betas.transpose(0, 1),
     }
 
 
