@@ -72,20 +72,23 @@ def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
 
 def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=64):
     """
-    Basecalls at set of reads.
+    Basecalls a set of reads.
     """
-    T = chunksize // model.stride
-    C = model.seqdist.n_score()
-    D = C // len(model.alphabet)
-
-    pinned_scores = torch.empty((batchsize, T, C), pin_memory=True, dtype=torch.int8)
-    pinned_betas  = torch.empty((batchsize, T + 1, D), pin_memory=True, dtype=torch.int8)
-
     _decode = partial(
         decode_int8, seqdist=model.seqdist, beamsize=beamsize
     )
     _stitch = partial(
-        stitch, start=overlap // 2 // model.stride, end=(chunksize - overlap // 2) // model.stride,
+        stitch,
+        start=overlap // 2 // model.stride,
+        end=(chunksize - overlap // 2) // model.stride,
+    )
+    pinned_scores = torch.empty(
+        (batchsize, chunksize // model.stride, model.seqdist.n_score()),
+        pin_memory=True, dtype=torch.int8
+    )
+    pinned_betas = torch.empty(
+        (batchsize, chunksize // model.stride + 1, model.seqdist.n_score() // len(model.alphabet)),
+        pin_memory=True, dtype=torch.int8
     )
     chunks = (
         ((read, chunk(torch.from_numpy(read.signal), chunksize, overlap, pad_start=True)) for read in reads)

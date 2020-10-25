@@ -14,7 +14,7 @@ from bonito.util import chunk, stitch, batchify, unbatchify, permute, concat
 
 def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1):
     """
-    Basecalls at set of reads.
+    Basecalls a set of reads.
     """
     chunks = (
         (read, chunk(torch.tensor(read.signal), chunksize, overlap)) for read in reads
