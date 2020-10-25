@@ -22,6 +22,7 @@ def stitch(chunks, start, end):
     """
     if isinstance(chunks, dict):
         return {k: stitch(v, start, end) for k, v in chunks.items()}
+
     if chunks.shape[0] == 1: return chunks.squeeze(0)
     return concat([chunks[0, :end], *chunks[1:-1, start:end], chunks[-1, start:]])
 
@@ -83,7 +84,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
         decode_int8, seqdist=model.seqdist, beamsize=beamsize
     )
     _stitch = partial(
-        stitch, start=overlap // 2 //model.stride, end=(chunksize - overlap // 2) // model.stride
+        stitch, start=overlap // 2 // model.stride, end=(chunksize - overlap // 2) // model.stride,
     )
     chunks = (
         ((read, chunk(torch.from_numpy(read.signal), chunksize, overlap, pad_start=True)) for read in reads)
@@ -106,39 +107,3 @@ def ctc_data(model, reads, aligner, chunksize=4000, overlap=500, min_accuracy=0.
     Convert reads into a format suitable for ctc training.
     """
     raise NotImplemented
-
-
-if __name__ == '__main__':
-
-    import sys
-    from tqdm import tqdm
-    from itertools import islice
-    from time import perf_counter
-    from datetime import timedelta
-    from bonito.fast5 import get_reads
-    from bonito.util import load_model
-
-    sys.stderr.write("> loading model\n")
-    model = load_model('dna_r9.4.1', 'cuda', half=True)
-    reads = islice(get_reads('/data/foxhound/validation/small/', n_proc=8), 1)
-
-    basecalls = tqdm(
-        basecall(model, reads), desc="> calling", unit=" reads", leave=False
-    )
-
-    log = []
-
-    t0 = perf_counter()
-    try:
-        for read, scores in basecalls:
-            log.append((read.read_id, len(read.signal)))
-    except:
-        list(basecalls)
-
-    duration = perf_counter() - t0
-    num_samples = sum(num_samples for read_id, num_samples in log)
-
-    sys.stderr.write("> completed reads: %s\n" % len(log))
-    sys.stderr.write("> duration: %s\n" % timedelta(seconds=np.round(duration)))
-    sys.stderr.write("> samples per second %.1E\n" % (num_samples / duration))
-    sys.stderr.write("> done\n")
