@@ -47,6 +47,9 @@ class Read:
         else:
             self.signal = norm_by_noisiest_section(scaled)
 
+    def __repr__(self):
+        return "Read('%s')" % self.read_id
+
 
 def med_mad(x, factor=1.4826):
     """
