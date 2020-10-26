@@ -43,65 +43,67 @@ def compute_scores(model, batch):
     }
 
 
-def transfer_int8(x, pinned_scores, pinned_betas, scale=127/5):
+def quantise_int8(x, scale=127/5):
+    """
+    Quantise scores to int8.
+    """
     scores = x['scores']
     scores *= scale
     scores = torch.round(scores).to(torch.int8).detach()
     betas = x['betas']
     betas *= scale
     betas = torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach()
-    if betas.shape[0] != pinned_betas.shape[0]:
-        pinned_betas.resize_as_(betas)
-        pinned_scores.resize_as_(scores)
-    pinned_betas.copy_(betas)
-    pinned_scores.copy_(scores)
-    return {'scores': pinned_scores.numpy(), 'betas': pinned_betas.numpy()}
+    return {'scores': scores, 'betas': betas}
+
+
+def transfer(x):
+    """
+    Device to host transfer using pinned memory.
+    """
+    buf = torch.empty(v.shape, pin_memory=True, dtype=v.dtype)
+    return {k: buf.copy_(v).numpy() for k, v in x.items()}
 
 
 def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
+    """
+    Beamsearch decode.
+    """
     path, _ = beamsearch(
-        scores['scores'], scale, seqdist.n_base, 40,
+        scores['scores'], scale, seqdist.n_base, beamsize,
         guide=scores['betas'], beam_cut=beamcut
     )
-    return {
-        'sequence': seqdist.path_to_str(path % 4 + 1),
-        'qstring': '*',
-        'mean_qscore': 0.0
-    }
+    return seqdist.path_to_str(path % 4 + 1)
 
 
-def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=64):
+def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, split_read_length=400000):
     """
     Basecalls a set of reads.
     """
-    _decode = partial(
-        decode_int8, seqdist=model.seqdist, beamsize=beamsize
-    )
     _stitch = partial(
         stitch,
         start=overlap // 2 // model.stride,
         end=(chunksize - overlap // 2) // model.stride,
     )
-    pinned_scores = torch.empty(
-        (batchsize, chunksize // model.stride, model.seqdist.n_score()),
-        pin_memory=True, dtype=torch.int8
-    )
-    pinned_betas = torch.empty(
-        (batchsize, chunksize // model.stride + 1, model.seqdist.n_score() // len(model.alphabet)),
-        pin_memory=True, dtype=torch.int8
+    _decode = partial(decode_int8, seqdist=model.seqdist)
+    reads = (
+        ((read, i), x) for read in reads
+        for (i, x) in enumerate(torch.split(torch.from_numpy(read.signal), split_read_length))
     )
     chunks = (
-        ((read, chunk(torch.from_numpy(read.signal), chunksize, overlap, pad_start=True)) for read in reads)
+        ((read, chunk(signal, chunksize, overlap, pad_start=True)) for (read, signal) in reads)
     )
     batches = (
-        (read, compute_scores(model, batch))
+        (read, quantise_int8(compute_scores(model, batch)))
         for read, batch in batchify(chunks, batchsize=batchsize)
     )
-    scores = (
-        (read, transfer_int8(batch, pinned_scores, pinned_betas)) for read, batch in batches
+    stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
+    transferred = thread_map(transfer, stitched, n_thread=8, preserve_order=True)
+    basecalls = thread_map(_decode, transferred, n_thread=8, preserve_order=True)
+
+    basecalls = (
+        (read, {'sequence': ''.join([seq for (k, seq) in parts]), 'qstring': '*', 'mean_qscore': 0.0})
+        for read, parts in groupby(basecalls, lambda x: x[0][0])
     )
-    scores = thread_map(_stitch, unbatchify(scores), n_thread=4)
-    basecalls = thread_map(_decode, scores, n_thread=4)
     if aligner: return align_map(aligner, basecalls)
     return basecalls
 
