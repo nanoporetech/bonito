@@ -55,13 +55,13 @@ def transfer_int8(x, pinned_scores, pinned_betas, scale=127/5):
         pinned_scores.resize_as_(scores)
     pinned_betas.copy_(betas)
     pinned_scores.copy_(scores)
-    return {'scores': pinned_scores, 'betas': pinned_betas}
+    return {'scores': pinned_scores.numpy(), 'betas': pinned_betas.numpy()}
 
 
 def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
     path, _ = beamsearch(
-        scores['scores'].numpy(), scale, seqdist.n_base, 40,
-        guide=scores['betas'].numpy(), beam_cut=beamcut
+        scores['scores'], scale, seqdist.n_base, 40,
+        guide=scores['betas'], beam_cut=beamcut
     )
     return {
         'sequence': seqdist.path_to_str(path % 4 + 1),
