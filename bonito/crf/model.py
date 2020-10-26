@@ -98,7 +98,7 @@ class CTC_CRF(SequenceDist):
     def backward_scores(self, scores, S: semiring=Log):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, self.n_base + 1)
-        beta_T = Ms.new_full((N, self.n_base**(5)), S.one)
+        beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.logZ_bwd_cupy(Ms, self.idx, beta_T, S, K=1)
 
     def viterbi(self, scores):
@@ -117,7 +117,7 @@ class CTC_CRF(SequenceDist):
 
         T, N, C = scores.shape
         scores = scores.to(torch.float32)
-        n = targets.size(1) - self.state_len - 1
+        n = targets.size(1) - (self.state_len - 1)
         stay_indices = sum(
             targets[:, i:n + i] * self.n_base ** (self.state_len - i - 1)
             for i in range(self.state_len)
