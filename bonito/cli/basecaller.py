@@ -51,8 +51,7 @@ def main(args):
         )
     else:
         basecalls = basecall(
-            model, reads, aligner=aligner,
-            beamsize=1 if args.fastq else args.beamsize,
+            model, reads, aligner=aligner, qscores=args.fastq
         )
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
@@ -81,7 +80,6 @@ def argparser():
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
-    parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)

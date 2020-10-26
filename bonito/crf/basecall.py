@@ -60,8 +60,10 @@ def transfer(x):
     """
     Device to host transfer using pinned memory.
     """
-    buf = torch.empty(v.shape, pin_memory=True, dtype=v.dtype)
-    return {k: buf.copy_(v).numpy() for k, v in x.items()}
+    return {
+        k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v).numpy()
+        for k, v in x.items()
+    }
 
 
 def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
@@ -75,16 +77,17 @@ def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
     return seqdist.path_to_str(path % 4 + 1)
 
 
-def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, split_read_length=400000):
+def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, qscores=False):
     """
     Basecalls a set of reads.
     """
+    split_read_length=400000
     _stitch = partial(
         stitch,
         start=overlap // 2 // model.stride,
         end=(chunksize - overlap // 2) // model.stride,
     )
-    _decode = partial(decode_int8, seqdist=model.seqdist)
+    _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
     reads = (
         ((read, i), x) for read in reads
         for (i, x) in enumerate(torch.split(torch.from_numpy(read.signal), split_read_length))
