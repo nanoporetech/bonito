@@ -74,7 +74,10 @@ def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
         scores['scores'], scale, seqdist.n_base, beamsize,
         guide=scores['betas'], beam_cut=beamcut
     )
-    return seqdist.path_to_str(path % 4 + 1)
+    try:
+        return seqdist.path_to_str(path % 4 + 1)
+    except IndexError:
+        return ""
 
 
 def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, qscores=False):
