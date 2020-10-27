@@ -94,9 +94,10 @@ def summary_file():
     """
     Return the filename to use for the summary tsv.
     """
-    if sys.stdout.isatty():
+    stdout = realpath('/dev/fd/1')
+    if sys.stdout.isatty() or stdout.startswith('/proc'):
         return 'summary.tsv'
-    return '%s_summary.tsv' % splitext(realpath('/dev/fd/1'))[0]
+    return '%s_summary.tsv' % splitext(stdout)[0]
 
 
 def write_summary_header(fd=sys.stdout, alignment=False, sep='\t'):
