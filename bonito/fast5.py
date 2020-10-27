@@ -105,10 +105,11 @@ def get_read_ids(filename, read_ids=None, skip=False):
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
 
 
-def get_raw_data_for_read(filename, read_id):
+def get_raw_data_for_read(info):
     """
-    Get the raw signal from the fast5 file for a given read_id
+    Get the raw signal from the fast5 file for a given filename, read_id pair
     """
+    filename, read_id = info
     with get_fast5_file(filename, 'r') as f5_fh:
         return Read(f5_fh.get_read(read_id), filename)
 
@@ -119,8 +120,8 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=4e6, n_proc=1)
     """
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
     with Pool(n_proc) as pool:
-        for job in chain(pool.imap(get_filtered_reads, glob("%s/*fast5" % directory))):
-            for read in pool.starmap(get_raw_data_for_read, job):
+        for job in chain(pool.imap(get_filtered_reads, glob("%s/*.fast5" % directory))):
+            for read in pool.imap(get_raw_data_for_read, job):
                 if len(read.signal) > max_read_size:
                     sys.stderr.write(
                         "> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal))
