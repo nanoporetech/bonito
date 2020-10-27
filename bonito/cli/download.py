@@ -4,6 +4,7 @@ Bonito Download
 
 import os
 import re
+from shutil import rmtree
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
@@ -22,8 +23,9 @@ class File:
     """
     __url__ = "https://nanoporetech.box.com/shared/static/"
 
-    def __init__(self, path, url_frag):
+    def __init__(self, path, url_frag, force):
         self.path = path
+        self.force = force
         self.url = os.path.join(self.__url__, url_frag)
 
     def location(self, filename):
@@ -42,9 +44,12 @@ class File:
         fname = re.findall('filename="([^"]+)', req.headers['content-disposition'])[0]
 
         # skip download if local file is found
-        if self.exists(fname.strip('.zip')):
+        if self.exists(fname.strip('.zip')) and not self.force:
             print("[skipping %s]" % fname)
             return
+
+        if self.exists(fname.strip('.zip')) and self.force:
+            rmtree(self.location(fname.strip('.zip')))
 
         # download the file
         with tqdm(total=total, unit='iB', ascii=True, ncols=100, unit_scale=True, leave=False) as t:
@@ -72,9 +77,9 @@ class File:
 
 
 models = [
-    #"n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
-    #"nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
-    #"1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
+    "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
+    "nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
+    "1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
     "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
 ]
 
@@ -89,13 +94,13 @@ def main(args):
     """
     if args.models or args.all:
         print("[downloading models]")
-        for model in models:
-            File(__models__, model).download()
+        for model in models[-1 if args.latest else 0:]:
+            File(__models__, model, args.force).download()
 
     if args.training or args.all:
         print("[downloading training data]")
         for train in training:
-            File(__models__, train).download()
+            File(__models__, train, args.force).download()
 
 
 def argparser():
@@ -107,4 +112,6 @@ def argparser():
     group.add_argument('--all', action='store_true')
     group.add_argument('--models', action='store_true')
     group.add_argument('--training', action='store_true')
+    parser.add_argument('-f', '--force', action='store_true')
+    parser.add_argument('--latest', action='store_true')
     return parser
