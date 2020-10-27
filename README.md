@@ -15,16 +15,6 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
  
-## Pair Decoding
-
-Pair decoding takes a template and complement read to produce higher quaility calls.
-
-```bash
-$ bonito pair pairs.csv /data/reads > basecalls.fasta
-```
-
-The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
-
 ## Training your own model
 
 To train a model using your own reads, first basecall the reads with the additional `--save-ctc` flag and use the output directory as the input directory for training.
@@ -54,6 +44,16 @@ To evaluate the pretrained model run `bonito evaluate dna_r9.4.1`.
 
 For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
 
+## Pair Decoding
+
+Pair decoding takes a template and complement read to produce higher quaility calls.
+
+```bash
+$ bonito pair pairs.csv /data/reads > basecalls.fasta
+```
+
+The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
+
 ## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
@@ -76,23 +76,6 @@ $ source venv3/bin/activate
 (venv3) $ python setup.py develop
 (venv3) $ bonito download --all
 ```
-
-## Medaka
-
-The Medaka can be downloaded from [here](https://nanoporetech.box.com/shared/static/u5gncwjbtg2k3dkw26nmvdvck65ab3xh.hdf5).
-
-It has been trained on Zymo: *E. faecalis, P. aeruginosa, S. enterica1, S.aureus and E.coli (with L. monocytogenes and B. subtilis held out)*.
-
-| Coverage | B. subtilis | E. coli | E. faecalis | L. monocytogenes | S. aureus | S. enterica |
-| -------- |:-----------:|:-------:|:-----------:|:----------------:|:---------:|:-----------:|
-|       25 |       36.92 |   39.51 |       36.68 |            37.33 |     36.87 |       37.70 |
-|       50 |       41.55 |   43.98 |       40.97 |            42.22 |     42.22 |       42.22 |
-|       75 |       43.01 |   45.23 |       42.22 |            43.01 |     43.01 |       43.98 |
-|      100 |       43.01 |   45.23 |       43.98 |            43.47 |     44.56 |       45.23 |
-|      125 |       45.23 |   46.99 |       43.98 |            45.23 |     45.23 |       45.23 |
-|      150 |       45.23 |   46.99 |       45.23 |            45.23 |     45.23 |       46.99 |
-|      175 |       46.12 |   46.99 |       45.23 |            46.99 |     46.99 |       46.99 |
-|      200 |       46.99 |   46.99 |       45.23 |            45.23 |     46.99 |       46.99 |
 
 ### References
 
