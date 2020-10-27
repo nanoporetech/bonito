@@ -2,7 +2,7 @@
 Bonito nn modules.
 """
 
-
+import torch
 from torch import sigmoid
 from torch.jit import script
 from torch.autograd import Function
@@ -77,6 +77,12 @@ activations = {
 }
 
 
+def truncated_normal(size, dtype=torch.float32, device=None, num_resample=5):
+    x = torch.empty(size + (num_resample,), dtype=torch.float32, device=device).normal_()
+    i = ((x < 2) & (x > -2)).max(-1, keepdim=True)[1]
+    return torch.clamp_(x.gather(-1, i).squeeze(-1), -2, 2)
+
+
 class RNNWrapper(Module):
     def __init__(
             self, rnn_type, *args, reverse=False, orthogonal_weight_init=True, disable_state_bias=True, bidirectional=False, **kwargs
@@ -86,14 +92,21 @@ class RNNWrapper(Module):
             raise Exception("'reverse' and 'bidirectional' should not both be set to True")
         self.reverse = reverse
         self.rnn = rnn_type(*args, bidirectional=bidirectional, **kwargs)
-        if disable_state_bias: self.disable_state_bias()
         self.init_orthogonal(orthogonal_weight_init)
+        self.init_biases()
+        if disable_state_bias: self.disable_state_bias()
 
     def forward(self, x):
         if self.reverse: x = x.flip(0)
         y, h = self.rnn(x)
         if self.reverse: y = y.flip(0)
         return y
+
+    def init_biases(self, types=('bias_ih',)):
+        for name, param in self.rnn.named_parameters():
+            if any(k in name for k in types):
+                with torch.no_grad():
+                    param.set_(0.5*truncated_normal(param.shape, dtype=param.dtype, device=param.device))
 
     def init_orthogonal(self, types=True):
         if not types: return
@@ -102,6 +115,7 @@ class RNNWrapper(Module):
             if any(k in name for k in types):
                 for i in range(0, x.size(0), self.rnn.hidden_size):
                     orthogonal_(x[i:i+self.rnn.hidden_size])
+
 
     def disable_state_bias(self):
         for name, x in self.rnn.named_parameters():
