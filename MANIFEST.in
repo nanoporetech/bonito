@@ -1,7 +1,6 @@
 include README.md
 include LICENCE.txt
 include requirements.txt
-include bonito/models/configs/quartznet5x5.toml
-include bonito/models/configs/dna_r9.4.1.toml
-graft bonito/data
-graft bonito/models/dna_r9.4.1
+include bonito/models/configs/dna_r9.4.1@v[123].toml
+include bonito/data/README.md
+include bonito/models/README.md

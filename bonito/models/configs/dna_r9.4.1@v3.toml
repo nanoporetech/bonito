@@ -1,0 +1,25 @@
+# Bonito CTC-CRF RNN Model
+
+[model]
+package = "bonito.crf"
+
+[labels]
+labels = [ "N", "A", "C", "G", "T" ]
+
+[input]
+features = 1
+
+[qscore]
+bias = 0.0
+scale = 1.0
+
+[encoder]
+stride = 5
+winlen = 19
+scale = 5.0
+features = 768
+rnn_type = "lstm"
+activation = "swish"
+
+[global_norm]
+state_len = 5

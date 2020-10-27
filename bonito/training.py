@@ -6,7 +6,6 @@ import os
 import re
 from glob import glob
 from functools import partial
-from itertools import starmap
 from time import perf_counter
 
 from bonito.util import accuracy, decode_ref, permute, concat
@@ -31,7 +30,7 @@ class ChunkDataSet:
     def __getitem__(self, i):
         return (
             self.chunks[i],
-            self.targets[i].astype(np.int32),
+            self.targets[i].astype(np.int64),
             self.lengths[i].astype(np.int64),
         )
 
@@ -152,17 +151,13 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
 
     with progress_bar:
 
-        for data, target, lengths in train_loader:
+        for data, targets, lengths in train_loader:
 
             optimizer.zero_grad()
 
             chunks += data.shape[0]
-
-            data = data.to(device)
-            target = target.to(device)
-            log_probs = model(data)
-
-            losses = criterion(log_probs, target, lengths)
+            log_probs = model(data.to(device))
+            losses = criterion(log_probs, targets.to(device), lengths.to(device))
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}
@@ -198,27 +193,24 @@ def test(model, device, test_loader, min_coverage=0.5, criterion=None):
         weights = torch.cat([torch.tensor([0.4]), (0.1 / (C - 1)) * torch.ones(C - 1)]).to(device)
         criterion = partial(ctc_label_smoothing_loss, weights=weights)
 
+    seqs = []
     model.eval()
     test_loss = 0
-    predictions = []
-    accuracy_with_coverage_filter = lambda ref, seq: accuracy(ref, seq, min_coverage=min_coverage)
+    accuracy_with_cov = lambda ref, seq: accuracy(ref, seq, min_coverage=min_coverage)
 
     with torch.no_grad():
         for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
-            data, target = data.to(device), target.to(device)
-            log_probs = model(data)
-            test_loss += criterion(log_probs, target, lengths)['ctc_loss']
+            log_probs = model(data.to(device))
+            loss = criterion(log_probs, target.to(device), lengths.to(device))
+            test_loss += loss['ctc_loss'] if isinstance(loss, dict) else loss
+            seqs.extend([model.decode(p) for p in permute(log_probs, 'TNC', 'NTC')])
 
-            probs = permute(log_probs.exp(), 'TNC', 'NTC')
-            predictions.append(probs.cpu().numpy().astype(np.float32))
-
-    references = [decode_ref(target, model.alphabet) for target in test_loader.dataset.targets]
-    sequences = [model.decode(probs) for probs in concat(predictions)]
-
-    if all(map(len, sequences)):
-        accuracies = list(starmap(accuracy_with_coverage_filter, zip(references, sequences)))
-    else:
-        accuracies = [0]
+    refs = [
+        decode_ref(target, model.alphabet) for target in test_loader.dataset.targets
+    ]
+    accuracies = [
+        accuracy_with_cov(ref, seq) if len(seq) else 0. for ref, seq in zip(refs, seqs)
+    ]
 
     mean = np.mean(accuracies)
     median = np.median(accuracies)

@@ -13,8 +13,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.fast5 import get_reads
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
-from bonito.basecall import basecall, ctc_data
-from bonito.util import column_to_set, load_model
+from bonito.util import column_to_set, load_symbol, load_model
 
 
 def main(args):
@@ -24,10 +23,7 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
-    model = load_model(
-        args.model_directory, args.device, weights=int(args.weights),
-        chunksize=args.chunksize, use_rt=args.cudart,
-    )
+    model = load_model(args.model_directory, args.device, weights=int(args.weights))
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -42,6 +38,9 @@ def main(args):
         args.reads_directory, n_proc=8, skip=args.skip, read_ids=column_to_set(args.read_ids)
     )
 
+    ctc_data = load_symbol(args.model_directory, "ctc_data")
+    basecall = load_symbol(args.model_directory, "basecall")
+
     if args.save_ctc:
         data = ctc_data(
             model, reads, aligner,
@@ -52,10 +51,7 @@ def main(args):
         )
     else:
         basecalls = basecall(
-            model, reads, aligner=aligner,
-            beamsize=1 if args.fastq else args.beamsize,
-            chunksize=args.chunksize, overlap=args.overlap,
-            batchsize=args.batchsize
+            model, reads, aligner=aligner, qscores=args.fastq
         )
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
@@ -84,13 +80,8 @@ def argparser():
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
-    parser.add_argument("--beamsize", default=5, type=int)
-    parser.add_argument("--batchsize", default=1, type=int)
-    parser.add_argument("--chunksize", default=0, type=int)
-    parser.add_argument("--overlap", default=0, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
-    parser.add_argument("--cudart", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)

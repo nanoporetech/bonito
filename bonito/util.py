@@ -9,10 +9,8 @@ import random
 from glob import glob
 from itertools import groupby
 from operator import itemgetter
+from importlib import import_module
 from collections import deque, defaultdict, OrderedDict
-
-from bonito.model import Model
-from bonito_cuda_runtime import CuModel
 
 import toml
 import torch
@@ -30,12 +28,11 @@ except ImportError:
 __dir__ = os.path.dirname(os.path.realpath(__file__))
 __data__ = os.path.join(__dir__, "data")
 __models__ = os.path.join(__dir__, "models")
-__configs__ = os.path.join(__models__, "configs")
-__url__ = "https://nanoporetech.box.com/shared/static/"
+__configs__ = os.path.join(__dir__, "models/configs")
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "dna_r9.4.1.toml")
+default_config = os.path.join(__configs__, "dna_r9.4.1@v3.toml")
 
 
 def init(seed, device):
@@ -76,6 +73,8 @@ def concat(xs, dim=0):
         return [x for l in xs for x in l]
     elif isinstance(xs[0], str):
         return ''.join(xs)
+    elif isinstance(xs[0], dict):
+        return {k: concat([x[k] for x in xs], dim) for k in xs[0].keys()}
     else:
         raise TypeError
 
@@ -84,7 +83,9 @@ def select_range(x, start, end, dim=0):
     """
     Type agnostic range select.
     """
-    if dim == 0: return x[start:end]
+    if isinstance(x, dict):
+        return {k: select_range(v, start, end, dim) for (k, v) in x.items()}
+    if dim == 0 or isinstance(x, list): return x[start:end]
     return x[(*(slice(None),)*dim, slice(start, end))]
 
 
@@ -236,7 +237,33 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     return chunks, targets, lengths
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=False):
+def load_symbol(config, symbol):
+    """
+    Dynamic load a symbol from module specified in model config.
+    """
+    if not isinstance(config, dict):
+        if not os.path.isdir(config) and os.path.isdir(os.path.join(__models__, config)):
+            dirname = os.path.join(__models__, config)
+        else:
+            dirname = config
+        config = toml.load(os.path.join(dirname, 'config.toml'))
+    imported = import_module(config['model']['package'])
+    return getattr(imported, symbol)
+
+
+def match_names(state_dict, model):
+    keys_and_shapes = lambda state_dict: zip(*[
+        (k, s) for s, i, k in sorted([(v.shape, i, k)
+        for i, (k, v) in enumerate(state_dict.items())])
+    ])
+    k1, s1 = keys_and_shapes(state_dict)
+    k2, s2 = keys_and_shapes(model.state_dict())
+    assert s1 == s2
+    remap = dict(zip(k1, k2))
+    return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
+
+
+def load_model(dirname, device, weights=None, half=None, chunksize=0):
     """
     Load a model from disk
     """
@@ -250,20 +277,20 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, use_rt=Fal
         weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
     device = torch.device(device)
-    config = os.path.join(dirname, 'config.toml')
+    config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
-    model = Model(toml.load(config))
+
+    Model = load_symbol(config, "Model")
+    model = Model(config)
 
     state_dict = torch.load(weights, map_location=device)
+    state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k.replace('module.', '')
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
-
-    if use_rt:
-        model = CuModel(model.config, chunksize, new_state_dict)
 
     if half is None:
         half = half_supported()
@@ -344,7 +371,7 @@ def print_alignment(ref, seq):
     return alignment.score
 
 
-def poa(groups, max_sequences_per_poa=100, gpu_mem_per_batch=0.9):
+def poa(groups, max_poa_sequences=100, gpu_mem_per_batch=0.9):
     """
     Generate consensus for POA groups.
 
@@ -353,7 +380,7 @@ def poa(groups, max_sequences_per_poa=100, gpu_mem_per_batch=0.9):
     """
     free, total = cuda.cuda_get_mem_info(cuda.cuda_get_device())
     gpu_mem_per_batch *= free
-    batch = CudaPoaBatch(max_sequences_per_poa, gpu_mem_per_batch, stream=None, output_type="consensus")
+    batch = CudaPoaBatch(max_poa_sequences, gpu_mem_per_batch, stream=None, output_type="consensus")
     results = []
 
     for i, group in enumerate(groups, start=1):

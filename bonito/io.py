@@ -85,6 +85,7 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
             sequence if mapping.strand == +1 else revcomp(sequence),
             qstring,
             'NM:i:%s' % mapping.NM,
+            'MD:Z:%s' % mapping.MD,
         ])))
     fd.flush()
 
@@ -93,9 +94,10 @@ def summary_file():
     """
     Return the filename to use for the summary tsv.
     """
-    if sys.stdout.isatty():
+    stdout = realpath('/dev/fd/1')
+    if sys.stdout.isatty() or stdout.startswith('/proc'):
         return 'summary.tsv'
-    return '%s_summary.tsv' % splitext(realpath('/dev/fd/1'))[0]
+    return '%s_summary.tsv' % splitext(stdout)[0]
 
 
 def write_summary_header(fd=sys.stdout, alignment=False, sep='\t'):
