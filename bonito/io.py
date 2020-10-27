@@ -85,6 +85,7 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
             sequence if mapping.strand == +1 else revcomp(sequence),
             qstring,
             'NM:i:%s' % mapping.NM,
+            'MD:Z:%s' % mapping.MD,
         ])))
     fd.flush()
 
