@@ -15,6 +15,19 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
  
+## Developer Quickstart
+
+```bash
+$ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
+$ cd bonito
+$ python3 -m venv venv3
+$ source venv3/bin/activate
+(venv3) $ pip install --upgrade pip
+(venv3) $ pip install -r requirements.txt
+(venv3) $ python setup.py develop
+(venv3) $ bonito download --models --latest
+```
+
 ## Training your own model
 
 To train a model using your own reads, first basecall the reads with the additional `--save-ctc` flag and use the output directory as the input directory for training.
@@ -63,19 +76,6 @@ The `pairs.csv` file is expected to contain pairs of read ids per line *(seperat
  - `bonito evaluate` - evaluate a model performance.
  - `bonito download` - download pretrained models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
-
-## Developer Quickstart
-
-```bash
-$ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
-$ cd bonito
-$ python3 -m venv venv3
-$ source venv3/bin/activate
-(venv3) $ pip install --upgrade pip
-(venv3) $ pip install -r requirements.txt
-(venv3) $ python setup.py develop
-(venv3) $ bonito download --all
-```
 
 ### References
 
