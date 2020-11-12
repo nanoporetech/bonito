@@ -81,13 +81,12 @@ def ctc_compute_scores(read, model, chunksize=0, overlap=0):
         dtype = np.float16 if half_supported() else np.float32
         raw_data = torch.tensor(read.signal.astype(dtype))
         chunks = chunk(raw_data, chunksize, overlap)
-        posteriors_ = model(chunks.to(device)).cpu().numpy()
-        posteriors = stitch(posteriors_, overlap, model.stride)[:raw_data.shape[0] // model.stride]
-        scores = np.exp(posteriors.astype(np.float32))
+        logprobs = permute(model(chunks.to(device)), 'TNC', 'NTC').cpu().to(torch.float32)
+        scores = stitch(logprobs, overlap, model.stride)[:raw_data.shape[0] // model.stride]
 
     if len(raw_data) > chunksize:
         ctc_chunks = chunks.numpy().squeeze()
-        ctc_scores = np.exp(posteriors_.astype(np.float32))
+        ctc_scores = logprobs
     else:
         ctc_chunks = None
         ctc_scores = None

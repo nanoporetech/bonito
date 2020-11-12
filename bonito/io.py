@@ -293,15 +293,13 @@ class CTCWriter(Thread):
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))
         np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1))
-        np.save(os.path.join(output_directory, "chunk_lengths.npy"), training.chunk_lengths)
         np.save(os.path.join(output_directory, "references.npy"), training.targets)
-        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.target_lengths)
+        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths)
 
         sys.stderr.write("> written ctc training data\n")
         sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, training.chunks.squeeze(1).shape)))
-        sys.stderr.write("  - chunk_lengths.npy with shape (%s)\n" % ','.join(map(str, training.chunk_lengths.shape)))
         sys.stderr.write("  - references.npy with shape (%s)\n" % ','.join(map(str, training.targets.shape)))
-        sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, training.target_lengths.shape)))
+        sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, training.lengths.shape)))
 
     def stop(self):
         self.join()

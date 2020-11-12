@@ -170,7 +170,7 @@ def stitch(predictions, overlap, stride=1):
     for i in range(1, predictions.shape[0] - 1):
         stitched.append(predictions[i][overlap:-overlap])
     stitched.append(predictions[-1][overlap:])
-    return np.concatenate(stitched)
+    return concat(stitched)
 
 
 def batchify(items, batchsize, dim=0):
