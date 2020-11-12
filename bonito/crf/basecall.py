@@ -107,9 +107,13 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     basecalls = thread_map(_decode, transferred, n_thread=8, preserve_order=True)
 
     basecalls = (
-        (read, {'sequence': ''.join([seq for (k, seq) in parts]), 'qstring': '*', 'mean_qscore': 0.0})
-        for read, parts in groupby(basecalls, lambda x: x[0][0])
+        (read, ''.join(seq for k, seq in parts)) for read, parts in groupby(basecalls, lambda x: x[0][0])
     )
+    basecalls = (
+        (read, {'sequence': seq, 'qstring': '?' * len(seq) if qscores else '*', 'mean_qscore': 0.0})
+        for read, seq in basecalls
+    )
+
     if aligner: return align_map(aligner, basecalls)
     return basecalls
 
