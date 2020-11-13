@@ -2,9 +2,8 @@
 Bonito Fast5 Utils
 """
 
-import os
 import sys
-from glob import glob
+from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
@@ -19,8 +18,8 @@ class Read:
     def __init__(self, read, filename):
 
         self.read_id = read.read_id
+        self.filename = filename.name
         self.run_id = read.get_run_id().decode()
-        self.filename = os.path.basename(read.filename)
 
         read_attrs = read.handle[read.raw_dataset_group_name].attrs
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
@@ -114,13 +113,14 @@ def get_raw_data_for_read(info):
         return Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1):
+def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, recursive=False):
     """
     Get all reads in a given `directory`.
     """
+    pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
     with Pool(n_proc) as pool:
-        for job in chain(pool.imap(get_filtered_reads, glob("%s/*.fast5" % directory))):
+        for job in chain(pool.imap(get_filtered_reads, Path(directory).glob(pattern))):
             for read in pool.imap(get_raw_data_for_read, job):
                 if max_read_size > 0 and len(read.signal) > max_read_size:
                     sys.stderr.write(

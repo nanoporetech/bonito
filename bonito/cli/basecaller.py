@@ -35,7 +35,8 @@ def main(args):
         aligner = None
 
     reads = get_reads(
-        args.reads_directory, n_proc=8, skip=args.skip, read_ids=column_to_set(args.read_ids)
+        args.reads_directory, n_proc=8, recursive=args.recursive,
+        read_ids=column_to_set(args.read_ids), skip=args.skip,
     )
 
     ctc_data = load_symbol(args.model_directory, "ctc_data")
@@ -83,6 +84,7 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
+    parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
     return parser
