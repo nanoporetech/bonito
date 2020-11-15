@@ -80,6 +80,7 @@ models = [
     "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
     "nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
     "1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
+    "uetgwsnb8yfqvuyoka8p09mxilgskqc7.zip", # dna_r9.4.1@v3.1
     "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
 ]
 
