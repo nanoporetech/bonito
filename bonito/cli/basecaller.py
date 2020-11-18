@@ -42,7 +42,9 @@ def main(args):
     basecall = load_symbol(args.model_directory, "basecall")
 
     if args.save_ctc:
-        reads = (chunk for read in reads for chunk in read_chunks(read))
+        reads = (
+            chunk for read in reads if len(read.signal) >= 3600 for chunk in read_chunks(read)
+        )
         basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64)
         writer = CTCWriter(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
