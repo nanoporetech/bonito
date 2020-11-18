@@ -4,6 +4,7 @@ Bonito Input/Output
 
 import os
 import sys
+import pandas as pd
 from warnings import warn
 from threading import Thread
 from logging import getLogger
@@ -233,12 +234,14 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, iterator, aligner, fd=sys.stdout):
+    def __init__(self, iterator, aligner, min_coverage, min_accuracy, fd=sys.stdout):
         super().__init__()
         self.fd = fd
         self.log = []
         self.aligner = aligner
         self.iterator = iterator
+        self.min_coverage = min_coverage
+        self.min_accuracy = min_accuracy
         self.write_headers()
 
     def write_headers(self):
@@ -251,7 +254,7 @@ class CTCWriter(Thread):
 
         chunks = []
         targets = []
-        target_lens = []
+        lengths = []
 
         for read, ctc_data in self.iterator:
 
@@ -260,36 +263,49 @@ class CTCWriter(Thread):
             mean_qscore = ctc_data['mean_qscore']
             mapping = ctc_data.get('mapping', False)
 
-            if len(seq):
-                write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
-                with open(summary_file(), 'a') as summary:
-                    write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
-                self.log.append((read.read_id, len(read.signal)))
-            else:
-                logger.warn("> skipping empty sequence %s", read.read_id)
-
-            for chunk, target in zip(ctc_data['chunks'], ctc_data['targets']):
-                try: # FIX:
-                    if len(chunk):
-                        chunks.append(chunk)
-                        targets.append(target)
-                        target_lens.append(len(target))
-                except:
-                    pass
-
             self.log.append((read.read_id, len(read.signal)))
+
+            if len(seq) == 0 or mapping is None:
+                continue
+
+            cov = (mapping.q_en - mapping.q_st) / len(seq)
+            acc = mapping.mlen / mapping.blen
+            refseq = self.aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
+
+            if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
+                continue
+
+            write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+            with open(summary_file(), 'a') as summary:
+                write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
+
+            if mapping.strand == -1:
+                refseq = revcomp(refseq)
+
+            target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
+            targets.append(target)
+            chunks.append(read.signal)
+            lengths.append(len(target))
 
         if len(chunks) == 0:
             sys.stderr.write("> no suitable ctc data to write\n")
             return
 
-        chunks = np.array(chunks, dtype=np.float32)
-        targets_ = np.zeros((chunks.shape[0], max(target_lens)), dtype=np.uint8)
+        chunks = np.array(chunks, dtype=np.float16)
+        targets_ = np.zeros((chunks.shape[0], max(lengths)), dtype=np.uint8)
         for idx, target in enumerate(targets): targets_[idx, :len(target)] = target
-        target_lens = np.array(target_lens, dtype=np.uint16)
+        lengths = np.array(lengths, dtype=np.uint16)
 
-        training = ChunkDataSet(chunks, targets_, target_lens)
+        training = ChunkDataSet(chunks, targets_, lengths)
         training = filter_chunks(training)
+
+        mu, sd = np.mean(lengths), np.std(lengths)
+        idx = [
+            i for i, n in enumerate(lengths)
+            if mu - 2.5 * sd < n < mu + 2.5 * sd
+        ]
+        summary = pd.read_csv(summary_file(), sep='\t')
+        summary[summary.index.isin(idx)].to_csv(summary_file(), sep='\t', index=False)
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))
         np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1))

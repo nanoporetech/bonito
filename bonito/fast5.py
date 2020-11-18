@@ -8,6 +8,7 @@ from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
 
+import torch
 import numpy as np
 from scipy.signal import find_peaks
 from ont_fast5_api.fast5_interface import get_fast5_file
@@ -50,6 +51,24 @@ class Read:
         return "Read('%s')" % self.read_id
 
 
+class ReadChunk:
+
+    def __init__(self, read, chunk, i, n):
+        self.read_id = "%s:%i:%i" % (read.read_id, i, n)
+        self.run_id = read.run_id
+        self.filename = read.filename
+        self.mux = read.mux
+        self.channel = read.channel
+        self.start = read.start
+        self.duration = read.duration
+        self.template_start = self.start
+        self.template_duration = self.duration
+        self.signal = chunk
+
+    def __repr__(self):
+        return "ReadChunk('%s')" % self.read_id
+
+
 def med_mad(x, factor=1.4826):
     """
     Calculate signal median and median absolute deviation
@@ -81,6 +100,15 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
     else:
         med, mad = med_mad(signal)
     return (signal - med) / mad
+
+
+def read_chunks(read, chunksize=3600):
+    """
+    Split a Read in fixed sized ReadChunks
+    """
+    chunks = torch.from_numpy(read.signal).unfold(0, chunksize, chunksize)
+    for idx, chunk in enumerate(chunks):
+        yield ReadChunk(read, chunk.numpy(), idx, chunks.shape[0])
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
