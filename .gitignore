@@ -20,3 +20,5 @@ Untitled*.ipynb
 *.db
 *.sqlite3
 *.deb
+tmp/
+*.npy
