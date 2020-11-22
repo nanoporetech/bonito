@@ -107,7 +107,7 @@ def read_chunks(read, chunksize=3600):
     """
     n = len(read.signal) // chunksize
     for i in range(n):
-        yield ReadChunk(read, read.signal[i*chunksize:(i+1)*chunksize], i, n)
+        yield ReadChunk(read, read.signal[i*chunksize:(i+1)*chunksize], i+1, n)
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
