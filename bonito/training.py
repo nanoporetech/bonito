@@ -6,7 +6,9 @@ import os
 import re
 from glob import glob
 from functools import partial
+from itertools import count
 from time import perf_counter
+import csv
 
 from bonito.util import accuracy, decode_ref, permute, concat
 
@@ -19,6 +21,48 @@ from torch.optim.lr_scheduler import LambdaLR
 
 try: from apex import amp
 except ImportError: pass
+
+
+class CSVLogger:
+    def __init__(self, filename):
+        self.filename = filename
+        if os.path.exists(self.filename):
+            with open(self.filename) as f:
+                self.keys = csv.DictReader(f).fieldnames
+        else:
+            self.keys = None
+        self.fh = open(self.filename, 'a', newline='')
+        self.csvwriter = csv.writer(self.fh, delimiter=',')
+
+    def append(self, row):
+        if self.keys is None:
+            self.keys = list(row.keys())
+            self.csvwriter.writerow(self.keys)
+        self.csvwriter.writerow([row.get(k, '-') for k in self.keys])
+
+    def close(self):
+        self.fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
+class FilterLogger:
+    def __init__(self, base_logger, filter_):
+        self.base_logger = base_logger
+        self.filter = filter_
+
+    def append(self, row):
+        if self.filter(row):
+            self.base_logger.append(row)
+
+
+def keep_every(n):
+    counter = count()
+    return (lambda *args: (next(counter) % n) == 0)
 
 
 class ChunkDataSet:

@@ -111,7 +111,7 @@ class CTC_CRF(SequenceDist):
         seq = alphabet[path[path != 0]]
         return seq.tobytes().decode()
 
-    def ctc_loss(self, scores, targets, target_lengths):
+    def ctc_loss(self, scores, targets, target_lengths, loss_clip=None):
         # convert from CTC targets (with blank=0) to zero indexed
         targets = torch.clamp(targets - 1, 0)
 
@@ -126,4 +126,7 @@ class CTC_CRF(SequenceDist):
         stay_scores = scores.gather(2, stay_indices.expand(T, -1, -1))
         move_scores = scores.gather(2, move_indices.expand(T, -1, -1))
         logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
-        return - (logz / target_lengths).mean()
+        loss = - (logz / target_lengths)
+        if loss_clip:
+            loss = torch.clamp(loss, 0.0, loss_clip)
+        return loss.mean()
