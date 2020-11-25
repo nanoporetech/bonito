@@ -116,10 +116,3 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
 
     if aligner: return align_map(aligner, basecalls)
     return basecalls
-
-
-def ctc_data(model, reads, aligner, chunksize=4000, overlap=500, min_accuracy=0.9, min_coverage=0.9):
-    """
-    Convert reads into a format suitable for ctc training.
-    """
-    raise NotImplemented

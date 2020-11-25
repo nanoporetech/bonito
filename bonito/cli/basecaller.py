@@ -10,9 +10,9 @@ from time import perf_counter
 from datetime import timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.fast5 import get_reads
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
+from bonito.fast5 import get_reads, read_chunks
 from bonito.util import column_to_set, load_symbol, load_model
 
 
@@ -39,21 +39,19 @@ def main(args):
         read_ids=column_to_set(args.read_ids), skip=args.skip,
     )
 
-    ctc_data = load_symbol(args.model_directory, "ctc_data")
     basecall = load_symbol(args.model_directory, "basecall")
 
     if args.save_ctc:
-        data = ctc_data(
-            model, reads, aligner,
-            min_accuracy=args.ctc_min_accuracy, min_coverage=args.ctc_min_coverage
+        reads = (
+            chunk for read in reads if len(read.signal) >= 3600 for chunk in read_chunks(read)
         )
+        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64)
         writer = CTCWriter(
-            tqdm(data, desc="> calling", unit=" reads", leave=False), aligner
+            tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
+            aligner, args.ctc_min_coverage, args.ctc_min_accuracy
         )
     else:
-        basecalls = basecall(
-            model, reads, aligner=aligner, qscores=args.fastq
-        )
+        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq)
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
         )
