@@ -8,12 +8,11 @@ from kbeam import beamsearch
 from itertools import groupby
 from functools import partial
 from operator import itemgetter
-from prefetch_generator import BackgroundGenerator
 
 from bonito.io import Writer
 from bonito.fast5 import get_reads
 from bonito.aligner import Aligner, align_map
-from bonito.multiprocessing import thread_map
+from bonito.multiprocessing import thread_map, thread_iter
 from bonito.util import concat, chunk, batchify, unbatchify, half_supported
 
 
@@ -101,7 +100,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     )
     batches = (
         (read, quantise_int8(compute_scores(model, batch)))
-        for read, batch in BackgroundGenerator(batchify(chunks, batchsize=batchsize))
+        for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
     transferred = thread_map(transfer, stitched, n_thread=8, preserve_order=True)
