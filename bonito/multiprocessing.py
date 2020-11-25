@@ -9,11 +9,18 @@ from collections import deque
 from multiprocessing import Process, Queue, Lock, cpu_count
 
 
-def process_iter(iterator, maxsize=10):
+def process_iter(iterator, maxsize=1):
     """
     Take an iterator and run it on another process.
     """
     return iter(ProcessIterator(iterator, maxsize=maxsize))
+
+
+def thread_iter(iterator, maxsize=1):
+    """
+    Take an iterator and run it on another thread.
+    """
+    return iter(ThreadIterator(iterator, maxsize=maxsize))
 
 
 def process_map(func, iterator, n_proc=4, maxsize=0):
@@ -39,14 +46,14 @@ def thread_map(func, iterator, n_thread=4, maxsize=0, preserve_order=False):
     )
 
 
-class ProcessIterator(Process):
+class BackgroundIterator:
     """
-    Runs an iterator in a separate process
+    Runs an iterator in the background.
     """
     def __init__(self, iterator, maxsize=10):
         super().__init__()
         self.iterator = iterator
-        self.queue = Queue(maxsize)
+        self.queue = self.QueueClass(maxsize)
 
     def __iter__(self):
         self.start()
@@ -63,6 +70,20 @@ class ProcessIterator(Process):
 
     def stop(self):
         self.join()
+
+
+class ThreadIterator(BackgroundIterator, Thread):
+    """
+    Runs an iterator in a separate process.
+    """
+    QueueClass = queue.Queue
+
+
+class ProcessIterator(BackgroundIterator, Process):
+    """
+    Runs an iterator in a separate process.
+    """
+    QueueClass = Queue
 
 
 class MapWorker(Process):
