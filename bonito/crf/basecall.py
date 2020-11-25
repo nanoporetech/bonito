@@ -101,7 +101,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     )
     batches = (
         (read, quantise_int8(compute_scores(model, batch)))
-         for read, batch in BackgroundGenerator(batchify(chunks, batchsize=batchsize))
+        for read, batch in BackgroundGenerator(batchify(chunks, batchsize=batchsize))
     )
     stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
     transferred = thread_map(transfer, stitched, n_thread=8, preserve_order=True)
