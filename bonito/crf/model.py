@@ -8,7 +8,7 @@ from bonito.nn import Permute, Scale, activations, rnns
 from torch.nn import Sequential, Module, Linear, Tanh, Conv1d
 
 import seqdist.sparse
-from seqdist.ctc_simple import logZ_cupy
+from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
 
 
@@ -111,7 +111,7 @@ class CTC_CRF(SequenceDist):
         seq = alphabet[path[path != 0]]
         return seq.tobytes().decode()
 
-    def ctc_loss(self, scores, targets, target_lengths, loss_clip=None):
+    def prepare_ctc_scores(self, scores, targets):
         # convert from CTC targets (with blank=0) to zero indexed
         targets = torch.clamp(targets - 1, 0)
 
@@ -125,8 +125,21 @@ class CTC_CRF(SequenceDist):
         move_indices = stay_indices[:, 1:] + targets[:, :n - 1] + 1
         stay_scores = scores.gather(2, stay_indices.expand(T, -1, -1))
         move_scores = scores.gather(2, move_indices.expand(T, -1, -1))
+        return stay_scores, move_scores
+
+    def ctc_loss(self, scores, targets, target_lengths, loss_clip=None, reduction='mean'):
+        stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
         logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
         loss = - (logz / target_lengths)
         if loss_clip:
             loss = torch.clamp(loss, 0.0, loss_clip)
-        return loss.mean()
+        if reduction == 'mean':
+            return loss.mean()
+        elif reduction in ('none', None):
+            return loss
+        else:
+            raise ValueError('Unknown reduction type {}'.format(reduction))
+
+    def ctc_viterbi_alignments(self, scores, targets, target_lengths):
+        stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
+        return viterbi_alignments(stay_scores, move_scores, target_lengths + 1 - self.state_len)

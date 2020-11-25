@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_data, load_symbol, init, default_config, default_data
-from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule, CSVLogger, FilterLogger, keep_every
+from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule, CSVLogger
 
 import toml
 import torch
@@ -82,7 +82,7 @@ def main(args):
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
                     use_amp=args.amp, lr_scheduler=lr_scheduler,
-                    loss_log = FilterLogger(loss_log, keep_every(10))
+                    loss_log = loss_log
                 )
             val_loss, val_mean, val_median = test(
                 model, device, test_loader, criterion=criterion

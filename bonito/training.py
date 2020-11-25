@@ -33,12 +33,17 @@ class CSVLogger:
             self.keys = None
         self.fh = open(self.filename, 'a', newline='')
         self.csvwriter = csv.writer(self.fh, delimiter=',')
+        self.count = 0
 
     def append(self, row):
         if self.keys is None:
             self.keys = list(row.keys())
             self.csvwriter.writerow(self.keys)
         self.csvwriter.writerow([row.get(k, '-') for k in self.keys])
+        self.count += 1
+        if self.count > 100:
+            self.count = 0
+            self.fh.flush()
 
     def close(self):
         self.fh.close()
@@ -191,7 +196,8 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
         total=len(train_loader), desc='[0/{}]'.format(len(train_loader.dataset)),
         ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
     )
-    smoothed_loss = {}
+    smoothed_loss = None
+    max_norm = 1.0
 
     with progress_bar:
 
@@ -212,22 +218,25 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             else:
                 losses['loss'].backward()
 
+            params = amp.master_params(optimizer) if use_amp else model.parameters()
+            grad_norm = torch.nn.utils.clip_grad_norm_(params, max_norm=max_norm).item()
+
             optimizer.step()
 
             if lr_scheduler is not None: lr_scheduler.step()
 
-            if not smoothed_loss:
-                smoothed_loss = {k: v.item() for k,v in losses.items()}
-            smoothed_loss = {k: 0.01 * v.item() + 0.99 * smoothed_loss[k] for k,v in losses.items()}
+            losses = {k: v.item() for k,v in losses.items()}
 
-            progress_bar.set_postfix(loss='%.4f' % smoothed_loss['loss'])
+            smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
+
+            progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
             progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
             progress_bar.update()
 
             if loss_log is not None:
-                loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, **smoothed_loss})
+                loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, 'grad_norm': grad_norm, **losses})
 
-    return smoothed_loss['loss'], perf_counter() - t0
+    return smoothed_loss, perf_counter() - t0
 
 
 def test(model, device, test_loader, min_coverage=0.5, criterion=None):
