@@ -96,7 +96,6 @@ def main(args):
 
         model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
         torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
-        torch.save(optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
 
         with CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
             training_log.append(OrderedDict([

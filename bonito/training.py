@@ -4,13 +4,14 @@ Bonito train
 
 import os
 import re
+import csv
 from glob import glob
 from functools import partial
 from itertools import count
 from time import perf_counter
-import csv
+from collections import OrderedDict
 
-from bonito.util import accuracy, decode_ref, permute, concat
+from bonito.util import accuracy, decode_ref, permute, concat, match_names
 
 import torch
 import numpy as np
@@ -146,26 +147,24 @@ def load_state(dirname, device, model, optim, use_amp=False):
             print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
             exit(1)
 
-    weight_no = optim_no = None
+    weight_no = None
 
     weight_files = glob(os.path.join(dirname, "weights_*.tar"))
     if weight_files:
         weight_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
-    optim_files = glob(os.path.join(dirname, "optim_*.tar"))
-    if optim_files:
-        optim_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in optim_files])
-
-    if weight_no and optim_no and weight_no == optim_no:
-        print("[picking up from epoch %s]" % optim_no)
-        model_dict = torch.load(
+    if weight_no:
+        print("[picking up from epoch %s]" % weight_no)
+        state_dict = torch.load(
             os.path.join(dirname, 'weights_%s.tar' % weight_no), map_location=device
         )
-        model.load_state_dict(model_dict)
-        optim_dict = torch.load(
-            os.path.join(dirname, 'optim_%s.tar' % optim_no), map_location=device
-        )
-        optim.load_state_dict(optim_dict)
+        state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k.replace('module.', '')
+            new_state_dict[name] = v
+
+        model.load_state_dict(new_state_dict)
         epoch = weight_no
     else:
         epoch = 0
