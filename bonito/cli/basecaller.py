@@ -43,15 +43,15 @@ def main(args):
 
     if args.save_ctc:
         reads = (
-            chunk for read in reads if len(read.signal) >= 3600 for chunk in read_chunks(read)
+            chunk for read in reads if len(read.signal) >= args.chunksize for chunk in read_chunks(read)
         )
-        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64)
+        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64, chunksize=args.chunksize)
         writer = CTCWriter(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
             aligner, args.ctc_min_coverage, args.ctc_min_accuracy
         )
     else:
-        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq)
+        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, chunksize=args.chunksize)
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
         )
@@ -85,4 +85,5 @@ def argparser():
     parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
+    parser.add_argument("--chunksize", default=3600, type=int)
     return parser

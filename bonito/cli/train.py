@@ -84,6 +84,10 @@ def main(args):
                     use_amp=args.amp, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
+    
+            model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
+            torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
+
             val_loss, val_mean, val_median = test(
                 model, device, test_loader, criterion=criterion
             )
@@ -93,9 +97,6 @@ def main(args):
         print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
             epoch, workdir, val_loss, val_mean, val_median
         ))
-
-        model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
-        torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
 
         with CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
             training_log.append(OrderedDict([
@@ -121,7 +122,7 @@ def argparser():
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
-    parser.add_argument("--chunks", default=2000000, type=int)
+    parser.add_argument("--chunks", default=-1, type=int)
     parser.add_argument("--validation_split", default=0.97, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
