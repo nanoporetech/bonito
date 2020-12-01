@@ -47,8 +47,12 @@ def main(args):
                 else:
                     data = data.to(args.device)
 
-                log_probs = permute(model(data), 'TNC', 'NTC')
-                seqs.extend([model.decode(p) for p in log_probs])
+                log_probs = model(data)
+
+                if hasattr(model, 'decode_batch'):
+                    seqs.extend(model.decode_batch(log_probs))
+                else:
+                    seqs.extend([model.decode(p) for p in permute(log_probs, 'TNC', 'NTC')])
 
         duration = time.perf_counter() - t0
 
