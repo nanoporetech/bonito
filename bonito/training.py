@@ -196,7 +196,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
         ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
     )
     smoothed_loss = None
-    max_norm = 1.0
+    max_norm = 2.0
 
     with progress_bar:
 
