@@ -6,12 +6,14 @@ Bonito training.
 
 import os
 import csv
+from collections import OrderedDict
+from functools import partial
 from datetime import datetime
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_data, load_symbol, init, default_config, default_data
-from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
+from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule, CSVLogger
 
 import toml
 import torch
@@ -69,17 +71,19 @@ def main(args):
         model.alphabet = model.module.alphabet
 
     if hasattr(model, 'seqdist'):
-        criterion = model.seqdist.ctc_loss
+        criterion = partial(model.seqdist.ctc_loss, loss_clip=5.0)
     else:
         criterion = None
 
     for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):
 
         try:
-            train_loss, duration = train(
-                model, device, train_loader, optimizer, criterion=criterion,
-                use_amp=args.amp, lr_scheduler=lr_scheduler
-            )
+            with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
+                train_loss, duration = train(
+                    model, device, train_loader, optimizer, criterion=criterion,
+                    use_amp=args.amp, lr_scheduler=lr_scheduler,
+                    loss_log = loss_log
+                )
             val_loss, val_mean, val_median = test(
                 model, device, test_loader, criterion=criterion
             )
@@ -94,18 +98,16 @@ def main(args):
         torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
         torch.save(optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
 
-        with open(os.path.join(workdir, 'training.csv'), 'a', newline='') as csvfile:
-            csvw = csv.writer(csvfile, delimiter=',')
-            if epoch == 1:
-                csvw.writerow([
-                    'time', 'duration', 'epoch', 'train_loss',
-                    'validation_loss', 'validation_mean', 'validation_median'
-                ])
-            csvw.writerow([
-                datetime.today(), int(duration), epoch,
-                train_loss, val_loss, val_mean, val_median,
-            ])
-
+        with CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
+            training_log.append(OrderedDict([
+                ('time', datetime.today()),
+                ('duration', int(duration)),
+                ('epoch', epoch),
+                ('train_loss', train_loss),
+                ('validation_loss', val_loss),
+                ('validation_mean', val_mean),
+                ('validation_median', val_median)
+            ]))
 
 def argparser():
     parser = ArgumentParser(
