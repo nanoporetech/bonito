@@ -255,7 +255,10 @@ def test(model, device, test_loader, min_coverage=0.5, criterion=None):
             log_probs = model(data.to(device))
             loss = criterion(log_probs, target.to(device), lengths.to(device))
             test_loss += loss['ctc_loss'] if isinstance(loss, dict) else loss
-            seqs.extend([model.decode(p) for p in permute(log_probs, 'TNC', 'NTC')])
+            if hasattr(model, 'decode_batch'):
+                seqs.extend(model.decode_batch(log_probs))
+            else:
+                seqs.extend([model.decode(p) for p in permute(log_probs, 'TNC', 'NTC')])
 
     refs = [
         decode_ref(target, model.alphabet) for target in test_loader.dataset.targets
