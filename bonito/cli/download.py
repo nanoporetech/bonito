@@ -76,12 +76,17 @@ class File:
             convert(args)
 
 
-models = [
+r9_models = [
     "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
     "nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
     "1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
     "uetgwsnb8yfqvuyoka8p09mxilgskqc7.zip", # dna_r9.4.1@v3.1
     "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
+]
+
+r10_models = [
+    "hnr5mwlm8vmdsfpvn5fsxn3mvhbucy5f.zip", # dna_r10.3@v3
+    "4cunv5z7nwjag7v2bun0g7vk2lf8rqnc.zip",
 ]
 
 training = [
@@ -95,7 +100,9 @@ def main(args):
     """
     if args.models or args.all:
         print("[downloading models]")
-        for model in models[-1 if args.latest else 0:]:
+        for model in r9_models[-1 if args.latest else 0:]:
+            File(__models__, model, args.force).download()
+        for model in r10_models[-1 if args.latest else 0:]:
             File(__models__, model, args.force).download()
 
     if args.training or args.all:
