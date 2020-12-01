@@ -71,7 +71,7 @@ def main(args):
         model.alphabet = model.module.alphabet
 
     if hasattr(model, 'seqdist'):
-        criterion = partial(model.seqdist.ctc_loss, loss_clip=5.0)
+        criterion = model.seqdist.ctc_loss
     else:
         criterion = None
 
