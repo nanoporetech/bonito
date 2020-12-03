@@ -14,7 +14,9 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 ```bash
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
- 
+
+Current available models are `dna_r9.4.1`, `dna_r10.3`.
+
 ## Developer Quickstart
 
 ```bash
