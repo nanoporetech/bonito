@@ -304,13 +304,16 @@ class CTCWriter(Thread):
             i for i, n in enumerate(lengths)
             if mu - 2.5 * sd < n < mu + 2.5 * sd
         ]
+
+        shuf = np.random.permutation(training.chunks.shape[0])
         summary = pd.read_csv(summary_file(), sep='\t')
-        summary[summary.index.isin(idx)].to_csv(summary_file(), sep='\t', index=False)
+        summary = summary[summary.index.isin(idx)].reset_index()
+        summary.reindex(shuf).to_csv(summary_file(), sep='\t', index=False)
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))
-        np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1))
-        np.save(os.path.join(output_directory, "references.npy"), training.targets)
-        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths)
+        np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1)[shuf])
+        np.save(os.path.join(output_directory, "references.npy"), training.targets[shuf])
+        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths[shuf])
 
         sys.stderr.write("> written ctc training data\n")
         sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, training.chunks.squeeze(1).shape)))

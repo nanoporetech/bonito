@@ -95,6 +95,6 @@ def argparser():
     parser.add_argument("--batchsize", default=96, type=int)
     parser.add_argument("--beamsize", default=5, type=int)
     parser.add_argument("--poa", action="store_true", default=False)
-    parser.add_argument("--shuffle", action="store_true", default=True)
+    parser.add_argument("--shuffle", action="store_true", default=False)
     parser.add_argument("--min-coverage", default=0.5, type=float)
     return parser
