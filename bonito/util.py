@@ -220,9 +220,9 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     if validation and os.path.exists(os.path.join(directory, 'validation')):
         directory = os.path.join(directory, 'validation')
 
-    chunks = np.load(os.path.join(directory, "chunks.npy"))
-    targets = np.load(os.path.join(directory, "references.npy"))
-    lengths = np.load(os.path.join(directory, "reference_lengths.npy"))
+    chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
+    targets = np.load(os.path.join(directory, "references.npy"), mmap_mode='r')
+    lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
 
     if shuffle:
         state = np.random.get_state()

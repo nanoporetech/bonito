@@ -79,9 +79,9 @@ class ChunkDataSet:
 
     def __getitem__(self, i):
         return (
-            self.chunks[i].astype(np.float32),
-            self.targets[i].astype(np.int64),
-            self.lengths[i].astype(np.int64),
+            np.array(self.chunks[i].astype(np.float32)),
+            np.array(self.targets[i].astype(np.int64)),
+            np.array(self.lengths[i].astype(np.int64)),
         )
 
     def __len__(self):
