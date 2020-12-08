@@ -60,10 +60,12 @@ def transfer(x):
     """
     Device to host transfer using pinned memory.
     """
-    return {
-        k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v).numpy()
-        for k, v in x.items()
-    }
+    torch.cuda.synchronize()
+    with torch.cuda.stream(torch.cuda.Stream()):
+        return {
+            k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v).numpy()
+            for k, v in x.items()
+        }
 
 
 def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
@@ -103,7 +105,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
         for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
-    transferred = thread_map(transfer, stitched, n_thread=8, preserve_order=True)
+    transferred = thread_map(transfer, stitched, n_thread=1, preserve_order=True)
     basecalls = thread_map(_decode, transferred, n_thread=8, preserve_order=True)
 
     basecalls = (
