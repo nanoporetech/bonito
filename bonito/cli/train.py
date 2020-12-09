@@ -39,7 +39,7 @@ def main(args):
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
     train_dataset = ChunkDataSet(chunks[:split], targets[:split], lengths[:split])
     test_dataset = ChunkDataSet(chunks[split:], targets[split:], lengths[split:])
-    train_loader = DataLoader(train_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
 
     config = toml.load(args.config)
