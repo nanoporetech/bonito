@@ -14,8 +14,7 @@ import numpy as np
 from mappy import revcomp
 
 import bonito
-from bonito.training import ChunkDataSet
-from bonito.cli.convert import typical_indices, filter_chunks
+from bonito.cli.convert import typical_indices
 
 
 logger = getLogger('bonito')
@@ -295,23 +294,24 @@ class CTCWriter(Thread):
         targets_ = np.zeros((chunks.shape[0], max(lengths)), dtype=np.uint8)
         for idx, target in enumerate(targets): targets_[idx, :len(target)] = target
         lengths = np.array(lengths, dtype=np.uint16)
+        indices = np.random.permutation(typical_indices(lengths))
 
-        training = ChunkDataSet(chunks, targets_, lengths)
-        indices = np.random.permutation(typical_indices(training.lengths))
-        training = filter_chunks(training, indices)
+        chunks = chunks[indices]
+        targets_ = targets_[indices]
+        lengths = lengths[indices]
 
         summary = pd.read_csv(summary_file(), sep='\t')
         summary.iloc[indices].to_csv(summary_file(), sep='\t', index=False)
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))
-        np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1))
-        np.save(os.path.join(output_directory, "references.npy"), training.targets)
-        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths)
+        np.save(os.path.join(output_directory, "chunks.npy"), chunks)
+        np.save(os.path.join(output_directory, "references.npy"), targets_)
+        np.save(os.path.join(output_directory, "reference_lengths.npy"), lengths)
 
         sys.stderr.write("> written ctc training data\n")
-        sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, training.chunks.squeeze(1).shape)))
-        sys.stderr.write("  - references.npy with shape (%s)\n" % ','.join(map(str, training.targets.shape)))
-        sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, training.lengths.shape)))
+        sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, chunks.shape)))
+        sys.stderr.write("  - references.npy with shape (%s)\n" % ','.join(map(str, targets_.shape)))
+        sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, lengths.shape)))
 
     def stop(self):
         self.join()
