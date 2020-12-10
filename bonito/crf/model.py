@@ -12,35 +12,22 @@ from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
 
 
-class Model(Module):
+def get_stride(m):
+    if hasattr(m, 'stride'):
+        return m.stride if isinstance(m.stride, int) else m.stride[0]
+    if isinstance(m, Sequential):
+        return int(np.prod([get_stride(x) for x in m]))
+    return 1
 
-    def __init__(self, config):
+
+class SeqdistModel(Module):
+    def __init__(self, encoder, seqdist):
         super().__init__()
-        self.config = config
-        self.stride = config['encoder']['stride']
-        self.alphabet = config['labels']['labels']
-        self.seqdist = CTC_CRF(config['global_norm']['state_len'], self.alphabet)
-
-        insize = config['input']['features']
-        winlen = config['encoder']['winlen']
-        activation = activations[config['encoder']['activation']]()
-
-        rnn = rnns[config['encoder']['rnn_type']]
-        size = config['encoder']['features']
-
-        self.encoder = Sequential(
-            conv(insize, 4, ks=5, bias=True), activation,
-            conv(4, 16, ks=5, bias=True), activation,
-            conv(16, size, ks=winlen, stride=self.stride, bias=True), activation,
-            Permute(2, 0, 1),
-            rnn(size, size, reverse=True), rnn(size, size),
-            rnn(size, size, reverse=True), rnn(size, size),
-            rnn(size, size, reverse=True),
-            Linear(size, self.seqdist.n_score(), bias=True),
-            Tanh(),
-            Scale(config['encoder']['scale']),
-        )
-        self.global_norm = GlobalNorm(self.seqdist)
+        self.seqdist = seqdist
+        self.encoder = encoder
+        self.global_norm = GlobalNorm(seqdist)
+        self.stride = get_stride(encoder)
+        self.alphabet = seqdist.alphabet
 
     def forward(self, x):
         return self.global_norm(self.encoder(x))
@@ -52,6 +39,39 @@ class Model(Module):
 
     def decode(self, x):
         return self.decode_batch(x.unsqueeze(1))[0]
+
+
+def rnn_encoder(outsize, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0):
+    activation = activations[activation]()
+    rnn = rnns[rnn_type]
+
+    return Sequential(
+            conv(insize, 4, ks=5, bias=True), activation,
+            conv(4, 16, ks=5, bias=True), activation,
+            conv(16, features, ks=winlen, stride=stride, bias=True), activation,
+            Permute(2, 0, 1),
+            rnn(features, features, reverse=True), rnn(features, features),
+            rnn(features, features, reverse=True), rnn(features, features),
+            rnn(features, features, reverse=True),
+            Linear(features, outsize, bias=True),
+            Tanh(),
+            Scale(scale),
+        )
+
+class Model(SeqdistModel):
+
+    def __init__(self, config):
+        seqdist = CTC_CRF(
+            state_len=config['global_norm']['state_len'],
+            alphabet=config['labels']['labels']
+        )
+        encoder = rnn_encoder(
+            outsize=seqdist.n_score(),
+            insize=config['input']['features'],
+            **config['encoder']
+        )
+        super().__init__(encoder, seqdist)
+        self.config = config
 
 
 def conv(c_in, c_out, ks, stride=1, bias=False, dilation=1, groups=1):
