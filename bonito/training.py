@@ -7,7 +7,6 @@ import re
 import csv
 from glob import glob
 from functools import partial
-from itertools import count
 from time import perf_counter
 from collections import OrderedDict
 
@@ -26,21 +25,26 @@ except ImportError: pass
 
 class CSVLogger:
     def __init__(self, filename):
-        self.filename = filename
+        self.filename = str(filename)
         if os.path.exists(self.filename):
             with open(self.filename) as f:
-                self.keys = csv.DictReader(f).fieldnames
+                self.columns = csv.DictReader(f).fieldnames
         else:
-            self.keys = None
+            self.columns = None
         self.fh = open(self.filename, 'a', newline='')
         self.csvwriter = csv.writer(self.fh, delimiter=',')
         self.count = 0
 
+    def set_columns(self, columns):
+        if self.columns:
+            raise Exception('Columns already set')
+        self.columns = list(columns)
+        self.csvwriter.writerow(self.columns)
+
     def append(self, row):
-        if self.keys is None:
-            self.keys = list(row.keys())
-            self.csvwriter.writerow(self.keys)
-        self.csvwriter.writerow([row.get(k, '-') for k in self.keys])
+        if self.columns is None:
+            self.set_columns(row.keys())
+        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
         self.count += 1
         if self.count > 100:
             self.count = 0
@@ -54,21 +58,6 @@ class CSVLogger:
 
     def __exit__(self, *args):
         self.close()
-
-
-class FilterLogger:
-    def __init__(self, base_logger, filter_):
-        self.base_logger = base_logger
-        self.filter = filter_
-
-    def append(self, row):
-        if self.filter(row):
-            self.base_logger.append(row)
-
-
-def keep_every(n):
-    counter = count()
-    return (lambda *args: (next(counter) % n) == 0)
 
 
 class ChunkDataSet:
