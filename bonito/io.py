@@ -301,13 +301,12 @@ class CTCWriter(Thread):
         training = filter_chunks(training, indices)
 
         summary = pd.read_csv(summary_file(), sep='\t')
-        summary = summary[summary.index.isin(indices)].reset_index()
-        summary.reindex(indices).to_csv(summary_file(), sep='\t', index=False)
+        summary.iloc[indices].to_csv(summary_file(), sep='\t', index=False)
 
         output_directory = '.' if sys.stdout.isatty() else dirname(realpath('/dev/fd/1'))
-        np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1)[indices])
-        np.save(os.path.join(output_directory, "references.npy"), training.targets[indices])
-        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths[indices])
+        np.save(os.path.join(output_directory, "chunks.npy"), training.chunks.squeeze(1))
+        np.save(os.path.join(output_directory, "references.npy"), training.targets)
+        np.save(os.path.join(output_directory, "reference_lengths.npy"), training.lengths)
 
         sys.stderr.write("> written ctc training data\n")
         sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, training.chunks.squeeze(1).shape)))
