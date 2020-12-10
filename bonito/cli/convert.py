@@ -79,7 +79,8 @@ def validation_split(reads, num_valid=1000):
 
 def typical_indices(x, n=2.5):
     mu, sd = np.mean(x), np.std(x)
-    return [i for i, n in enumerate(x) if mu - n * sd < n < mu + n * sd]
+    idx, = np.where((mu - n*sd < x) & (x < mu + n*sd))
+    return idx
 
 
 def filter_chunks(ds, idx):
