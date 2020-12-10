@@ -77,18 +77,13 @@ def validation_split(reads, num_valid=1000):
     return OrderedDict(reads[:-num_valid]), OrderedDict(reads[-num_valid:])
 
 
-def select_indices(ds, idx):
-    return ChunkDataSet(
-        ds.chunks.squeeze(1)[idx], ds.targets[idx], ds.lengths[idx]
-    )
+def typical_indices(x, n=2.5):
+    mu, sd = np.mean(x), np.std(x)
+    return [i for i, n in enumerate(x) if mu - n * sd < n < mu + n * sd]
 
 
-def filter_chunks(chunks):
-    mu, sd = np.mean(chunks.lengths), np.std(chunks.lengths)
-    idx = [
-        i for i, n in enumerate(chunks.lengths) if mu - 2.5 * sd < n < mu + 2.5 * sd
-    ]
-    filtered = select_indices(chunks, idx)
+def filter_chunks(ds, idx):
+    filtered = ChunkDataSet(ds.chunks.squeeze(1)[idx], ds.targets[idx], ds.lengths[idx])
     filtered.targets = filtered.targets[:, :filtered.lengths.max()]
     return filtered
 
@@ -115,12 +110,14 @@ def main(args):
 
     print("> preparing training chunks\n")
     training_chunks = chunk_dataset(training, args.chunksize)
+    training_indices = typical_indices(training_chunks.lengths)
     training_chunks = filter_chunks(training_chunks)
     save_chunks(training_chunks, args.output_directory)
 
     print("\n> preparing validation chunks\n")
     validation_chunks = chunk_dataset(validation, args.chunksize)
-    validation_chunks = filter_chunks(validation_chunks)
+    validation_indices = typical_indexes(validation_chunks.length)
+    validation_chunks = filter_chunks(validation_chunks, validation_indices)
     save_chunks(validation_chunks, os.path.join(args.output_directory, "validation"))
 
 
