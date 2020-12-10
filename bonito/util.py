@@ -210,7 +210,7 @@ def unbatchify(batches, dim=0):
     )
 
 
-def load_data(shuffle=False, limit=None, directory=None, validation=False):
+def load_data(limit=None, directory=None, validation=False):
     """
     Load the training data
     """
@@ -220,21 +220,16 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
     if validation and os.path.exists(os.path.join(directory, 'validation')):
         directory = os.path.join(directory, 'validation')
 
-    chunks = np.load(os.path.join(directory, "chunks.npy"))
-    targets = np.load(os.path.join(directory, "references.npy"))
-    lengths = np.load(os.path.join(directory, "reference_lengths.npy"))
+    chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
+    targets = np.load(os.path.join(directory, "references.npy"), mmap_mode='r')
+    lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
 
-    if shuffle:
-        state = np.random.get_state()
-        for array in (chunks, targets, lengths):
-            np.random.set_state(state)
-            np.random.shuffle(array)
     if limit:
         chunks = chunks[:limit]
         targets = targets[:limit]
         lengths = lengths[:limit]
 
-    return chunks, targets, lengths
+    return np.array(chunks), np.array(targets), np.array(lengths)
 
 
 def load_symbol(config, symbol):

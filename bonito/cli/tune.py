@@ -46,7 +46,7 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    chunks, chunk_lengths, targets, target_lengths = load_data(limit=args.chunks, shuffle=True, directory=args.directory)
+    chunks, chunk_lengths, targets, target_lengths = load_data(limit=args.chunks, directory=args.directory)
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
     train_dataset = ChunkDataSet(chunks[:split], chunk_lengths[:split], targets[:split], target_lengths[:split])
     test_dataset = ChunkDataSet(chunks[split:], chunk_lengths[split:], targets[split:], target_lengths[split:])

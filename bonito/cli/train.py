@@ -6,9 +6,9 @@ Bonito training.
 
 import os
 import csv
-from collections import OrderedDict
 from functools import partial
 from datetime import datetime
+from collections import OrderedDict
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
@@ -34,7 +34,7 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    chunks, targets, lengths = load_data(limit=args.chunks, shuffle=True, directory=args.directory)
+    chunks, targets, lengths = load_data(limit=args.chunks, directory=args.directory)
 
     split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
     train_dataset = ChunkDataSet(chunks[:split], targets[:split], lengths[:split])
