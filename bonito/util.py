@@ -234,7 +234,7 @@ def load_data(shuffle=False, limit=None, directory=None, validation=False):
         targets = targets[:limit]
         lengths = lengths[:limit]
 
-    return chunks, targets, lengths
+    return np.array(chunks), np.array(targets), np.array(lengths)
 
 
 def load_symbol(config, symbol):
