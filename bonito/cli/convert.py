@@ -110,8 +110,8 @@ def main(args):
 
     print("> preparing training chunks\n")
     training_chunks = chunk_dataset(training, args.chunksize)
-    training_indices = typical_indices(training_chunks.lengths)
-    training_chunks = filter_chunks(training_chunks)
+    training_indices = typical_indices(training_chunks.lengths))
+    training_chunks = filter_chunks(training_chunks, np.random.permutation(training_indices))
     save_chunks(training_chunks, args.output_directory)
 
     print("\n> preparing validation chunks\n")
