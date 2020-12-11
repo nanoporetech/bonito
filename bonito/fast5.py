@@ -106,7 +106,7 @@ def read_chunks(read, chunksize=4000, overlap=400):
     """
     Split a Read in fixed sized ReadChunks
     """
-    _, offset = divmod(len(read.signal), chunksize)
+    _, offset = divmod(len(read.signal) - chunksize, chunksize - overlap)
     signal = torch.from_numpy(read.signal[offset:])
     blocks = signal.unfold(0, chunksize, chunksize - overlap)
 
