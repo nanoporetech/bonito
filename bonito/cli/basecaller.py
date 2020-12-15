@@ -85,5 +85,5 @@ def argparser():
     parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
-    parser.add_argument("--chunksize", default=3600, type=int)
+    parser.add_argument("--chunksize", default=4000, type=int)
     return parser

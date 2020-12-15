@@ -8,6 +8,7 @@ from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
 
+import torch
 import numpy as np
 from scipy.signal import find_peaks
 from ont_fast5_api.fast5_interface import get_fast5_file
@@ -101,13 +102,16 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
     return (signal - med) / mad
 
 
-def read_chunks(read, chunksize=3600):
+def read_chunks(read, chunksize=4000, overlap=400):
     """
     Split a Read in fixed sized ReadChunks
     """
-    n = len(read.signal) // chunksize
-    for i in range(n):
-        yield ReadChunk(read, read.signal[i*chunksize:(i+1)*chunksize], i+1, n)
+    _, offset = divmod(len(read.signal) - chunksize, chunksize - overlap)
+    signal = torch.from_numpy(read.signal[offset:])
+    blocks = signal.unfold(0, chunksize, chunksize - overlap)
+
+    for i, block in enumerate(blocks):
+        yield ReadChunk(read, block.numpy(), i+1, blocks.shape[0])
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
