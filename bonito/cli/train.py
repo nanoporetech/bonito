@@ -126,7 +126,7 @@ def argparser():
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
-    parser.add_argument("--chunks", default=-1, type=int)
+    parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--validation_split", default=0.97, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
