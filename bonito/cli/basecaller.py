@@ -43,7 +43,7 @@ def main(args):
 
     if args.save_ctc:
         reads = (
-            chunk for read in reads if len(read.signal) >= args.chunksize for chunk in read_chunks(read)
+            chunk for read in reads for chunk in read_chunks(read)
         )
         basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64, chunksize=args.chunksize)
         writer = CTCWriter(
