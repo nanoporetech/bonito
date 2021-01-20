@@ -21,9 +21,14 @@ def main(args):
     init(args.seed, args.device)
 
     print("* loading data")
+
+    directory = args.directory
+    if os.path.exists(os.path.join(directory, 'validation')):
+        directory = os.path.join(directory, 'validation')
+
     testdata = ChunkDataSet(
         *load_data(
-            limit=args.chunks, directory=args.directory, validation=True
+            limit=args.chunks, directory=directory
         )
     )
     dataloader = DataLoader(testdata, batch_size=args.batchsize)
