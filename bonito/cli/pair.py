@@ -13,7 +13,7 @@ import sys
 import time
 import json
 from glob import glob
-from textwrap import wrap
+from pathlib import Path
 from os.path import basename
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Process, Queue, Lock, cpu_count
@@ -176,7 +176,7 @@ class PairDecoderWriter(Process):
 
             with self.lock:
                 sys.stdout.write(">%s;%s;\n" % (read_id_1, read_id_2))
-                sys.stdout.write("%s\n" % os.linesep.join(wrap(consensus, 100)))
+                sys.stdout.write("%s\n" % consensus)
                 sys.stdout.flush()
 
 
@@ -216,14 +216,16 @@ def main(args):
 
             if read_id_1 not in index or read_id_2 not in index: continue
 
-            read_1 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_1]), read_id_1)
+            path_1 = Path(os.path.join(args.reads_directory, index[read_id_1]))
+            read_1 = get_raw_data_for_read((path_1, read_id_1))
             raw_data_1 = read_1.signal
 
             if len(raw_data_1) > max_read_size:
                 sys.stderr.write("> skipping long read %s (%s samples)\n" % (read_id_1, len(raw_data_1)))
                 continue
 
-            read_2 = get_raw_data_for_read(os.path.join(args.reads_directory, index[read_id_2]), read_id_2)
+            path_2 = Path(os.path.join(args.reads_directory, index[read_id_2]))
+            read_2 = get_raw_data_for_read((path_2, read_id_2))
             raw_data_2 = read_2.signal
 
             if len(raw_data_2) > max_read_size:
