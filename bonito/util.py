@@ -225,13 +225,14 @@ def load_data(limit=None, directory=None, validation=False):
     lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
 
     indices = os.path.join(directory, "indices.npy")
+    
     if os.path.exists(indices):
         idx = np.load(indices, mmap_mode='r')
+        if limit: idx = idx[:limit]
         chunks = chunks[idx, :]
         targets = targets[idx, :]
         lengths = lengths[idx]
-
-    if limit:
+    elif limit:
         chunks = chunks[:limit]
         targets = targets[:limit]
         lengths = lengths[:limit]
