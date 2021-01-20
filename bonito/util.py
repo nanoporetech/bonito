@@ -210,26 +210,24 @@ def unbatchify(batches, dim=0):
     )
 
 
-def load_data(limit=None, directory=None, validation=False):
+def load_data(limit=None, directory=None):
     """
     Load the training data
     """
     if directory is None:
         directory = default_data
 
-    if validation and os.path.exists(os.path.join(directory, 'validation')):
-        directory = os.path.join(directory, 'validation')
-
     chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
     targets = np.load(os.path.join(directory, "references.npy"), mmap_mode='r')
     lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
 
     indices = os.path.join(directory, "indices.npy")
+    
     if os.path.exists(indices):
         idx = np.load(indices, mmap_mode='r')
-        chunks = chunks[idx, :]
-        targets = targets[idx, :]
-        lengths = lengths[idx]
+        if limit:
+            idx = idx[:limit]
+        return chunks[idx, :], targets[idx, :], lengths[idx]
 
     if limit:
         chunks = chunks[:limit]

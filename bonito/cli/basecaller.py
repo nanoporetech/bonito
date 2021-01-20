@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from time import perf_counter
 from datetime import timedelta
+from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.aligner import Aligner
@@ -38,6 +39,8 @@ def main(args):
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
     )
+    if args.max_reads:
+        reads = take(reads, args.max_reads)
 
     basecall = load_symbol(args.model_directory, "basecall")
 
@@ -86,4 +89,5 @@ def argparser():
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
     parser.add_argument("--chunksize", default=4000, type=int)
+    parser.add_argument("--max-reads", default=0, type=int)
     return parser

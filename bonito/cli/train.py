@@ -21,7 +21,6 @@ import numpy as np
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-
 def main(args):
 
     workdir = os.path.expanduser(args.training_directory)
@@ -34,13 +33,17 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    chunks, targets, lengths = load_data(limit=args.chunks, directory=args.directory)
+    train_data = load_data(limit=args.chunks, directory=args.directory)
+    if os.path.exists(os.path.join(args.directory, 'validation')):
+        valid_data = load_data(directory=os.path.join(args.directory, 'validation'))
+    else:
+        print("[validation set not found: splitting training set]")
+        split = np.floor(len(train_data[0]) * 0.97).astype(np.int32)
+        valid_data = [x[split:] for x in train_data]
+        train_data = [x[:split] for x in train_data]
 
-    split = np.floor(chunks.shape[0] * args.validation_split).astype(np.int32)
-    train_dataset = ChunkDataSet(chunks[:split], targets[:split], lengths[:split])
-    test_dataset = ChunkDataSet(chunks[split:], targets[split:], lengths[split:])
-    train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
+    valid_loader = DataLoader(ChunkDataSet(*valid_data), batch_size=args.batch, num_workers=4, pin_memory=True)
 
     config = toml.load(args.config)
     argsdict = dict(training=vars(args))
@@ -93,7 +96,7 @@ def main(args):
             torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
 
             val_loss, val_mean, val_median = test(
-                model, device, test_loader, criterion=criterion
+                model, device, valid_loader, criterion=criterion
             )
         except KeyboardInterrupt:
             break
@@ -127,7 +130,6 @@ def argparser():
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--chunks", default=0, type=int)
-    parser.add_argument("--validation_split", default=0.97, type=float)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
