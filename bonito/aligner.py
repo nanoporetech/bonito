@@ -31,6 +31,7 @@ class MappyWorker(Thread):
         while True:
             item = self.input_queue.get()
             if item is StopIteration:
+                self.output_queue.put(item)
                 break
             k, v = item
             mapping = next(self.aligner.map(v['sequence'], buf=thrbuf, MD=True), None)
