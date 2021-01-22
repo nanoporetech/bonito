@@ -117,7 +117,7 @@ def main(args):
 
     print("\n> preparing validation chunks\n")
     validation_chunks = chunk_dataset(validation, args.chunksize)
-    validation_indices = typical_indexes(validation_chunks.length)
+    validation_indices = typical_indices(validation_chunks.lengths)
     validation_chunks = filter_chunks(validation_chunks, validation_indices)
     save_chunks(validation_chunks, os.path.join(args.output_directory, "validation"))
 
