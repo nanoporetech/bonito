@@ -105,8 +105,8 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
         for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
-    transferred = thread_map(transfer, stitched, n_thread=1, preserve_order=True)
-    basecalls = thread_map(_decode, transferred, n_thread=8, preserve_order=True)
+    transferred = thread_map(transfer, stitched, n_thread=1)
+    basecalls = thread_map(_decode, transferred, n_thread=8)
 
     basecalls = (
         (read, ''.join(seq for k, seq in parts)) for read, parts in groupby(basecalls, lambda x: x[0][0])
