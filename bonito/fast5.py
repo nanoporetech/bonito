@@ -147,7 +147,7 @@ def get_raw_data_for_read(info):
         return Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, recursive=False):
+def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, recursive=False, cancel=None):
     """
     Get all reads in a given `directory`.
     """
@@ -162,3 +162,6 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, r
                     )
                     continue
                 yield read
+
+                if cancel is not None and cancel.is_set():
+                    return

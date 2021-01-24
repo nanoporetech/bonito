@@ -7,7 +7,8 @@ from itertools import count
 from threading import Thread
 from functools import partial
 from collections import deque
-from multiprocessing import Process, Queue, Lock, cpu_count
+from signal import signal, SIGINT
+from multiprocessing import Process, Queue, Event, Lock, cpu_count
 
 
 def process_iter(iterator, maxsize=1):
@@ -22,6 +23,15 @@ def thread_iter(iterator, maxsize=1):
     Take an iterator and run it on another thread.
     """
     return iter(ThreadIterator(iterator, maxsize=maxsize))
+
+
+def process_cancel():
+    """
+    Register an cancel event on sigint
+    """
+    event = Event()
+    signal(SIGINT, lambda *a: event.set())
+    return event
 
 
 def process_map(func, iterator, n_proc=4, maxsize=0):

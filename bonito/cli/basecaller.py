@@ -14,6 +14,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
 from bonito.fast5 import get_reads, read_chunks
+from bonito.multiprocessing import process_cancel
 from bonito.util import column_to_set, load_symbol, load_model
 
 
@@ -38,7 +39,9 @@ def main(args):
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
+        cancel=process_cancel()
     )
+
     if args.max_reads:
         reads = take(reads, args.max_reads)
 
