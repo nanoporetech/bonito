@@ -24,7 +24,7 @@ $ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clon
 $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
-(venv3) $ pip install --upgrade pip
+(venv3) $ pip install pip==20.3.4
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
 (venv3) $ bonito download --models --latest
