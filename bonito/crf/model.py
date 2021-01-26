@@ -118,11 +118,17 @@ class CTC_CRF(SequenceDist):
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
 
+    def forward_scores(self, scores, S: semiring=Log):
+        T, N, _ = scores.shape
+        Ms = scores.reshape(T, N, -1, self.n_base + 1)
+        alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
+        return seqdist.sparse.fwd_scores_cupy(Ms, self.idx, alpha_0, S, K=1)
+
     def backward_scores(self, scores, S: semiring=Log):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, self.n_base + 1)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        return seqdist.sparse.logZ_bwd_cupy(Ms, self.idx, beta_T, S, K=1)
+        return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
 
     def viterbi(self, scores):
         traceback = self.posteriors(scores, Max)
