@@ -85,6 +85,7 @@ r9_models = [
 ]
 
 r10_models = [
+    "e70s615lh3i24rkhz006i0e4u4m8y2xa.zip", # dna_r10.3_q20ea
     "hnr5mwlm8vmdsfpvn5fsxn3mvhbucy5f.zip", # dna_r10.3@v3
     "4cunv5z7nwjag7v2bun0g7vk2lf8rqnc.zip",
 ]
