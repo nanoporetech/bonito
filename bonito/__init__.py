@@ -10,7 +10,7 @@ except ImportError:
     pass
 
 
-__version__ = '0.3.5a0'
+__version__ = '0.3.5'
 
 
 def main():
