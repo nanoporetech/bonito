@@ -313,7 +313,7 @@ Exhibit A - Source Code Form License Notice
   This Source Code Form is subject to the terms of the Oxford Nanopore
   Technologies, Ltd. Public License, v. 1.0.  Full licence can be found
   at
-  https://github.com/nanoporetech/flappie/blob/master/LICENCE.txt
+  https://github.com/nanoporetech/bonito/blob/master/LICENCE.txt
 
 If it is not possible or desirable to put the notice in a particular
 file, then You may include the notice in a location (such as a LICENSE
