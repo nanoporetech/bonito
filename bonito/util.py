@@ -225,6 +225,7 @@ def load_data(limit=None, directory=None):
     
     if os.path.exists(indices):
         idx = np.load(indices, mmap_mode='r')
+        idx = idx[idx < lengths.shape[0]]
         if limit:
             idx = idx[:limit]
         return chunks[idx, :], targets[idx, :], lengths[idx]
