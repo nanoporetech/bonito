@@ -81,12 +81,14 @@ r9_models = [
     "nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
     "1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
     "uetgwsnb8yfqvuyoka8p09mxilgskqc7.zip", # dna_r9.4.1@v3.1
+    "47t2y48zw4waly25lmzx6sagf4bbbqqz.zip", # dna_r9.4.1@v3.2
     "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
 ]
 
 r10_models = [
     "e70s615lh3i24rkhz006i0e4u4m8y2xa.zip", # dna_r10.3_q20ea
     "hnr5mwlm8vmdsfpvn5fsxn3mvhbucy5f.zip", # dna_r10.3@v3
+    "yesf11tisfrncmod5hj2xtx9kbdveuqt.zip", # dna_r10.3@v3.2
     "4cunv5z7nwjag7v2bun0g7vk2lf8rqnc.zip",
 ]
 
