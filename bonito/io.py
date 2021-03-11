@@ -9,6 +9,7 @@ from warnings import warn
 from threading import Thread
 from logging import getLogger
 from os.path import realpath, splitext, dirname
+import csv
 
 import numpy as np
 from mappy import revcomp
@@ -18,6 +19,43 @@ from bonito.cli.convert import typical_indices
 
 
 logger = getLogger('bonito')
+
+
+class CSVLogger:
+    def __init__(self, filename, sep=','):
+        self.filename = str(filename)
+        if os.path.exists(self.filename):
+            with open(self.filename) as f:
+                self.columns = csv.DictReader(f).fieldnames
+        else:
+            self.columns = None
+        self.fh = open(self.filename, 'a', newline='')
+        self.csvwriter = csv.writer(self.fh, delimiter=sep)
+        self.count = 0
+
+    def set_columns(self, columns):
+        if self.columns:
+            raise Exception('Columns already set')
+        self.columns = list(columns)
+        self.csvwriter.writerow(self.columns)
+
+    def append(self, row):
+        if self.columns is None:
+            self.set_columns(row.keys())
+        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
+        self.count += 1
+        if self.count > 100:
+            self.count = 0
+            self.fh.flush()
+
+    def close(self):
+        self.fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
 
 def write_fasta(header, sequence, fd=sys.stdout):
@@ -100,48 +138,39 @@ def summary_file():
     return '%s_summary.tsv' % splitext(stdout)[0]
 
 
-def write_summary_header(fd=sys.stdout, alignment=False, sep='\t'):
-    """
-    Write the summary tsv header.
-    """
-    fields = [
-        'filename',
-        'read_id',
-        'run_id',
-        'channel',
-        'mux',
-        'start_time',
-        'duration',
-        'template_start',
-        'template_duration',
-        'sequence_length_template',
-        'mean_qscore_template',
-    ]
-    if alignment:
-        fields.extend([
-            'alignment_genome',
-            'alignment_genome_start',
-            'alignment_genome_end',
-            'alignment_strand_start',
-            'alignment_strand_end',
-            'alignment_direction',
-            'alignment_length',
-            'alignment_num_aligned',
-            'alignment_num_correct',
-            'alignment_num_insertions',
-            'alignment_num_deletions',
-            'alignment_num_substitutions',
-            'alignment_strand_coverage',
-            'alignment_identity',
-            'alignment_accuracy',
-        ])
-    fd.write('%s\n' % sep.join(fields))
-    fd.flush()
+summary_field_names = [
+    'filename',
+    'read_id',
+    'run_id',
+    'channel',
+    'mux',
+    'start_time',
+    'duration',
+    'template_start',
+    'template_duration',
+    'sequence_length_template',
+    'mean_qscore_template',
+    #if alignment
+    'alignment_genome',
+    'alignment_genome_start',
+    'alignment_genome_end',
+    'alignment_strand_start',
+    'alignment_strand_end',
+    'alignment_direction',
+    'alignment_length',
+    'alignment_num_aligned',
+    'alignment_num_correct',
+    'alignment_num_insertions',
+    'alignment_num_deletions',
+    'alignment_num_substitutions',
+    'alignment_strand_coverage',
+    'alignment_identity',
+    'alignment_accuracy',
+]
 
-
-def write_summary_row(read, seqlen, qscore, fd=sys.stdout, alignment=False, sep='\t'):
+def summary_row(read, seqlen, qscore, alignment=False, sep='\t'):
     """
-    Write a summary tsv row.
+    Summary tsv row.
     """
     fields = [str(field) for field in [
         read.filename,
@@ -185,8 +214,7 @@ def write_summary_row(read, seqlen, qscore, fd=sys.stdout, alignment=False, sep=
             ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
         ])
 
-    fd.write('%s\n' % sep.join(fields))
-    fd.flush()
+    return dict(zip(summary_field_names, fields))
 
 
 class Writer(Thread):
@@ -201,32 +229,31 @@ class Writer(Thread):
         self.write_headers()
 
     def write_headers(self):
-        with open(summary_file(), 'w') as summary:
-            write_summary_header(summary, alignment=self.aligner)
         if self.aligner:
             write_sam_header(self.aligner, fd=self.fd)
 
     def run(self):
-        for read, res in self.iterator:
 
-            seq = res['sequence']
-            qstring = res['qstring']
-            mean_qscore = res['mean_qscore']
-            mapping = res.get('mapping', False)
+        with CSVLogger(summary_file(), sep='\t') as summary:
+            for read, res in self.iterator:
 
-            if len(seq):
-                if self.aligner:
-                    write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
-                else:
-                    if self.fastq:
-                        write_fastq(read.read_id, seq, qstring, fd=self.fd)
+                seq = res['sequence']
+                qstring = res['qstring']
+                mean_qscore = res['mean_qscore']
+                mapping = res.get('mapping', False)
+
+                if len(seq):
+                    if self.aligner:
+                        write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
                     else:
-                        write_fasta(read.read_id, seq, fd=self.fd)
-                with open(summary_file(), 'a') as summary:
-                    write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
-                self.log.append((read.read_id, len(read.signal)))
-            else:
-                logger.warn("> skipping empty sequence %s", read.read_id)
+                        if self.fastq:
+                            write_fastq(read.read_id, seq, qstring, fd=self.fd)
+                        else:
+                            write_fasta(read.read_id, seq, fd=self.fd)
+                    summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
+                    self.log.append((read.read_id, len(read.signal)))
+                else:
+                    logger.warn("> skipping empty sequence %s", read.read_id)
 
 
 class CTCWriter(Thread):
@@ -244,8 +271,6 @@ class CTCWriter(Thread):
         self.write_headers()
 
     def write_headers(self):
-        with open(summary_file(), 'w') as summary:
-            write_summary_header(summary, alignment=self.aligner)
         if self.aligner:
             write_sam_header(self.aligner, fd=self.fd)
 
@@ -255,36 +280,37 @@ class CTCWriter(Thread):
         targets = []
         lengths = []
 
-        for read, ctc_data in self.iterator:
 
-            seq = ctc_data['sequence']
-            qstring = ctc_data['qstring']
-            mean_qscore = ctc_data['mean_qscore']
-            mapping = ctc_data.get('mapping', False)
+        with CSVLogger(summary_file(), sep='\t') as summary:
+            for read, ctc_data in self.iterator:
 
-            self.log.append((read.read_id, len(read.signal)))
+                seq = ctc_data['sequence']
+                qstring = ctc_data['qstring']
+                mean_qscore = ctc_data['mean_qscore']
+                mapping = ctc_data.get('mapping', False)
 
-            if len(seq) == 0 or mapping is None:
-                continue
+                self.log.append((read.read_id, len(read.signal)))
 
-            cov = (mapping.q_en - mapping.q_st) / len(seq)
-            acc = mapping.mlen / mapping.blen
-            refseq = self.aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
+                if len(seq) == 0 or mapping is None:
+                    continue
 
-            if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
-                continue
+                cov = (mapping.q_en - mapping.q_st) / len(seq)
+                acc = mapping.mlen / mapping.blen
+                refseq = self.aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
 
-            write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
-            with open(summary_file(), 'a') as summary:
-                write_summary_row(read, len(seq), mean_qscore, alignment=mapping, fd=summary)
+                if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
+                    continue
 
-            if mapping.strand == -1:
-                refseq = revcomp(refseq)
+                write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
 
-            target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
-            targets.append(target)
-            chunks.append(read.signal)
-            lengths.append(len(target))
+                if mapping.strand == -1:
+                    refseq = revcomp(refseq)
+
+                target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
+                targets.append(target)
+                chunks.append(read.signal)
+                lengths.append(len(target))
 
         if len(chunks) == 0:
             sys.stderr.write("> no suitable ctc data to write\n")
