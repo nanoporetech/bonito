@@ -4,7 +4,6 @@ Bonito train
 
 import os
 import re
-import csv
 from glob import glob
 from functools import partial
 from time import perf_counter
@@ -21,43 +20,6 @@ from torch.optim.lr_scheduler import LambdaLR
 
 try: from apex import amp
 except ImportError: pass
-
-
-class CSVLogger:
-    def __init__(self, filename):
-        self.filename = str(filename)
-        if os.path.exists(self.filename):
-            with open(self.filename) as f:
-                self.columns = csv.DictReader(f).fieldnames
-        else:
-            self.columns = None
-        self.fh = open(self.filename, 'a', newline='')
-        self.csvwriter = csv.writer(self.fh, delimiter=',')
-        self.count = 0
-
-    def set_columns(self, columns):
-        if self.columns:
-            raise Exception('Columns already set')
-        self.columns = list(columns)
-        self.csvwriter.writerow(self.columns)
-
-    def append(self, row):
-        if self.columns is None:
-            self.set_columns(row.keys())
-        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
-        self.count += 1
-        if self.count > 100:
-            self.count = 0
-            self.fh.flush()
-
-    def close(self):
-        self.fh.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
 
 
 class ChunkDataSet:

@@ -13,7 +13,8 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data
-from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule, CSVLogger
+from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
+from bonito.io import CSVLogger
 
 import toml
 import torch
