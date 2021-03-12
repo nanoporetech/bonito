@@ -168,11 +168,11 @@ summary_field_names = [
     'alignment_accuracy',
 ]
 
-def summary_row(read, seqlen, qscore, alignment=False, sep='\t'):
+def summary_row(read, seqlen, qscore, alignment=False):
     """
     Summary tsv row.
     """
-    fields = [str(field) for field in [
+    fields = [
         read.filename,
         read.read_id,
         read.run_id,
@@ -184,7 +184,7 @@ def summary_row(read, seqlen, qscore, alignment=False, sep='\t'):
         read.template_duration,
         seqlen,
         qscore,
-    ]]
+    ]
 
     if alignment:
 
@@ -195,7 +195,7 @@ def summary_row(read, seqlen, qscore, alignment=False, sep='\t'):
         matches = length - ins - dels
         correct = alignment.mlen
 
-        fields.extend([str(field) for field in [
+        fields.extend([
             alignment.ctg,
             alignment.r_st,
             alignment.r_en,
@@ -207,12 +207,12 @@ def summary_row(read, seqlen, qscore, alignment=False, sep='\t'):
             (alignment.q_en - alignment.q_st) / seqlen,
             correct / matches,
             correct / length,
-        ]])
+        ])
 
     elif alignment is None:
-        fields.extend([str(field) for field in
+        fields.extend(
             ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
-        ])
+        )
 
     return dict(zip(summary_field_names, fields))
 
