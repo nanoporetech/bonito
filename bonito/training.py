@@ -161,7 +161,7 @@ def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
     return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
 
-def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, lr_scheduler=None, loss_log=None):
+def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, scaler=None, lr_scheduler=None, loss_log=None):
 
     if criterion is None:
         C = len(model.alphabet)
@@ -178,12 +178,6 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
     )
     smoothed_loss = None
     max_norm = 2.0
-
-    try:
-        scaler = amp.GradScaler(enabled=use_amp)
-    except Exception as e:
-        print("Error using AMP - {}".format(e))
-        exit(1)
 
     with progress_bar:
 

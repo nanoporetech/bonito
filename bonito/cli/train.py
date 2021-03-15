@@ -21,6 +21,8 @@ import numpy as np
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
+import torch.cuda.amp as amp
+
 def main(args):
 
     workdir = os.path.expanduser(args.training_directory)
@@ -64,6 +66,12 @@ def main(args):
         model = load_symbol(config, 'Model')(config)
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
+    try:
+        scaler = amp.GradScaler(enabled=args.amp)
+    except Exception as e:
+        print("Error using AMP - {}".format(e))
+        exit(1)
+
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
 
     lr_scheduler = func_scheduler(
@@ -88,10 +96,10 @@ def main(args):
             with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=args.amp, lr_scheduler=lr_scheduler,
+                    use_amp=args.amp, scaler=scaler, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
-    
+
             model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
             torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
 
