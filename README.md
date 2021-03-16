@@ -24,7 +24,7 @@ $ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clon
 $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
-(venv3) $ pip install pip==20.3.4
+(venv3) $ pip install --upgrade pip
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
 (venv3) $ bonito download --models --latest
@@ -36,23 +36,23 @@ To train a model using your own reads, first basecall the reads with the additio
 
 ```bash
 $ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads > /data/training/ctc-data/basecalls.sam
-$ bonito train --amp --directory /data/training/ctc-data /data/training/model-dir
+$ bonito train --directory /data/training/ctc-data /data/training/model-dir
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
 
 ```bash
 $ bonito download --training
-$ bonito train --amp /data/training/model-dir
+$ bonito train /data/training/model-dir
 ```
 
-Automatic mixed precision can be used to speed up training with the `--amp` flag *(however [apex](https://github.com/nvidia/apex#quick-start) needs to be installed manually)*.
+All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
 
 For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` environment variable to select which GPUs and add the `--multi-gpu` flag.
 
 ```bash
 $ export CUDA_VISIBLE_DEVICES=0,1,2,3
-$ bonito train --amp --multi-gpu --batch 256 /data/model-dir
+$ bonito train --multi-gpu --batch 256 /data/model-dir
 ```
 
 To evaluate the pretrained model run `bonito evaluate dna_r9.4.1`.

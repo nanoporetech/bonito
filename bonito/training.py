@@ -18,8 +18,7 @@ from tqdm import tqdm
 from torch.nn.functional import ctc_loss
 from torch.optim.lr_scheduler import LambdaLR
 
-try: from apex import amp
-except ImportError: pass
+import torch.cuda.amp as amp
 
 
 class ChunkDataSet:
@@ -91,13 +90,6 @@ def load_state(dirname, device, model, optim, use_amp=False):
     """
     model.to(device)
 
-    if use_amp:
-        try:
-            model, optimizer = amp.initialize(model, optim, opt_level="O1", verbosity=0)
-        except NameError:
-            print("[error]: Cannot use AMP: Apex package needs to be installed manually, See https://github.com/NVIDIA/apex")
-            exit(1)
-
     weight_no = None
 
     weight_files = glob(os.path.join(dirname, "weights_*.tar"))
@@ -131,7 +123,7 @@ def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
     return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
 
-def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, lr_scheduler=None, loss_log=None):
+def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, scaler=None, lr_scheduler=None, loss_log=None):
 
     if criterion is None:
         C = len(model.alphabet)
@@ -156,22 +148,24 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             optimizer.zero_grad()
 
             chunks += data.shape[0]
-            log_probs = model(data.to(device))
-            losses = criterion(log_probs, targets.to(device), lengths.to(device))
+
+            with amp.autocast(enabled=use_amp):
+                log_probs = model(data.to(device))
+                losses = criterion(log_probs, targets.to(device), lengths.to(device))
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}
 
             if use_amp:
-                with amp.scale_loss(losses['loss'], optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                scaler.scale(losses['loss']).backward()
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
+                scaler.step(optimizer)
+                scaler.update()
             else:
                 losses['loss'].backward()
-
-            params = amp.master_params(optimizer) if use_amp else model.parameters()
-            grad_norm = torch.nn.utils.clip_grad_norm_(params, max_norm=max_norm).item()
-
-            optimizer.step()
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
+                optimizer.step()
 
             if lr_scheduler is not None: lr_scheduler.step()
 

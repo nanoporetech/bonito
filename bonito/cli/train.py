@@ -12,15 +12,18 @@ from collections import OrderedDict
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
-from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data
-from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
 from bonito.io import CSVLogger
+from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
+from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data, half_supported
 
 import toml
 import torch
 import numpy as np
+
 from torch.optim import AdamW
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
+
 
 def main(args):
 
@@ -65,7 +68,9 @@ def main(args):
         model = load_symbol(config, 'Model')(config)
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
-    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
+    scaler = GradScaler(enabled=half_supported() and not args.no_amp)
+
+    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=not args.no_amp)
 
     lr_scheduler = func_scheduler(
         optimizer, cosine_decay_schedule(1.0, 0.1), args.epochs * len(train_loader),
@@ -89,10 +94,10 @@ def main(args):
             with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=args.amp, lr_scheduler=lr_scheduler,
+                    use_amp=half_supported() and not args.no_amp, scaler=scaler, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
-    
+
             model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
             torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
 
@@ -131,7 +136,7 @@ def argparser():
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--chunks", default=0, type=int)
-    parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     parser.add_argument("--pretrained", default="")
