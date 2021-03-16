@@ -12,7 +12,7 @@ from collections import OrderedDict
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
-from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data
+from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data, half_supported
 from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule, CSVLogger
 
 import toml
@@ -66,13 +66,9 @@ def main(args):
         model = load_symbol(config, 'Model')(config)
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
-    try:
-        scaler = amp.GradScaler(enabled=args.amp)
-    except Exception as e:
-        print("Error using AMP - {}".format(e))
-        exit(1)
+    scaler = amp.GradScaler(enabled=half_supported() and not args.no_amp)
 
-    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=args.amp)
+    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=not args.no_amp)
 
     lr_scheduler = func_scheduler(
         optimizer, cosine_decay_schedule(1.0, 0.1), args.epochs * len(train_loader),
@@ -96,7 +92,7 @@ def main(args):
             with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=args.amp, scaler=scaler, lr_scheduler=lr_scheduler,
+                    use_amp=half_supported() and not args.no_amp, scaler=scaler, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
 
@@ -138,7 +134,7 @@ def argparser():
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--chunks", default=0, type=int)
-    parser.add_argument("--amp", action="store_true", default=False)
+    parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     parser.add_argument("--pretrained", default="")
