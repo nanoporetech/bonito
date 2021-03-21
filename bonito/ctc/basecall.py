@@ -23,7 +23,7 @@ def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, bat
         (k, compute_scores(model, v)) for k, v in batchify(chunks, batchsize)
     )
     scores = (
-        (read, {'scores': stitch(v, overlap, model.stride)}) for read, v in scores
+        (read, {'scores': stitch(v, chunksize, overlap, len(read.signal), model.stride)}) for read, v in scores
     )
     decoder = partial(decode, decode=model.decode, beamsize=beamsize, qscores=qscores)
     basecalls = process_map(decoder, scores, n_proc=4)
