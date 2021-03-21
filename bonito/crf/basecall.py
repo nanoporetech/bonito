@@ -9,6 +9,7 @@ from itertools import groupby
 from functools import partial
 from operator import itemgetter
 
+import bonito
 from bonito.io import Writer
 from bonito.fast5 import get_reads
 from bonito.aligner import Aligner, align_map
@@ -16,16 +17,13 @@ from bonito.multiprocessing import thread_map, thread_iter
 from bonito.util import concat, chunk, batchify, unbatchify, half_supported
 
 
-def stitch(chunks, start, end):
+def stitch(chunks, chunksize, overlap, length, stride):
     """
     Stitch chunks together with a given overlap
     """
     if isinstance(chunks, dict):
-        return {k: stitch(v, start, end) for k, v in chunks.items()}
-
-    if chunks.shape[0] == 1: return chunks.squeeze(0)
-    return concat([chunks[0, :end], *chunks[1:-1, start:end], chunks[-1, start:]])
-
+        return {k: stitch(v, chunksize, overlap, length, stride) for k, v in chunks.items()}
+    return bonito.util.stitch(chunks, chunksize, overlap, length, stride)
 
 def compute_scores(model, batch):
     """
@@ -81,35 +79,33 @@ def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
     except IndexError:
         return ""
 
+def split_read(read, split_read_length):
+    if len(read.signal) <= split_read_length:
+        return [(read, 0, len(read.signal))]
+    breaks = np.arange(0, len(read.signal)+split_read_length, split_read_length)
+    return [(read, start, min(end, len(read.signal))) for (start, end) in zip(breaks[:-1], breaks[1:])]
+
 
 def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, qscores=False):
     """
     Basecalls a set of reads.
     """
-    split_read_length=400000
-    _stitch = partial(
-        stitch,
-        start=overlap // 2 // model.stride,
-        end=(chunksize - overlap // 2) // model.stride,
-    )
     _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
-    reads = (
-        ((read, i), x) for read in reads
-        for (i, x) in enumerate(torch.split(torch.from_numpy(read.signal), split_read_length))
-    )
+    reads = (read_chunk for read in reads for read_chunk in split_read(read, 400000))
     chunks = (
-        ((read, chunk(signal, chunksize, overlap, pad_start=True)) for (read, signal) in reads)
+        ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap)) for (read, start, end) in reads
     )
     batches = (
-        (read, quantise_int8(compute_scores(model, batch)))
-        for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
+        (k, quantise_int8(compute_scores(model, batch)))
+        for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
-    stitched = ((read, _stitch(x)) for (read, x) in unbatchify(batches))
+    stitched = ((read, stitch(x, chunksize, overlap, (end-start), model.stride)) for ((read, start, end), x) in unbatchify(batches))
+
     transferred = thread_map(transfer, stitched, n_thread=1)
     basecalls = thread_map(_decode, transferred, n_thread=8)
 
     basecalls = (
-        (read, ''.join(seq for k, seq in parts)) for read, parts in groupby(basecalls, lambda x: x[0][0])
+        (read, ''.join(seq for k, seq in parts)) for read, parts in groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
     )
     basecalls = (
         (read, {'sequence': seq, 'qstring': '?' * len(seq) if qscores else '*', 'mean_qscore': 0.0})

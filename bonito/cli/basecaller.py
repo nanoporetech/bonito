@@ -61,7 +61,6 @@ def main(args):
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
         )
-
     t0 = perf_counter()
     writer.start()
     writer.join()

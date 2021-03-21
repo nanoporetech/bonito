@@ -147,30 +147,34 @@ def column_to_set(filename, idx=0, skip_header=False):
             return {line.strip().split()[idx] for line in tsv.readlines()}
 
 
-def chunk(signal, chunksize, overlap, pad_start=False):
+def chunk(signal, chunksize, overlap):
     """
     Convert a read into overlapping chunks before calling
     """
     T = signal.shape[0]
-    if chunksize > 0:
-        padding = chunksize - T if T < chunksize else (overlap - T) % (chunksize - overlap)
-        padded = torch.nn.functional.pad(signal, (padding, 0) if pad_start else (0, padding))
-        return padded.unfold(0, chunksize, chunksize - overlap).unsqueeze(1)
-    return signal.unsqueeze(0).unsqueeze(0)
+    if chunksize == 0:
+        chunks = signal[None, :]
+    elif T < chunksize:
+        chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
+    else:
+        stub = (T - overlap) % (chunksize - overlap)
+        chunks = signal[stub:].unfold(0, chunksize, chunksize - overlap)
+        if stub > 0:
+            chunks = torch.cat([signal[None, :chunksize], chunks], dim=0)
+    return chunks.unsqueeze(1)
 
 
-def stitch(predictions, overlap, stride=1):
+def stitch(chunks, chunksize, overlap, length, stride):
     """
-    Stitch predictions together with a given overlap
+    Stitch chunks together with a given overlap
     """
-    overlap = overlap // stride // 2
-    if predictions.shape[0] == 1:
-        return predictions.squeeze(0)
-    stitched = [predictions[0, 0:-overlap]]
-    for i in range(1, predictions.shape[0] - 1):
-        stitched.append(predictions[i][overlap:-overlap])
-    stitched.append(predictions[-1][overlap:])
-    return concat(stitched)
+    if chunks.shape[0] == 1: return chunks.squeeze(0)
+
+    semi_overlap = overlap//2
+    start, end = semi_overlap // stride, (chunksize-semi_overlap) // stride
+    stub = (length - overlap) % (chunksize - overlap)
+    first_chunk_end = (stub + semi_overlap) // stride if (stub > 0) else end
+    return concat([chunks[0, :first_chunk_end], *chunks[1:-1, start:end], chunks[-1, start:]])
 
 
 def batchify(items, batchsize, dim=0):
