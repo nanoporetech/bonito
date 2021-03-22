@@ -100,7 +100,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     Basecalls a set of reads.
     """
     _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
-    reads = (read_chunk for read in reads for read_chunk in split_read(read))
+    reads = (read_chunk for read in reads for read_chunk in split_read(read)[::-1 if reverse else 1])
     chunks = (
         ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
         for (read, start, end) in reads
