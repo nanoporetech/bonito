@@ -176,9 +176,9 @@ def stitch(chunks, chunksize, overlap, length, stride, reverse=False):
     first_chunk_end = (stub + semi_overlap) // stride if (stub > 0) else end
 
     if reverse:
-        chunks = chunks.flip(0)
+        chunks = list(chunks)
         return concat([
-            chunks[0, :-start], *chunks[1:-1, start:end], chunks[-1, -first_chunk_end:],
+            chunks[-1][:-start], *(x[-end:-start] for x in reversed(chunks[1:-1])), chunks[0][-first_chunk_end:]
         ])
     else:
         return concat([
