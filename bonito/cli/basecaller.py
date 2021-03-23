@@ -51,15 +51,22 @@ def main(args):
         reads = (
             chunk for read in reads for chunk in read_chunks(read)
         )
-        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, batchsize=64, chunksize=args.chunksize)
+        basecalls = basecall(
+            model, reads, batchsize=64, chunksize=args.chunksize,
+            aligner=aligner, qscores=args.fastq, reverse=args.revcomp,
+        )
         writer = CTCWriter(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
             aligner, args.ctc_min_coverage, args.ctc_min_accuracy
         )
     else:
-        basecalls = basecall(model, reads, aligner=aligner, qscores=args.fastq, chunksize=args.chunksize)
+        basecalls = basecall(
+            model, reads, aligner=aligner, reverse=args.revcomp,
+            qscores=args.fastq, batchsize=args.batchsize, chunksize=args.chunksize,
+        )
         writer = Writer(
-            tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, fastq=args.fastq
+            tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
+            aligner, fastq=args.fastq
         )
     t0 = perf_counter()
     writer.start()
@@ -87,9 +94,11 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
+    parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
     parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
+    parser.add_argument("--batchsize", default=32, type=int)
     parser.add_argument("--chunksize", default=4000, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
     return parser

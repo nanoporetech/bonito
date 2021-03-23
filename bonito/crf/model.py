@@ -130,6 +130,20 @@ class CTC_CRF(SequenceDist):
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
 
+    def reverse_complement(self, scores):
+        T, N, C = scores.shape
+        expand_dims = T, N, *(self.n_base for _ in range(self.state_len)), self.n_base + 1
+        scores = scores.reshape(*expand_dims)
+        blanks = torch.flip(scores[..., 0].permute(
+            0, 1, *range(self.state_len + 1, 1, -1)).reshape(T, N, -1, 1), [0, 2]
+        )
+        emissions = torch.flip(scores[..., 1:].permute(
+            0, 1, *range(self.state_len, 1, -1),
+            self.state_len +2,
+            self.state_len + 1).reshape(T, N, -1, self.n_base), [0, 2, 3]
+        )
+        return torch.cat([blanks, emissions], dim=-1).reshape(T, N, -1)
+
     def viterbi(self, scores):
         traceback = self.posteriors(scores, Max)
         paths = traceback.argmax(2) % len(self.alphabet)

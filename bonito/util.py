@@ -164,17 +164,26 @@ def chunk(signal, chunksize, overlap):
     return chunks.unsqueeze(1)
 
 
-def stitch(chunks, chunksize, overlap, length, stride):
+def stitch(chunks, chunksize, overlap, length, stride, reverse=False):
     """
     Stitch chunks together with a given overlap
     """
     if chunks.shape[0] == 1: return chunks.squeeze(0)
 
-    semi_overlap = overlap//2
-    start, end = semi_overlap // stride, (chunksize-semi_overlap) // stride
+    semi_overlap = overlap // 2
+    start, end = semi_overlap // stride, (chunksize - semi_overlap) // stride
     stub = (length - overlap) % (chunksize - overlap)
     first_chunk_end = (stub + semi_overlap) // stride if (stub > 0) else end
-    return concat([chunks[0, :first_chunk_end], *chunks[1:-1, start:end], chunks[-1, start:]])
+
+    if reverse:
+        chunks = list(chunks)
+        return concat([
+            chunks[-1][:-start], *(x[-end:-start] for x in reversed(chunks[1:-1])), chunks[0][-first_chunk_end:]
+        ])
+    else:
+        return concat([
+            chunks[0, :first_chunk_end], *chunks[1:-1, start:end], chunks[-1, start:]
+        ])
 
 
 def batchify(items, batchsize, dim=0):
