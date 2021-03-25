@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from bonito.fast5 import get_raw_data_for_read
 from bonito.util import accuracy, load_model, half_supported
-from fast_ctc_decode import beam_search, beam_search_2d
+from fast_ctc_decode import beam_search, beam_search_duplex
 from ont_fast5_api.fast5_interface import get_fast5_file
 
 
@@ -169,7 +169,7 @@ class PairDecoderWriter(Process):
 
             env = build_envelope(probs_1.shape[0], temp_seq, temp_path, probs_2.shape[0], comp_seq, comp_path, padding=self.padding)
 
-            consensus = beam_search_2d(
+            consensus = beam_search_duplex(
                 probs_1, probs_2, self.alphabet, envelope=env,
                 beam_size=self.beamsize, beam_cut_threshold=self.threshold
             )
