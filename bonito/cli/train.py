@@ -128,7 +128,9 @@ def argparser():
         add_help=False
     )
     parser.add_argument("training_directory")
-    parser.add_argument("--config", default=default_config)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--config', default=default_config)
+    group.add_argument('--pretrained', default="")    
     parser.add_argument("--directory", default=default_data)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
@@ -138,6 +140,5 @@ def argparser():
     parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
-    parser.add_argument("-f", "--force", action="store_true", default=False)
-    parser.add_argument("--pretrained", default="")
+    parser.add_argument("-f", "--force", action="store_true", default=False)    
     return parser
