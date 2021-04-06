@@ -13,13 +13,13 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.io import CSVLogger
+from bonito.util import __models__, default_config, default_data
+from bonito.util import load_data, load_model, load_symbol, init, half_supported
 from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
-from bonito.util import load_data, load_model, load_symbol, init, default_config, default_data, half_supported
 
 import toml
 import torch
 import numpy as np
-
 from torch.optim import AdamW
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -49,7 +49,14 @@ def main(args):
     train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
     valid_loader = DataLoader(ChunkDataSet(*valid_data), batch_size=args.batch, num_workers=4, pin_memory=True)
 
-    config_file = os.path.join(args.pretrained, 'config.toml') if args.pretrained else args.config
+    if args.pretrained:
+        dirname = args.pretrained
+        if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
+            dirname = os.path.join(__models__, dirname)
+        config_file = os.path.join(dirname, 'config.toml')
+    else:
+        config_file = args.config
+
     config = toml.load(config_file)
 
     argsdict = dict(training=vars(args))
