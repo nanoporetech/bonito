@@ -3,10 +3,7 @@ Bonito nn modules.
 """
 
 import torch
-from torch import sigmoid
 from torch.nn import Module
-from torch.jit import script
-from torch.autograd import Function
 from torch.nn.init import orthogonal_
 
 
@@ -17,6 +14,15 @@ def register(layer):
     layer.name = layer.__name__.lower()
     layers[layer.name] = layer
     return layer
+
+
+register(torch.nn.ReLU)
+register(torch.nn.Tanh)
+
+
+@register
+class Swish(torch.nn.SiLU):
+    pass
 
 
 @register
@@ -191,49 +197,6 @@ class LSTM(RNNWrapper):
                 'b': self.rnn.bias_ih_l0.reshape(4, self.rnn.hidden_size)
             }
         return res
-
-
-@script
-def swish_jit_fwd(x):
-    return x * sigmoid(x)
-
-
-@script
-def swish_jit_bwd(x, grad):
-    x_s = sigmoid(x)
-    return grad * (x_s * (1 + x * (1 - x_s)))
-
-
-class SwishAutoFn(Function):
-
-    @staticmethod
-    def symbolic(g, x):
-        return g.op('Swish', x)
-
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad):
-        x = ctx.saved_tensors[0]
-        return swish_jit_bwd(x, grad)
-
-
-@register
-class Swish(Module):
-    """
-    Swish Activation function
-
-    https://arxiv.org/abs/1710.05941
-    """
-    def forward(self, x):
-        return SwishAutoFn.apply(x)
-
-
-register(torch.nn.ReLU)
-register(torch.nn.Tanh)
 
 
 def to_dict(layer, include_weights=False):
