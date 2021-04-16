@@ -4,8 +4,7 @@ Bonito CTC-CRF Model.
 
 import torch
 import numpy as np
-from bonito.nn import Permute, Scale, activations, rnns
-from torch.nn import Sequential, Module, Linear, Tanh, Conv1d
+from bonito.nn import Module, Convolution, Linear, Serial, Permute, layers, from_dict
 
 import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
@@ -15,83 +14,11 @@ from seqdist.core import SequenceDist, Max, Log, semiring
 def get_stride(m):
     if hasattr(m, 'stride'):
         return m.stride if isinstance(m.stride, int) else m.stride[0]
-    if isinstance(m, Sequential):
+    if isinstance(m, Convolution):
+        return get_stride(m.conv)
+    if isinstance(m, Serial):
         return int(np.prod([get_stride(x) for x in m]))
     return 1
-
-
-class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist):
-        super().__init__()
-        self.seqdist = seqdist
-        self.encoder = encoder
-        self.global_norm = GlobalNorm(seqdist)
-        self.stride = get_stride(encoder)
-        self.alphabet = seqdist.alphabet
-
-    def forward(self, x):
-        return self.global_norm(self.encoder(x))
-
-    def decode_batch(self, x):
-        scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
-        tracebacks = self.seqdist.viterbi(scores.log()).to(torch.int16).T
-        return [self.seqdist.path_to_str(x) for x in tracebacks.cpu().numpy()]
-
-    def decode(self, x):
-        return self.decode_batch(x.unsqueeze(1))[0]
-
-
-def rnn_encoder(outsize, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0):
-    activation = activations[activation]()
-    rnn = rnns[rnn_type]
-
-    return Sequential(
-            conv(insize, 4, ks=5, bias=True), activation,
-            conv(4, 16, ks=5, bias=True), activation,
-            conv(16, features, ks=winlen, stride=stride, bias=True), activation,
-            Permute(2, 0, 1),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True),
-            Linear(features, outsize, bias=True),
-            Tanh(),
-            Scale(scale),
-        )
-
-class Model(SeqdistModel):
-
-    def __init__(self, config):
-        seqdist = CTC_CRF(
-            state_len=config['global_norm']['state_len'],
-            alphabet=config['labels']['labels']
-        )
-        encoder = rnn_encoder(
-            outsize=seqdist.n_score(),
-            insize=config['input']['features'],
-            **config['encoder']
-        )
-        super().__init__(encoder, seqdist)
-        self.config = config
-
-
-def conv(c_in, c_out, ks, stride=1, bias=False, dilation=1, groups=1):
-    if stride > 1 and dilation > 1:
-        raise ValueError("Dilation and stride can not both be greater than 1")
-    return Conv1d(
-        c_in, c_out, ks, stride=stride, padding=(ks // 2) * dilation,
-        bias=bias, dilation=dilation, groups=groups
-    )
-
-
-class GlobalNorm(Module):
-
-    def __init__(self, seq_dist):
-        super().__init__()
-        self.seq_dist = seq_dist
-
-    def forward(self, x):
-        scores = x.to(torch.float32)
-        return (scores - self.seq_dist.logZ(scores)[:, None] / len(scores)).to(x.dtype)
 
 
 class CTC_CRF(SequenceDist):
@@ -117,6 +44,9 @@ class CTC_CRF(SequenceDist):
         alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
+
+    def normalise(self, scores):
+        return (scores - self.logZ(scores)[:, None] / len(scores))
 
     def forward_scores(self, scores, S: semiring=Log):
         T, N, _ = scores.shape
@@ -186,3 +116,60 @@ class CTC_CRF(SequenceDist):
     def ctc_viterbi_alignments(self, scores, targets, target_lengths):
         stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
         return viterbi_alignments(stay_scores, move_scores, target_lengths + 1 - self.state_len)
+
+
+def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
+    return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
+
+
+def rnn_encoder(outsize, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0):
+    rnn = layers[rnn_type]
+    return Serial([
+            conv(insize, 4, ks=5, bias=True, activation=activation),
+            conv(4, 16, ks=5, bias=True, activation=activation),
+            conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
+            Permute([2, 0, 1]),
+            rnn(features, features, reverse=True), rnn(features, features),
+            rnn(features, features, reverse=True), rnn(features, features),
+            rnn(features, features, reverse=True),
+            Linear(features, outsize, bias=True, activation='tanh', scale=scale),
+    ])
+
+
+class SeqdistModel(Module):
+    def __init__(self, encoder, seqdist):
+        super().__init__()
+        self.seqdist = seqdist
+        self.encoder = encoder
+        self.stride = get_stride(encoder)
+        self.alphabet = seqdist.alphabet
+
+    def forward(self, x):
+        return self.seqdist.normalise(self.encoder(x).to(torch.float32))
+
+    def decode_batch(self, x):
+        scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
+        tracebacks = self.seqdist.viterbi(scores.log()).to(torch.int16).T
+        return [self.seqdist.path_to_str(x) for x in tracebacks.cpu().numpy()]
+
+    def decode(self, x):
+        return self.decode_batch(x.unsqueeze(1))[0]
+
+
+class Model(SeqdistModel):
+
+    def __init__(self, config):
+        seqdist = CTC_CRF(
+            state_len=config['global_norm']['state_len'],
+            alphabet=config['labels']['labels']
+        )
+        if 'type' in config['encoder']: #new-skool
+            encoder = from_dict(config['encoder'])
+        else: #old-skool
+            encoder = rnn_encoder(
+                outsize=seqdist.n_score(),
+                insize=config['input']['features'],
+                **config['encoder']
+            )
+        super().__init__(encoder, seqdist)
+        self.config = config
