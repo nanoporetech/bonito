@@ -1,8 +1,8 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from bonito.cli import basecaller, train, tune, evaluate, view, convert, download, pair, export
+from bonito.cli import basecaller, train, evaluate, view, convert, download, pair, export
 
 modules = [
-    'basecaller', 'train', 'tune', 'pair', 'evaluate', 'view', 'convert', 'download', 'export'
+    'basecaller', 'train', 'pair', 'evaluate', 'view', 'convert', 'download', 'export'
 ]
 
 __version__ = '0.3.6'

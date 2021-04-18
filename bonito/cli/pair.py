@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from bonito.fast5 import get_raw_data_for_read
 from bonito.util import accuracy, load_model, half_supported
-from fast_ctc_decode import beam_search, beam_search_2d
+from fast_ctc_decode import beam_search, beam_search_duplex
 from ont_fast5_api.fast5_interface import get_fast5_file
 
 

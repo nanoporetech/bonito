@@ -201,7 +201,7 @@ class LSTM(RNNWrapper):
 
 def to_dict(layer, include_weights=False):
     if hasattr(layer, 'to_dict'):
-        {'type': layer.name, **layer.to_dict(include_weights)}
+        return {'type': layer.name, **layer.to_dict(include_weights)}
     return {'type': layer.name}
 
 
