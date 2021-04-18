@@ -47,8 +47,8 @@ def to_guppy_dict(model, include_weights=True):
     guppy_dict['sublayers'] = [x for x in guppy_dict['sublayers'] if x['type'] != 'permute']
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'] = [ {'type': 'reverse', 'sublayers': x} if x.pop('reverse', False) else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'][-1]['type'] = 'GlobalNormTransducer'# we call it Linear
+    guppy_dict['sublayers'] = [{'type': 'reverse', 'sublayers': x} if x.pop('reverse', False) else x for x in guppy_dict['sublayers']]
+    guppy_dict['sublayers'][-1]['type'] = 'GlobalNormTransducer' # we call it Linear
     return guppy_dict
 
 
@@ -66,7 +66,5 @@ def argparser():
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
     )
-    parser.add_argument('--scale', default=5.0, type=float)
-    parser.add_argument('--stride', default=5, type=int)
     parser.add_argument('model')
     return parser

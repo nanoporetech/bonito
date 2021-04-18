@@ -51,7 +51,7 @@ class Reverse(Module):
         if isinstance(self.layer, Serial):
             return self.layer.to_dict(include_weights)
         else:
-            return {'sublayers':  to_dict(self.layer, include_weights)}
+            return {'sublayers': to_dict(self.layer, include_weights)}
 
 
 @register
@@ -200,10 +200,9 @@ class LSTM(RNNWrapper):
 
 
 def to_dict(layer, include_weights=False):
-    d = {'type': layer.name}
     if hasattr(layer, 'to_dict'):
-        d.update(**layer.to_dict(include_weights))
-    return d
+        {'type': layer.name, **layer.to_dict(include_weights)}
+    return {'type': layer.name}
 
 
 def from_dict(model_dict, layer_types=None):
