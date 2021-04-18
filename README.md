@@ -72,7 +72,6 @@ The `pairs.csv` file is expected to contain pairs of read ids per line *(seperat
 ## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
- - `bonito tune` - distributed tuning of network hyperparameters.
  - `bonito train` - train a bonito model.
  - `bonito convert` - convert a hdf5 training file into a bonito format.
  - `bonito evaluate` - evaluate a model performance.
