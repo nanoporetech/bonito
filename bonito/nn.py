@@ -91,8 +91,8 @@ class LinearCRFEncoder(Module):
         super().__init__()
         self.n_base = n_base
         self.state_len = state_len
-        self.blank_score
-        size = n_base**(state_len + 1) if blank_score is None else (n_base + 1) * n_base**state_len
+        self.blank_score = blank_score
+        size = (n_base + 1) * n_base**state_len if blank_score is None else n_base**(state_len + 1)
         self.linear = torch.nn.Linear(insize, size, bias=bias)
         self.activation = layers.get(activation, lambda: activation)()
         self.scale = scale
@@ -106,7 +106,7 @@ class LinearCRFEncoder(Module):
         if self.blank_score is not None:
             T, N, C = scores.shape
             s = torch.tensor(self.blank_score, device=scores.device, dtype=scores.dtype)
-            scores = torch.cat([s.expand(T, N, C//self.n_base, 1), scores.reshape(T, N, C//self.n_base, n_base)], axis=-1).reshape(T, N, -1)
+            scores = torch.cat([s.expand(T, N, C//self.n_base, 1), scores.reshape(T, N, C//self.n_base, self.n_base)], axis=-1).reshape(T, N, -1)
         return scores
 
     def to_dict(self, include_weights=False):
@@ -117,7 +117,7 @@ class LinearCRFEncoder(Module):
             'bias': self.linear.bias is not None,
             'scale': self.scale,
             'activation': self.activation.name if self.activation else None,
-            'blank_score': blank_score,
+            'blank_score': self.blank_score,
         }
         if include_weights:
             res['params'] = {

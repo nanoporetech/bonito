@@ -4,7 +4,7 @@ Bonito CTC-CRF Model.
 
 import torch
 import numpy as np
-from bonito.nn import Module, Convolution, Linear, Serial, Permute, layers, from_dict
+from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
 
 import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
@@ -167,6 +167,6 @@ class Model(SeqdistModel):
         if 'type' in config['encoder']: #new-skool
             encoder = from_dict(config['encoder'])
         else: #old-skool
-            layers = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
+            encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
         super().__init__(encoder, seqdist)
         self.config = config

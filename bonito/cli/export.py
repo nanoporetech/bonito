@@ -58,7 +58,7 @@ def reformat_output_layer(layer_dict):
         params['b'] = torch.nn.functional.pad(
             params['b'].reshape(n_base**state_len, n_base),
             (1, 0),
-            value=np.arctanh(blank_score / layer_dict['scale']
+            value=np.arctanh(blank_score / layer_dict['scale'])
         ).reshape(-1)
 
     return layer_dict
