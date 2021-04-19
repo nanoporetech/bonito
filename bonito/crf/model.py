@@ -101,6 +101,7 @@ class CTC_CRF(SequenceDist):
         return stay_scores, move_scores
 
     def ctc_loss(self, scores, targets, target_lengths, loss_clip=None, reduction='mean'):
+        scores = self.normalise(scores)
         stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
         logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
         loss = - (logz / target_lengths)
@@ -122,7 +123,7 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(outsize, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None):
     rnn = layers[rnn_type]
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
@@ -132,7 +133,7 @@ def rnn_encoder(outsize, insize=1, stride=5, winlen=19, activation='swish', rnn_
             rnn(features, features, reverse=True), rnn(features, features),
             rnn(features, features, reverse=True), rnn(features, features),
             rnn(features, features, reverse=True),
-            Linear(features, outsize, bias=True, activation='tanh', scale=scale),
+            LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
     ])
 
 
@@ -145,7 +146,7 @@ class SeqdistModel(Module):
         self.alphabet = seqdist.alphabet
 
     def forward(self, x):
-        return self.seqdist.normalise(self.encoder(x).to(torch.float32))
+        return self.encoder(x).to(torch.float32)
 
     def decode_batch(self, x):
         scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
@@ -166,10 +167,6 @@ class Model(SeqdistModel):
         if 'type' in config['encoder']: #new-skool
             encoder = from_dict(config['encoder'])
         else: #old-skool
-            encoder = rnn_encoder(
-                outsize=seqdist.n_score(),
-                insize=config['input']['features'],
-                **config['encoder']
-            )
+            layers = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
         super().__init__(encoder, seqdist)
         self.config = config

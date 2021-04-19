@@ -150,8 +150,8 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             chunks += data.shape[0]
 
             with amp.autocast(enabled=use_amp):
-                log_probs = model(data.to(device))
-                losses = criterion(log_probs, targets.to(device), lengths.to(device))
+                scores = model(data.to(device))
+                losses = criterion(scores, targets.to(device), lengths.to(device))
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses}
@@ -197,13 +197,13 @@ def test(model, device, test_loader, min_coverage=0.5, criterion=None):
 
     with torch.no_grad():
         for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
-            log_probs = model(data.to(device))
-            loss = criterion(log_probs, target.to(device), lengths.to(device))
+            scores = model(data.to(device))
+            loss = criterion(scores, target.to(device), lengths.to(device))
             test_loss += loss['ctc_loss'] if isinstance(loss, dict) else loss
             if hasattr(model, 'decode_batch'):
-                seqs.extend(model.decode_batch(log_probs))
+                seqs.extend(model.decode_batch(scores))
             else:
-                seqs.extend([model.decode(p) for p in permute(log_probs, 'TNC', 'NTC')])
+                seqs.extend([model.decode(x) for x in permute(scores, 'TNC', 'NTC')])
 
     refs = [
         decode_ref(target, model.alphabet) for target in test_loader.dataset.targets
