@@ -34,12 +34,13 @@ class Read:
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
 
-        # no trimming
-        self.template_start = self.start
-        self.template_duration = self.duration
-
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+
+        trim_start, _ = trim(scaled[:8000])
+        scaled = scaled[trim_start:]
+        self.template_start = self.start + (1 / self.sampling_rate) * trim_start
+        self.template_duration = self.duration + (1 / self.sampling_rate) * trim_start
 
         if len(scaled) > 8000:
             med, mad = med_mad(scaled)
@@ -67,6 +68,28 @@ class ReadChunk:
 
     def __repr__(self):
         return "ReadChunk('%s')" % self.read_id
+
+
+def trim(signal, window_size=40, threshold_factor=2.4, min_elements=3):
+
+    min_trim = 10
+    signal = signal[min_trim:]
+
+    med, mad = med_mad(signal[-(window_size*100):])
+
+    threshold = med + mad * threshold_factor
+    num_windows = len(signal) // window_size
+
+    for pos in range(num_windows):
+        start = pos * window_size
+        end = start + window_size
+        window = signal[start:end]
+        if len(window[window > threshold]) > min_elements:
+            if window[-1] > threshold:
+                continue
+            return min(end + min_trim, len(signal)), len(signal)
+
+    return min_trim, len(signal)
 
 
 def med_mad(x, factor=1.4826):
