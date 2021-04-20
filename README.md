@@ -15,8 +15,6 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
 
-Current available models are `dna_r9.4.1`, `dna_r10.3`.
-
 ## Developer Quickstart
 
 ```bash
@@ -30,6 +28,22 @@ $ source venv3/bin/activate
 (venv3) $ bonito download --models --latest
 ```
 
+## Models
+
+The following pretrained models are available to download with `bonito download`.
+
+| Model | Type | Bonito Version  | 
+| ------ | ------ |------ |
+| `dna_r9.4.1@v3.3`, `dna_r10.3@v3.3`  | CRF-CTC RNN _(fixed blank score)_ | v0.3.7 |
+| `dna_r9.4.1@v3.2`, `dna_r10.3@v3.2`  | CRF-CTC RNN | v0.3.6 |
+| `dna_r10.3@v3` | CRF-CTC RNN  | v0.3.2 |
+| `dna_r9.4.1@v3.1`  | CRF-CTC RNN  | v0.3.1 |
+| `dna_r9.4.1@v3`  | CRF-CTC RNN  | v0.3.0 |
+| `dna_r9.4.1@v2` | CTC CNN _(Custom QuartzNet)_ | v0.2.0 | 
+| `dna_r9.4.1@v1` | CTC CNN _(5x5 QuartzNet)_ | v0.1.2 |
+
+All models can be downloaded with `bonito download --models` or if you just want the latest version then `bonito download --models --latest -f`.
+
 ## Training your own model
 
 To train a model using your own reads, first basecall the reads with the additional `--save-ctc` flag and use the output directory as the input directory for training.
@@ -37,6 +51,12 @@ To train a model using your own reads, first basecall the reads with the additio
 ```bash
 $ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads > /data/training/ctc-data/basecalls.sam
 $ bonito train --directory /data/training/ctc-data /data/training/model-dir
+```
+
+In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
+
+```bash
+bonito training --epochs 1 --lr 5e-4 --pretrained dna_r9.4.1@v3.3 --directory /data/training/ctc-data /data/training/fine-tuned-model
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
