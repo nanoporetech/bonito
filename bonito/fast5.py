@@ -80,11 +80,14 @@ def trim(signal, window_size=40, threshold_factor=2.4, min_elements=3):
     threshold = med + mad * threshold_factor
     num_windows = len(signal) // window_size
 
+    seen_peak = False
+
     for pos in range(num_windows):
         start = pos * window_size
         end = start + window_size
         window = signal[start:end]
-        if len(window[window > threshold]) > min_elements:
+        if len(window[window > threshold]) > min_elements or seen_peak:
+            seen_peak = True
             if window[-1] > threshold:
                 continue
             return min(end + min_trim, len(signal)), len(signal)
