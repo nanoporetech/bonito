@@ -48,17 +48,6 @@ $ bonito train /data/training/model-dir
 
 All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
 
-For multi-gpu training use the `$CUDA_VISIBLE_DEVICES` environment variable to select which GPUs and add the `--multi-gpu` flag.
-
-```bash
-$ export CUDA_VISIBLE_DEVICES=0,1,2,3
-$ bonito train --multi-gpu --batch 256 /data/model-dir
-```
-
-To evaluate the pretrained model run `bonito evaluate dna_r9.4.1`.
-
-For a model you have trainined yourself, replace `dna_r9.4.1` with the model directory.
-
 ## Pair Decoding
 
 Pair decoding takes a template and complement read to produce higher quaility calls.
@@ -77,21 +66,6 @@ The `pairs.csv` file is expected to contain pairs of read ids per line *(seperat
  - `bonito evaluate` - evaluate a model performance.
  - `bonito download` - download pretrained models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
-
-# Medaka
-
-The Medaka can be downloaded from [here](https://nanoporetech.box.com/shared/static/ve8445ceb2bnwod1zaj0z2ptuwsvxd64.hdf5).
-
-| Coverage | B. subtilis | E. coli | E. faecalis | L. monocytogenes | P. aeruginosa | S. aureus | S. enterica |
-| -------- |:-----------:|:-------:|:-----------:|:----------------:|:-------------:|:---------:|:-----------:|
-|       25 |       38.86 |   42.60 |       40.24 |            41.55 |         41.55 |     43.98 |       36.78 |
-|       50 |       39.36 |   45.23 |       43.01 |            43.98 |         45.34 |     46.99 |       38.07 |
-|       75 |       43.98 |   45.23 |       45.23 |            45.23 |         50.00 |     46.99 |       38.36 |
-|      100 |       43.98 |   46.99 |       45.23 |            46.99 |         50.00 |     50.00 |       39.39 |
-|      125 |       45.23 |   45.23 |       45.23 |            45.23 |         50.00 |     50.00 |       39.39 |
-|      150 |       45.23 |   46.99 |       46.99 |            46.99 |         50.00 |     50.00 |       39.59 |
-|      175 |       45.23 |   46.99 |       46.99 |            46.99 |         50.00 |     50.00 |       39.59 |
-|      200 |       46.99 |   46.99 |       50.00 |            50.00 |         50.00 |     50.00 |       40.00 |
 
 ### References
 
