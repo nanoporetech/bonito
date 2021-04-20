@@ -20,7 +20,9 @@ class Read:
 
         self.read_id = read.read_id
         self.filename = filename.name
-        self.run_id = read.get_run_id().decode()
+        self.run_id = read.get_run_id()
+        if type(self.run_id) == bytes:
+            self.run_id = self.run_id.decode()
 
         read_attrs = read.handle[read.raw_dataset_group_name].attrs
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
@@ -30,7 +32,10 @@ class Read:
         self.scaling = channel_info['range'] / channel_info['digitisation']
 
         self.mux = read_attrs['start_mux']
-        self.channel = channel_info['channel_number'].decode()
+        self.channel = channel_info['channel_number']
+        if type(self.channel) == bytes:
+            self.channel = self.channel.decode()
+
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
 
