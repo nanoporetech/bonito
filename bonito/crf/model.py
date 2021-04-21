@@ -100,8 +100,9 @@ class CTC_CRF(SequenceDist):
         move_scores = scores.gather(2, move_indices.expand(T, -1, -1))
         return stay_scores, move_scores
 
-    def ctc_loss(self, scores, targets, target_lengths, loss_clip=None, reduction='mean'):
-        scores = self.normalise(scores)
+    def ctc_loss(self, scores, targets, target_lengths, loss_clip=None, reduction='mean', normalise_scores=True):
+        if normalise_scores:
+            scores = self.normalise(scores)
         stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
         logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
         loss = - (logz / target_lengths)
@@ -164,9 +165,9 @@ class Model(SeqdistModel):
             state_len=config['global_norm']['state_len'],
             alphabet=config['labels']['labels']
         )
-        if 'type' in config['encoder']: #new-skool
+        if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])
-        else: #old-skool
+        else: #old-style
             encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
         super().__init__(encoder, seqdist)
         self.config = config
