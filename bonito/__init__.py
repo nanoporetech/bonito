@@ -5,7 +5,7 @@ modules = [
     'basecaller', 'train', 'pair', 'evaluate', 'view', 'convert', 'download', 'export'
 ]
 
-__version__ = '0.3.6'
+__version__ = '0.3.7'
 
 
 def main():
