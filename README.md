@@ -56,7 +56,7 @@ $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
 
 ```bash
-bonito training --epochs 1 --lr 5e-4 --pretrained dna_r9.4.1@v3.3 --directory /data/training/ctc-data /data/training/fine-tuned-model
+bonito train --epochs 1 --lr 5e-4 --pretrained dna_r9.4.1@v3.3 --directory /data/training/ctc-data /data/training/fine-tuned-model
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
