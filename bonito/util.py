@@ -32,7 +32,7 @@ __configs__ = os.path.join(__dir__, "models/configs")
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "dna_r9.4.1@v3.toml")
+default_config = os.path.join(__configs__, "dna_r9.4.1@v3.1.toml")
 
 
 def init(seed, device):

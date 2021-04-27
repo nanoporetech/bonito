@@ -3,78 +3,142 @@ Bonito nn modules.
 """
 
 import torch
-from torch import sigmoid
-from torch.jit import script
-from torch.autograd import Function
+from torch.nn import Module
 from torch.nn.init import orthogonal_
-from torch.nn import Module, LSTM, GRU, ReLU
 
 
-class Add(Module):
-    def forward(self, x, y):
-        return x + y
+layers = {}
 
 
+def register(layer):
+    layer.name = layer.__name__.lower()
+    layers[layer.name] = layer
+    return layer
+
+
+register(torch.nn.ReLU)
+register(torch.nn.Tanh)
+
+
+@register
+class Swish(torch.nn.SiLU):
+    pass
+
+
+@register
+class Serial(torch.nn.Sequential):
+
+    def __init__(self, sublayers):
+        super().__init__(*sublayers)
+
+    def to_dict(self, include_weights=False):
+        return {
+            'sublayers': [to_dict(layer, include_weights) for layer in self._modules.values()]
+        }
+
+
+@register
+class Reverse(Module):
+
+    def __init__(self, sublayers):
+        super().__init__()
+        self.layer = Serial(sublayers) if isinstance(sublayers, list) else sublayers
+
+    def forward(self, x):
+        return self.layer(x.flip(0)).flip(0)
+
+    def to_dict(self, include_weights=False):
+        if isinstance(self.layer, Serial):
+            return self.layer.to_dict(include_weights)
+        else:
+            return {'sublayers': to_dict(self.layer, include_weights)}
+
+
+@register
+class Convolution(Module):
+
+    def __init__(self, insize, size, winlen, stride=1, padding=0, bias=True, activation=None):
+        super().__init__()
+        self.conv = torch.nn.Conv1d(insize, size, winlen, stride=stride, padding=padding, bias=bias)
+        self.activation = layers.get(activation, lambda: activation)()
+
+    def forward(self, x):
+        if self.activation is not None:
+            return self.activation(self.conv(x))
+        return self.conv(x)
+
+    def to_dict(self, include_weights=False):
+        res = {
+            "insize": self.conv.in_channels,
+            "size": self.conv.out_channels,
+            "bias": self.conv.bias is not None,
+            "winlen": self.conv.kernel_size[0],
+            "stride": self.conv.stride[0],
+            "padding": self.conv.padding[0],
+            "activation": self.activation.name if self.activation else None,
+        }
+        if include_weights:
+            res['params'] = {
+                'W': self.conv.weight, 'b': self.conv.bias if self.conv.bias is not None else []
+            }
+        return res
+
+
+@register
+class LinearCRFEncoder(Module):
+
+    def __init__(self, insize, n_base, state_len, bias=True, scale=None, activation=None, blank_score=None):
+        super().__init__()
+        self.n_base = n_base
+        self.state_len = state_len
+        self.blank_score = blank_score
+        size = (n_base + 1) * n_base**state_len if blank_score is None else n_base**(state_len + 1)
+        self.linear = torch.nn.Linear(insize, size, bias=bias)
+        self.activation = layers.get(activation, lambda: activation)()
+        self.scale = scale
+
+    def forward(self, x):
+        scores = self.linear(x)
+        if self.activation is not None:
+            scores = self.activation(scores)
+        if self.scale is not None:
+            scores = scores * self.scale
+        if self.blank_score is not None:
+            T, N, C = scores.shape
+            s = torch.tensor(self.blank_score, device=scores.device, dtype=scores.dtype)
+            scores = torch.cat([s.expand(T, N, C//self.n_base, 1), scores.reshape(T, N, C//self.n_base, self.n_base)], axis=-1).reshape(T, N, -1)
+        return scores
+
+    def to_dict(self, include_weights=False):
+        res = {
+            'insize': self.linear.in_features,
+            'n_base': self.n_base,
+            'state_len': self.state_len,
+            'bias': self.linear.bias is not None,
+            'scale': self.scale,
+            'activation': self.activation.name if self.activation else None,
+            'blank_score': self.blank_score,
+        }
+        if include_weights:
+            res['params'] = {
+                'W': self.linear.weight, 'b': self.linear.bias
+                if self.linear.bias is not None else []
+            }
+        return res
+
+
+@register
 class Permute(Module):
-    def __init__(self, *dims):
+
+    def __init__(self, dims):
         super().__init__()
         self.dims = dims
 
     def forward(self, x):
         return x.permute(*self.dims)
 
-
-class Scale(Module):
-    def __init__(self, scale):
-        super().__init__()
-        self.scale = scale
-
-    def forward(self, x):
-        return x * self.scale
-
-
-@script
-def swish_jit_fwd(x):
-    return x * sigmoid(x)
-
-
-@script
-def swish_jit_bwd(x, grad):
-    x_s = sigmoid(x)
-    return grad * (x_s * (1 + x * (1 - x_s)))
-
-
-class SwishAutoFn(Function):
-
-    @staticmethod
-    def symbolic(g, x):
-        return g.op('Swish', x)
-
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad):
-        x = ctx.saved_tensors[0]
-        return swish_jit_bwd(x, grad)
-
-
-class Swish(Module):
-    """
-    Swish Activation function
-
-    https://arxiv.org/abs/1710.05941
-    """
-    def forward(self, x):
-        return SwishAutoFn.apply(x)
-
-
-activations = {
-    "relu": ReLU,
-    "swish": Swish,
-}
+    def to_dict(self, include_weights=False):
+        return {'dims': self.dims}
 
 
 def truncated_normal(size, dtype=torch.float32, device=None, num_resample=5):
@@ -116,7 +180,6 @@ class RNNWrapper(Module):
                 for i in range(0, x.size(0), self.rnn.hidden_size):
                     orthogonal_(x[i:i+self.rnn.hidden_size])
 
-
     def disable_state_bias(self):
         for name, x in self.rnn.named_parameters():
             if 'bias_hh' in name:
@@ -124,15 +187,47 @@ class RNNWrapper(Module):
                 x.zero_()
 
 
-def gru(*args, **kwargs):
-    return RNNWrapper(GRU, *args, **kwargs)
+@register
+class LSTM(RNNWrapper):
+
+    def __init__(self, size, insize, bias=True, reverse=False):
+        super().__init__(torch.nn.LSTM, size, insize, bias=bias, reverse=reverse)
+
+    def to_dict(self, include_weights=False):
+        res = {
+            'size': self.rnn.hidden_size,
+            'insize': self.rnn.input_size,
+            'bias': self.rnn.bias,
+            'reverse': self.reverse,
+        }
+        if include_weights:
+            res['params'] = {
+                'iW': self.rnn.weight_ih_l0.reshape(4, self.rnn.hidden_size, self.rnn.input_size),
+                'sW': self.rnn.weight_hh_l0.reshape(4, self.rnn.hidden_size, self.rnn.hidden_size),
+                'b': self.rnn.bias_ih_l0.reshape(4, self.rnn.hidden_size)
+            }
+        return res
 
 
-def lstm(*args, **kwargs):
-    return RNNWrapper(LSTM, *args, **kwargs)
+def to_dict(layer, include_weights=False):
+    if hasattr(layer, 'to_dict'):
+        return {'type': layer.name, **layer.to_dict(include_weights)}
+    return {'type': layer.name}
 
 
-rnns = {
-    "gru": gru,
-    "lstm": lstm,
-}
+def from_dict(model_dict, layer_types=None):
+    model_dict = model_dict.copy()
+    if layer_types is None:
+        layer_types = layers
+    type_name = model_dict.pop('type')
+    typ = layer_types[type_name]
+    if 'sublayers' in model_dict:
+        sublayers = model_dict['sublayers']
+        model_dict['sublayers'] = [
+            from_dict(x, layer_types) for x in sublayers
+        ] if isinstance(sublayers, list) else from_dict(sublayers, layer_types)
+    try:
+        layer = typ(**model_dict)
+    except Exception as e:
+        raise Exception(f'Failed to build layer of type {typ} with args {model_dict}') from e
+    return layer
