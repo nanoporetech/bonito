@@ -75,6 +75,11 @@ def to_guppy_dict(model, include_weights=True):
 
 
 def main(args):
+
+    if not os.path.isdir(args.model):
+        print("[error] file given - please provide a model directory to export.", file=sys.stderr)
+        return 1
+
     model = bonito.util.load_model(args.model, device='cpu')
     jsn = to_guppy_dict(model)
     weight_files = glob(os.path.join(args.model, "weights_*.tar"))
