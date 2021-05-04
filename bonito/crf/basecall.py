@@ -4,10 +4,10 @@ Bonito CRF basecall
 
 import torch
 import numpy as np
+from kbeam import beamsearch
 from itertools import groupby
 from functools import partial
 from operator import itemgetter
-from fast_ctc_decode import crf_beam_search
 
 import bonito
 from bonito.io import Writer
@@ -39,11 +39,24 @@ def compute_scores(model, batch, reverse=False):
         scores = model(batch.to(dtype).to(device))
         if reverse: scores = model.seqdist.reverse_complement(scores)
         betas = model.seqdist.backward_scores(scores.to(torch.float32))
-        trans, init = model.seqdist.compute_transition_probs(scores, betas)
+        betas -= (betas.max(2, keepdim=True)[0] - 5.0)
     return {
-        'trans': trans.to(dtype).transpose(0, 1),
-        'init': init.to(dtype).unsqueeze(1),
+        'scores': scores.transpose(0, 1),
+        'betas': betas.transpose(0, 1),
     }
+
+
+def quantise_int8(x, scale=127/5):
+    """
+    Quantise scores to int8.
+    """
+    scores = x['scores']
+    scores *= scale
+    scores = torch.round(scores).to(torch.int8).detach()
+    betas = x['betas']
+    betas *= scale
+    betas = torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach()
+    return {'scores': scores, 'betas': betas}
 
 
 def transfer(x):
@@ -58,16 +71,18 @@ def transfer(x):
         }
 
 
-def decode(scores, beam_size=10, beam_cut_threshold=0.1, alphabet="NACGT"):
+def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
     """
-    Beam search over the transition posterior probs.
+    Beamsearch decode.
     """
-    return crf_beam_search(
-        scores['trans'].astype(np.float32),
-        scores['init'][0].astype(np.float32),
-        alphabet, beam_size=beam_size,
-        beam_cut_threshold=beam_cut_threshold,
-    )[0]
+    path, _ = beamsearch(
+        scores['scores'], scale, seqdist.n_base, beamsize,
+        guide=scores['betas'], beam_cut=beamcut
+    )
+    try:
+        return seqdist.path_to_str(path % 4 + 1)
+    except IndexError:
+        return ""
 
 
 def split_read(read, split_read_length=400000):
@@ -84,13 +99,14 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     """
     Basecalls a set of reads.
     """
+    _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
     reads = (read_chunk for read in reads for read_chunk in split_read(read)[::-1 if reverse else 1])
     chunks = (
         ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
         for (read, start, end) in reads
     )
     batches = (
-        (k, compute_scores(model, batch, reverse=reverse))
+        (k, quantise_int8(compute_scores(model, batch, reverse=reverse)))
         for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = (
@@ -99,7 +115,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     )
 
     transferred = thread_map(transfer, stitched, n_thread=1)
-    basecalls = thread_map(decode, transferred, n_thread=8)
+    basecalls = thread_map(_decode, transferred, n_thread=8)
 
     basecalls = (
         (read, ''.join(seq for k, seq in parts))

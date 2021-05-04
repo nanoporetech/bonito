@@ -1,5 +1,7 @@
 """
-Bonito Duplex
+Bonito Duplex consensus decoding.
+
+https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1
 """
 
 import os
@@ -12,10 +14,13 @@ from time import perf_counter
 from datetime import timedelta
 from multiprocessing import Pool
 from itertools import islice, groupby
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Process, Queue, Lock, cpu_count
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import spoa
 import torch
+import parasail
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -25,7 +30,6 @@ import bonito
 from bonito.io import Writer
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_raw_data_for_read
-from bonito.cli.pair import build_envelope, build_index
 from bonito.util import half_supported, concat, accuracy
 from bonito.multiprocessing import thread_map, process_map
 from bonito.crf.basecall import transfer, split_read, stitch
@@ -74,6 +78,63 @@ def pair_gen(directory, pairs, n_proc=4, direction=0):
             if direction == 0: yield template
             elif direction == 1: yield complement
             else: yield template, complement
+
+
+def build_index(files, workers=8):
+    """
+    Build an index of read ids to filename mappings
+    """
+    index = {}
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        for res in tqdm(pool.map(get_read_ids, files), ascii=True, ncols=100):
+            index.update(res)
+    return index
+
+
+def build_envelope(len1, seq1, path1, len2, seq2, path2, padding=15):
+
+    # needleman-wunsch alignment with constant gap penalty.
+    aln = parasail.nw_trace_striped_32(seq2, seq1, 2, 2, parasail.dnafull)
+
+    # pair up positions
+    alignment = np.column_stack([
+        np.cumsum([x != '-' for x in aln.traceback.ref]) - 1,
+        np.cumsum([x != '-' for x in aln.traceback.query]) - 1
+    ])
+
+    path_range1 = np.column_stack([path1, path1[1:] + [len1]])
+    path_range2 = np.column_stack([path2, path2[1:] + [len2]])
+
+    envelope = np.full((len1, 2), -1, dtype=int)
+
+    for idx1, idx2 in alignment.clip(0):
+
+        st_1, en_1 = path_range1[idx1]
+        st_2, en_2 = path_range2[idx2]
+
+        for idx in range(st_1, en_1):
+            if st_2 < envelope[idx, 0] or envelope[idx, 0] < 0:
+                envelope[idx, 0] = st_2
+            if en_2 > envelope[idx, 1] or envelope[idx, 1] < 0:
+                envelope[idx, 1] = en_2
+
+    # add a little padding to ensure some overlap
+    envelope[:, 0] = envelope[:, 0] - padding
+    envelope[:, 1] = envelope[:, 1] + padding
+    envelope = np.clip(envelope, 0, len2)
+
+    prev_end = 0
+    for i in range(envelope.shape[0]):
+
+        if envelope[i, 0] > envelope[i, 1]:
+            envelope[i, 0] = 0
+
+        if envelope[i, 0] > prev_end:
+            envelope[i, 0] = prev_end
+
+        prev_end = envelope[i, 1]
+
+    return envelope.astype(np.uint64)
 
 
 def find_follow_on(df, gap=5, distance=51, cov=0.85, min_len=100, max_samples=SPLIT_READ_LENGTH):
