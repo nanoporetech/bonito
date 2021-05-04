@@ -168,6 +168,7 @@ summary_field_names = [
     'alignment_accuracy',
 ]
 
+
 def summary_row(read, seqlen, qscore, alignment=False):
     """
     Summary tsv row.
@@ -217,13 +218,95 @@ def summary_row(read, seqlen, qscore, alignment=False):
     return dict(zip(summary_field_names, fields))
 
 
+duplex_summary_field_names = [
+    'filename_template',
+    'read_id_template',
+    'filename_complement',
+    'read_id_complement',
+    'run_id',
+    'channel_template',
+    'mux_template',
+    'channel_complement',
+    'mux_complement',
+    'sequence_length_duplex',
+    'mean_qscore_duplex',
+    #if alignment
+    'alignment_genome',
+    'alignment_genome_start',
+    'alignment_genome_end',
+    'alignment_strand_start',
+    'alignment_strand_end',
+    'alignment_direction',
+    'alignment_length',
+    'alignment_num_aligned',
+    'alignment_num_correct',
+    'alignment_num_insertions',
+    'alignment_num_deletions',
+    'alignment_num_substitutions',
+    'alignment_strand_coverage',
+    'alignment_identity',
+    'alignment_accuracy',
+]
+
+
+def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
+    """
+    Duplex summary tsv row.
+    """
+    fields = [
+        read_temp.filename,
+        read_temp.read_id,
+        comp_read.filename,
+        comp_read.read_id,
+        read_temp.run_id,
+        read_temp.channel,
+        read_temp.mux,
+        comp_read.channel,
+        comp_read.mux,
+        seqlen,
+        qscore,
+    ]
+
+    if alignment:
+
+        ins = sum(count for count, op in alignment.cigar if op == 1)
+        dels = sum(count for count, op in alignment.cigar if op == 2)
+        subs = alignment.NM - ins - dels
+        length = alignment.blen
+        matches = length - ins - dels
+        correct = alignment.mlen
+
+        fields.extend([
+            alignment.ctg,
+            alignment.r_st,
+            alignment.r_en,
+            alignment.q_st if alignment.strand == +1 else seqlen - alignment.q_en,
+            alignment.q_en if alignment.strand == +1 else seqlen - alignment.q_st,
+            '+' if alignment.strand == +1 else '-',
+            length, matches, correct,
+            ins, dels, subs,
+            (alignment.q_en - alignment.q_st) / seqlen,
+            correct / matches,
+            correct / length,
+        ])
+
+    elif alignment is None:
+        fields.extend(
+            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
+        )
+
+    return dict(zip(duplex_summary_field_names, fields))
+
+
+
 class Writer(Thread):
 
-    def __init__(self, iterator, aligner, fd=sys.stdout, fastq=False):
+    def __init__(self, iterator, aligner, fd=sys.stdout, fastq=False, duplex=False):
         super().__init__()
         self.fd = fd
         self.log = []
         self.fastq = fastq
+        self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
         self.write_headers()
@@ -238,22 +321,35 @@ class Writer(Thread):
             for read, res in self.iterator:
 
                 seq = res['sequence']
-                qstring = res['qstring']
-                mean_qscore = res['mean_qscore']
+                qstring = res.get('qstring', '*')
+                mean_qscore = res.get('mean_qscore', 0.0)
                 mapping = res.get('mapping', False)
+
+                if self.duplex:
+                    samples = len(read[0].signal) + len(read[1].signal)
+                    read_id = '%s;%s' % (read[0].read_id, read[1].read_id)
+                else:
+                    samples = len(read.signal)
+                    read_id = read.read_id
 
                 if len(seq):
                     if self.aligner:
-                        write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                        write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
                     else:
                         if self.fastq:
-                            write_fastq(read.read_id, seq, qstring, fd=self.fd)
+                            write_fastq(read_id, seq, qstring, fd=self.fd)
                         else:
-                            write_fasta(read.read_id, seq, fd=self.fd)
-                    summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
-                    self.log.append((read.read_id, len(read.signal)))
+                            write_fasta(read_id, seq, fd=self.fd)
+
+                    if self.duplex:
+                        summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
+                    else:
+                        summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
+
+                    self.log.append((read_id, samples))
+
                 else:
-                    logger.warn("> skipping empty sequence %s", read.read_id)
+                    logger.warn("> skipping empty sequence %s", read_id)
 
 
 class CTCWriter(Thread):
@@ -279,7 +375,6 @@ class CTCWriter(Thread):
         chunks = []
         targets = []
         lengths = []
-
 
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, ctc_data in self.iterator:
