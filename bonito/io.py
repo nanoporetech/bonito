@@ -163,6 +163,7 @@ summary_field_names = [
     'alignment_num_insertions',
     'alignment_num_deletions',
     'alignment_num_substitutions',
+    'alignment_mapq',
     'alignment_strand_coverage',
     'alignment_identity',
     'alignment_accuracy',
@@ -205,6 +206,7 @@ def summary_row(read, seqlen, qscore, alignment=False):
             '+' if alignment.strand == +1 else '-',
             length, matches, correct,
             ins, dels, subs,
+            alignment.mapq,
             (alignment.q_en - alignment.q_st) / seqlen,
             correct / matches,
             correct / length,
@@ -212,7 +214,7 @@ def summary_row(read, seqlen, qscore, alignment=False):
 
     elif alignment is None:
         fields.extend(
-            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
+            ['*', -1, -1, -1, -1, '*', 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0]
         )
 
     return dict(zip(summary_field_names, fields))

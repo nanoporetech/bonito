@@ -12,7 +12,7 @@ from fast_ctc_decode import crf_beam_search
 import bonito
 from bonito.io import Writer
 from bonito.fast5 import get_reads
-from bonito.aligner import Aligner, align_map
+from bonito.aligner import align_map
 from bonito.multiprocessing import thread_map, thread_iter
 from bonito.util import concat, chunk, batchify, unbatchify, half_supported
 
