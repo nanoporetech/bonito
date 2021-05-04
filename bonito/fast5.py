@@ -21,7 +21,7 @@ class Read:
         self.read_id = read.read_id
         self.filename = filename.name
         self.run_id = read.get_run_id()
-        if type(self.run_id) == bytes:
+        if type(self.run_id) in (bytes, np.bytes_):
             self.run_id = self.run_id.decode()
 
         read_attrs = read.handle[read.raw_dataset_group_name].attrs
@@ -33,7 +33,7 @@ class Read:
 
         self.mux = read_attrs['start_mux']
         self.channel = channel_info['channel_number']
-        if type(self.channel) == bytes:
+        if type(self.channel) in (bytes, np.bytes_):
             self.channel = self.channel.decode()
 
         self.start = read_attrs['start_time'] / self.sampling_rate
