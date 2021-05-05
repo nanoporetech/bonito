@@ -35,9 +35,6 @@ from bonito.multiprocessing import thread_map, process_map
 from bonito.crf.basecall import transfer, split_read, stitch
 
 
-SPLIT_READ_LENGTH = 400000
-
-
 def get_read(readdir, summary, idx):
     """
     Get a single read from row `idx` in the `summary` dataframe.
@@ -47,18 +44,7 @@ def get_read(readdir, summary, idx):
     )
 
 
-def get_pairs(readdir, pairs, idx):
-    """
-    Get a pair of reads from row `idx` in the `pairs` dataframe.
-    """
-    row = pairs.iloc[idx]
-    return (
-        get_raw_data_for_read((readdir / row.file_1, row.read_1)),
-        get_raw_data_for_read((readdir / row.file_2, row.read_2))
-    )
-
-
-def read_gen(directory, summary, n_proc=4):
+def read_gen(directory, summary, n_proc=1):
     """
     Generate reads from the given `directory` listed in the `summary` dataframe.
     """
@@ -66,26 +52,12 @@ def read_gen(directory, summary, n_proc=4):
         yield from pool.imap(partial(get_read, Path(directory), summary), range(len(summary)))
 
 
-def pair_gen(directory, pairs, n_proc=4, direction=0):
-    """
-    Generate pairs of reads from given `directory` listed in the `pairs` dataframe.
-    """
-    with Pool(n_proc) as pool:
-        for template, complement in pool.imap(partial(get_pairs, Path(directory), pairs), range(len(pairs))):
-            # TODO: fixed read splitting
-            if len(template.signal) > SPLIT_READ_LENGTH or len(complement.signal) > SPLIT_READ_LENGTH:
-                continue
-            if direction == 0: yield template
-            elif direction == 1: yield complement
-            else: yield template, complement
-
-
-def build_index(files, workers=8):
+def build_index(files, n_proc=1):
     """
     Build an index of read ids to filename mappings
     """
     index = {}
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    with ProcessPoolExecutor(max_workers=n_proc) as pool:
         for res in tqdm(pool.map(get_read_ids, files), ascii=True, ncols=100):
             index.update(res)
     return index
@@ -137,14 +109,13 @@ def build_envelope(len1, seq1, path1, len2, seq2, path2, padding=15):
     return envelope.astype(np.uint64)
 
 
-def find_follow_on(df, gap=5, distance=51, cov=0.85, min_len=100, max_samples=SPLIT_READ_LENGTH):
+def find_follow_on(df, gap=5, distance=51, cov=0.85, min_len=100):
     """
     Find follow on reads from a sequencing summary file.
     """
     df = df[
         df.alignment_coverage.gt(cov) &
-        df.sequence_length_template.gt(min_len) &
-        df.duration.lt(max_samples / 4000)
+        df.sequence_length_template.gt(min_len)
     ]
     df = df.sort_values(['run_id', 'channel', 'mux', 'start_time'])
 
@@ -188,7 +159,7 @@ def compute_scores(model, batch, reverse=False):
 def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=False):
     reads = (
         read_chunk for read in reads
-        for read_chunk in split_read(read, SPLIT_READ_LENGTH)[::-1 if reverse else 1]
+        for read_chunk in split_read(read, chunksize * batchsize)[::-1 if reverse else 1]
     )
     chunks = (
         ((read, start, end),
@@ -204,6 +175,7 @@ def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=Fa
         for ((read, start, end), x) in bonito.util.unbatchify(batches)
     )
     transferred = thread_map(transfer, stitched, n_thread=1)
+
     return (
         (read, concat([part for k, part in parts]))
         for read, parts in groupby(transferred, lambda x: x[0])
@@ -250,14 +222,10 @@ def poa(seqs, allseq=False):
     return (con, )
 
 
-def call(model, reads_directory, summary, is_pairs=False, aligner=None, qscore=False):
+def call(model, reads_directory, summary_temp, summary_comp, aligner=None, qscore=False):
 
-    if is_pairs:
-        temp_reads = pair_gen(reads_directory, summary, direction=0)
-        comp_reads = pair_gen(reads_directory, summary, direction=1)
-    else:
-        temp_reads = read_gen(reads_directory, summary.iloc[0::2])
-        comp_reads = read_gen(reads_directory, summary.iloc[1::2])
+    temp_reads = read_gen(reads_directory, summary_temp, n_proc=8)
+    comp_reads = read_gen(reads_directory, summary_comp, n_proc=8)
 
     temp_scores = basecall(model, temp_reads, reverse=False)
     comp_scores = basecall(model, comp_reads, reverse=True)
@@ -299,7 +267,12 @@ def main(args):
         summary = summary[summary.filename_fast5.isin(valid_fast5s)]
         summary = find_follow_on(summary)
         sys.stderr.write(f"> found {len(summary) // 2} follow strands\n")
+
         pairs = summary.head(args.max_reads)
+
+        temp_reads = pairs.iloc[0::2]
+        comp_reads = pairs.iloc[1::2]
+
     else:
         if args.index is not None:
             sys.stderr.write("> loading read index\n")
@@ -307,7 +280,7 @@ def main(args):
         else:
             sys.stderr.write("> building read index\n")
             files = list(glob(os.path.join(args.reads_directory, '*.fast5')))
-            index = build_index(files)
+            index = build_index(files, n_proc=8)
             if args.save_index:
                 with open('bonito-read-id.idx', 'w') as f:
                     json.dump(index, f)
@@ -316,7 +289,10 @@ def main(args):
         pairs['file_1'] = pairs.apply(lambda x: index[x.read_1], axis=1)
         pairs['file_2'] = pairs.apply(lambda x: index[x.read_2], axis=1)
 
-    basecalls = call(model, args.reads_directory, pairs, aligner=aligner, is_pairs=bool(args.pairs))
+        temp_reads = pairs[['read_1', 'file_1']].rename(columns={'read_1': 'read_id', 'file_1': 'filename_fast5'})
+        comp_reads = pairs[['read_2', 'file_2']].rename(columns={'read_2': 'read_id', 'file_2': 'filename_fast5'})
+
+    basecalls = call(model, args.reads_directory, temp_reads, comp_reads, aligner=aligner)
     writer = Writer(tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, duplex=True)
 
     t0 = perf_counter()
