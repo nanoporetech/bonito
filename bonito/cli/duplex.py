@@ -229,7 +229,11 @@ def decode(res, beamsize_1=5, pad_1=40, cut_1=0.01, beamsize_2=5, pad_2=40, cut_
     simplex1, path1 = crf_beam_search(temp_probs, init1, alphabet, beam_size=5, beam_cut_threshold=0.01)
     simplex2, path2 = crf_beam_search(comp_probs, init2, alphabet, beam_size=5, beam_cut_threshold=0.01)
 
-    if accuracy(simplex1, simplex2) < match: return [simplex1, simplex2]
+    if len(simplex1) < 10 or len(simplex2) < 10:
+        return [simplex1, simplex2]
+
+    if accuracy(simplex1, simplex2) < match:
+        return [simplex1, simplex2]
 
     duplex1 = beam_search_duplex(
         simplex1, path1, temp_probs, init1, simplex2, path2, comp_probs, init2, pad=pad_1, beamsize=5, T=cut_1
