@@ -29,10 +29,10 @@ from fast_ctc_decode import crf_beam_search, crf_beam_search_duplex
 import bonito
 from bonito.io import Writer
 from bonito.aligner import Aligner, align_map
-from bonito.fast5 import get_raw_data_for_read
 from bonito.util import half_supported, concat, accuracy
-from bonito.multiprocessing import thread_map, process_map
 from bonito.crf.basecall import transfer, split_read, stitch
+from bonito.fast5 import get_raw_data_for_read, get_read_ids
+from bonito.multiprocessing import thread_map, process_map, process_cancel
 
 
 def get_read(readdir, summary, idx):
@@ -44,12 +44,16 @@ def get_read(readdir, summary, idx):
     )
 
 
-def read_gen(directory, summary, n_proc=1):
+def read_gen(directory, summary, n_proc=1, cancel=None):
     """
     Generate reads from the given `directory` listed in the `summary` dataframe.
     """
     with Pool(n_proc) as pool:
-        yield from pool.imap(partial(get_read, Path(directory), summary), range(len(summary)))
+        for read in pool.imap(partial(get_read, Path(directory), summary), range(len(summary))):
+            yield read
+
+            if cancel is not None and cancel.is_set():
+                return
 
 
 def build_index(files, n_proc=1):
@@ -58,7 +62,7 @@ def build_index(files, n_proc=1):
     """
     index = {}
     with ProcessPoolExecutor(max_workers=n_proc) as pool:
-        for res in tqdm(pool.map(get_read_ids, files), ascii=True, ncols=100):
+        for res in tqdm(pool.map(get_read_ids, files), leave=False):
             index.update(res)
     return index
 
@@ -114,18 +118,18 @@ def find_follow_on(df, gap=5, distance=51, cov=0.85, min_len=100):
     Find follow on reads from a sequencing summary file.
     """
     df = df[
-        df.alignment_coverage.gt(cov) &
-        df.sequence_length_template.gt(min_len)
+        df.alignment_coverage.astype('float32').gt(cov) &
+        df.sequence_length_template.astype('int32').gt(min_len)
     ]
     df = df.sort_values(['run_id', 'channel', 'mux', 'start_time'])
 
-    genome_start = np.array(df.alignment_genome_start)
-    genome_end = np.array(df.alignment_genome_end)
+    genome_start = np.array(df.alignment_genome_start, dtype=np.int32)
+    genome_end = np.array(df.alignment_genome_end, dtype=np.int32)
     direction = np.array(df.alignment_direction)
-    start_time = np.array(df.start_time)
-    end_time = np.array(df.start_time + df.duration)
-    channel = np.array(df.channel)
-    mux = np.array(df.mux)
+    start_time = np.array(df.start_time, dtype=np.float32)
+    end_time = np.array(df.start_time + df.duration, dtype=np.float32)
+    channel = np.array(df.channel, dtype=np.int32)
+    mux = np.array(df.mux, dtype=np.int32)
 
     filt = (
         (channel[1:] == channel[:-1]) &
@@ -224,8 +228,8 @@ def poa(seqs, allseq=False):
 
 def call(model, reads_directory, summary_temp, summary_comp, aligner=None, qscore=False):
 
-    temp_reads = read_gen(reads_directory, summary_temp, n_proc=8)
-    comp_reads = read_gen(reads_directory, summary_comp, n_proc=8)
+    temp_reads = read_gen(reads_directory, summary_temp, n_proc=8, cancel=process_cancel())
+    comp_reads = read_gen(reads_directory, summary_comp, n_proc=8, cancel=process_cancel())
 
     temp_scores = basecall(model, temp_reads, reverse=False)
     comp_scores = basecall(model, comp_reads, reverse=True)
@@ -259,7 +263,8 @@ def main(args):
 
     if args.summary:
         sys.stderr.write("> finding follow on strands\n")
-        summary = pd.read_csv(args.summary, '\t')
+        summary = pd.read_csv(args.summary, '\t', low_memory=False)
+        summary = summary[summary.sequence_length_template.gt(0)]
         valid_fast5s = [
             f for f in summary.filename_fast5.unique()
             if ((args.reads_directory / Path(f)).exists())
@@ -269,10 +274,8 @@ def main(args):
         sys.stderr.write(f"> found {len(summary) // 2} follow strands\n")
 
         pairs = summary.head(args.max_reads)
-
         temp_reads = pairs.iloc[0::2]
         comp_reads = pairs.iloc[1::2]
-
     else:
         if args.index is not None:
             sys.stderr.write("> loading read index\n")
@@ -286,11 +289,16 @@ def main(args):
                     json.dump(index, f)
 
         pairs = pd.read_csv(args.pairs, sep=args.sep, names=['read_1', 'read_2']).head(args.max_reads)
-        pairs['file_1'] = pairs.apply(lambda x: index[x.read_1], axis=1)
-        pairs['file_2'] = pairs.apply(lambda x: index[x.read_2], axis=1)
+        pairs['file_1'] = pairs['read_1'].apply(index.get)
+        pairs['file_2'] = pairs['read_2'].apply(index.get)
+        pairs = pairs.dropna().reset_index()
 
         temp_reads = pairs[['read_1', 'file_1']].rename(columns={'read_1': 'read_id', 'file_1': 'filename_fast5'})
         comp_reads = pairs[['read_2', 'file_2']].rename(columns={'read_2': 'read_id', 'file_2': 'filename_fast5'})
+
+    if len(pairs) == 0:
+        print("> no valid pairs found", file=sys.stderr)
+        exit(1)
 
     basecalls = call(model, args.reads_directory, temp_reads, comp_reads, aligner=aligner)
     writer = Writer(tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, duplex=True)
