@@ -274,6 +274,8 @@ def main(args):
         sys.stderr.write(f"> found {len(summary) // 2} follow strands\n")
 
         pairs = summary.head(args.max_reads)
+        if args.max_reads > 0: pairs = summary.head(args.max_reads)
+
         temp_reads = pairs.iloc[0::2]
         comp_reads = pairs.iloc[1::2]
     else:
@@ -288,7 +290,9 @@ def main(args):
                 with open('bonito-read-id.idx', 'w') as f:
                     json.dump(index, f)
 
-        pairs = pd.read_csv(args.pairs, sep=args.sep, names=['read_1', 'read_2']).head(args.max_reads)
+        pairs = pd.read_csv(args.pairs, sep=args.sep, names=['read_1', 'read_2'])
+        if args.max_reads > 0: pairs = pairs.head(args.max_reads)
+
         pairs['file_1'] = pairs['read_1'].apply(index.get)
         pairs['file_2'] = pairs['read_2'].apply(index.get)
         pairs = pairs.dropna().reset_index()
@@ -328,5 +332,5 @@ def argparser():
     parser.add_argument("--save-index", action="store_true", default=False)
     parser.add_argument("--reference")
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--max-reads", default=100, type=int)
+    parser.add_argument("--max-reads", default=0, type=int)
     return parser
