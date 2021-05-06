@@ -320,14 +320,12 @@ def argparser():
     )
     parser.add_argument("model")
     parser.add_argument("reads_directory")
-
-    parser.add_argument("--summary", default=None)
-
-    parser.add_argument("--pairs")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--summary", default=None)
+    group.add_argument("--pairs")
     parser.add_argument("--sep", default=' ')
     parser.add_argument("--index", default=None)
     parser.add_argument("--save-index", action="store_true", default=False)
-
     parser.add_argument("--reference")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--max-reads", default=100, type=int)
