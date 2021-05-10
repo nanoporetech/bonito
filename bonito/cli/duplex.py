@@ -4,7 +4,6 @@ Bonito Duplex consensus decoding.
 https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1
 """
 
-
 import os
 import sys
 import json
@@ -304,7 +303,7 @@ def call(model, reads_directory, templates, complements, aligner=None, cudapoa=T
     comp_scores = basecall(model, comp_reads, reverse=True)
 
     scores = (((r1, r2), (s1, s2)) for (r1, s1), (r2, s2) in zip(temp_scores, comp_scores))
-    calls = thread_map(decode, scores, n_thread=24)
+    calls = thread_map(decode, scores, n_thread=12)
 
     if cudapoa:
         sequences = ((reads, [seqs, ]) for reads, seqs in calls if len(seqs) > 2)
@@ -343,7 +342,7 @@ def main(args):
         ]
         pairs = pairs[pairs.filename_fast5.isin(valid_fast5s)]
         pairs = find_follow_on(pairs)
-        sys.stderr.write("> found {len(pairs) // 2} follow strands in summary\n")
+        sys.stderr.write("> found %s follow strands in summary\n" % (len(pairs) // 2))
 
         if args.max_reads > 0: pairs = pairs.head(args.max_reads)
 
