@@ -4,11 +4,13 @@ Bonito Duplex consensus decoding.
 https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1
 """
 
+
 import os
 import sys
 import json
 from glob import glob
 from pathlib import Path
+from os.path import basename
 from functools import partial
 from time import perf_counter
 from datetime import timedelta
@@ -26,13 +28,71 @@ import pandas as pd
 from tqdm import tqdm
 from fast_ctc_decode import crf_beam_search, crf_beam_search_duplex
 
+from genomeworks import cuda
+from genomeworks.cudapoa import CudaPoaBatch, status_to_str
+
 import bonito
 from bonito.io import Writer
 from bonito.aligner import Aligner, align_map
-from bonito.util import half_supported, concat, accuracy
+from bonito.util import load_model, half_supported
 from bonito.crf.basecall import transfer, split_read, stitch
-from bonito.fast5 import get_raw_data_for_read, get_read_ids
+from bonito.fast5 import get_raw_data_for_read, get_fast5_file
+from bonito.util import unbatchify, batchify, chunk, concat, accuracy
 from bonito.multiprocessing import thread_map, process_map, process_cancel
+
+
+def poagen(groups, gpu_percent=0.8):
+    free, total = cuda.cuda_get_mem_info(cuda.cuda_get_device())
+    gpu_mem_per_batch = gpu_percent * free
+
+    max_seq_sz = 0
+    max_sequences_per_poa = 0
+
+    for group in groups:
+        longest_seq = len(max(group, key=len))
+        max_seq_sz = longest_seq if longest_seq > max_seq_sz else max_seq_sz
+        seq_in_poa = len(group)
+        max_sequences_per_poa = seq_in_poa if seq_in_poa > max_sequences_per_poa else max_sequences_per_poa
+
+    batch = CudaPoaBatch(
+        max_sequences_per_poa,
+        max_seq_sz,
+        gpu_mem_per_batch,
+        output_type="consensus",
+        cuda_banded_alignment=True,
+        alignment_band_width=256,
+    )
+
+    poa_index = 0
+    initial_count = 0
+
+    while poa_index < len(groups):
+
+        group = groups[poa_index]
+        group_status, seq_status = batch.add_poa_group(group)
+
+        # If group was added and more space is left in batch, continue onto next group.
+        if group_status == 0:
+            for seq_index, status in enumerate(seq_status):
+                if status != 0:
+                    print("Could not add sequence {} to POA {} - error {}".format(seq_index, poa_index, status_to_str(status)))
+            poa_index += 1
+
+        # Once batch is full or no groups are left, run POA processing.
+        if ((group_status == 1) or ((group_status == 0) and (poa_index == len(groups)))):
+            batch.generate_poa()
+            consensus, coverage, con_status = batch.get_consensus()
+            for p, status in enumerate(con_status):
+                if status != 0:
+                    print("Could not get consensus for POA group {} - {}".format(initial_count + p, status_to_str(status)))
+            yield from consensus
+            initial_count = poa_index
+            batch.reset()
+
+        # In the case where POA group wasn't processed correctly.
+        elif group_status != 0:
+            print("Could not add POA group {} to batch - {}".format(poa_index, status_to_str(group_status)))
+            poa_index += 1
 
 
 def get_read(readdir, summary, idx):
@@ -51,9 +111,18 @@ def read_gen(directory, summary, n_proc=1, cancel=None):
     with Pool(n_proc) as pool:
         for read in pool.imap(partial(get_read, Path(directory), summary), range(len(summary))):
             yield read
-
             if cancel is not None and cancel.is_set():
                 return
+
+
+def get_read_ids(filename):
+    """
+    Return a dictionary of read_id -> filename mappings.
+    """
+    with get_fast5_file(filename, 'r') as f5:
+        return {
+            read.read_id: basename(filename) for read in f5.get_reads()
+        }
 
 
 def build_index(files, n_proc=1):
@@ -167,16 +236,16 @@ def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=Fa
     )
     chunks = (
         ((read, start, end),
-        bonito.util.chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
+        chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
         for (read, start, end) in reads
     )
     batches = (
         (k, compute_scores(model, batch, reverse=reverse))
-        for k, batch in bonito.util.batchify(chunks, batchsize=batchsize)
+        for k, batch in batchify(chunks, batchsize=batchsize)
     )
     stitched = (
         (read, stitch(x, chunksize, overlap, end - start, model.stride, reverse=reverse))
-        for ((read, start, end), x) in bonito.util.unbatchify(batches)
+        for ((read, start, end), x) in unbatchify(batches)
     )
     transferred = thread_map(transfer, stitched, n_thread=1)
 
@@ -222,26 +291,29 @@ def decode(res, beamsize_1=5, pad_1=40, cut_1=0.01, beamsize_2=5, pad_2=40, cut_
 
 def poa(seqs, allseq=False):
     con, msa = spoa.poa(seqs, genmsa=False)
-    if allseq: return (*seqs, con)
+    if allseq: return (con, *seqs)
     return (con, )
 
 
-def call(model, reads_directory, summary_temp, summary_comp, aligner=None, qscore=False):
+def call(model, reads_directory, templates, complements, aligner=None, cudapoa=True):
 
-    temp_reads = read_gen(reads_directory, summary_temp, n_proc=8, cancel=process_cancel())
-    comp_reads = read_gen(reads_directory, summary_comp, n_proc=8, cancel=process_cancel())
+    temp_reads = read_gen(reads_directory, templates, n_proc=8, cancel=process_cancel())
+    comp_reads = read_gen(reads_directory, complements, n_proc=8, cancel=process_cancel())
 
     temp_scores = basecall(model, temp_reads, reverse=False)
     comp_scores = basecall(model, comp_reads, reverse=True)
 
     scores = (((r1, r2), (s1, s2)) for (r1, s1), (r2, s2) in zip(temp_scores, comp_scores))
+    calls = thread_map(decode, scores, n_thread=24)
 
-    calls = thread_map(decode, scores, n_thread=16)
-    sequences = ((reads, seqs) for reads, seqs in calls if len(seqs) > 2)
-
-    consensus = process_map(poa, sequences, n_proc=8)
-
-    res = ((reads, {'sequence': seq}) for reads, seqs in consensus for seq in seqs)
+    if cudapoa:
+        sequences = ((reads, [seqs, ]) for reads, seqs in calls if len(seqs) > 2)
+        consensus = (zip(reads, poagen(calls)) for reads, calls in batchify(sequences, 100))
+        res = ((reads[0], {'sequence': seq}) for seqs in consensus for reads, seq in seqs)
+    else:
+        sequences = ((reads, seqs) for reads, seqs in calls if len(seqs) > 2)
+        consensus = process_map(poa, sequences, n_proc=4)
+        res = ((reads, {'sequence': seq}) for reads, seqs in consensus for seq in seqs)
 
     if aligner is None: return res
     return align_map(aligner, res)
@@ -250,7 +322,7 @@ def call(model, reads_directory, summary_temp, summary_comp, aligner=None, qscor
 def main(args):
 
     sys.stderr.write("> loading model\n")
-    model = bonito.util.load_model(args.model, args.device)
+    model = load_model(args.model, args.device)
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -263,18 +335,17 @@ def main(args):
 
     if args.summary:
         sys.stderr.write("> finding follow on strands\n")
-        summary = pd.read_csv(args.summary, '\t', low_memory=False)
-        summary = summary[summary.sequence_length_template.gt(0)]
+        pairs = pd.read_csv(args.summary, '\t', low_memory=False)
+        pairs = pairs[pairs.sequence_length_template.gt(0)]
         valid_fast5s = [
-            f for f in summary.filename_fast5.unique()
+            f for f in pairs.filename_fast5.unique()
             if ((args.reads_directory / Path(f)).exists())
         ]
-        summary = summary[summary.filename_fast5.isin(valid_fast5s)]
-        summary = find_follow_on(summary)
-        sys.stderr.write(f"> found {len(summary) // 2} follow strands\n")
+        pairs = pairs[pairs.filename_fast5.isin(valid_fast5s)]
+        pairs = find_follow_on(pairs)
+        sys.stderr.write("> found {len(pairs) // 2} follow strands in summary\n")
 
-        pairs = summary.head(args.max_reads)
-        if args.max_reads > 0: pairs = summary.head(args.max_reads)
+        if args.max_reads > 0: pairs = pairs.head(args.max_reads)
 
         temp_reads = pairs.iloc[0::2]
         comp_reads = pairs.iloc[1::2]
@@ -297,12 +368,18 @@ def main(args):
         pairs['file_2'] = pairs['read_2'].apply(index.get)
         pairs = pairs.dropna().reset_index()
 
-        temp_reads = pairs[['read_1', 'file_1']].rename(columns={'read_1': 'read_id', 'file_1': 'filename_fast5'})
-        comp_reads = pairs[['read_2', 'file_2']].rename(columns={'read_2': 'read_id', 'file_2': 'filename_fast5'})
+        temp_reads = pairs[['read_1', 'file_1']].rename(
+            columns={'read_1': 'read_id', 'file_1': 'filename_fast5'}
+        )
+        comp_reads = pairs[['read_2', 'file_2']].rename(
+            columns={'read_2': 'read_id', 'file_2': 'filename_fast5'}
+        )
 
     if len(pairs) == 0:
-        print("> no valid pairs found", file=sys.stderr)
+        print("> no matched pairs found in given directory", file=sys.stderr)
         exit(1)
+
+    CudaPoaBatch(1000, 1000, 3724032) # logger chatter
 
     basecalls = call(model, args.reads_directory, temp_reads, comp_reads, aligner=aligner)
     writer = Writer(tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, duplex=True)
@@ -326,7 +403,7 @@ def argparser():
     parser.add_argument("reads_directory")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--summary", default=None)
-    group.add_argument("--pairs")
+    group.add_argument("--pairs", default=None)
     parser.add_argument("--sep", default=' ')
     parser.add_argument("--index", default=None)
     parser.add_argument("--save-index", action="store_true", default=False)
