@@ -74,7 +74,7 @@ def poagen(groups, gpu_percent=0.8):
         if group_status == 0:
             for seq_index, status in enumerate(seq_status):
                 if status != 0:
-                    print("Could not add sequence {} to POA {} - error {}".format(seq_index, poa_index, status_to_str(status)))
+                    print("Could not add sequence {} to POA {} - error {}".format(seq_index, poa_index, status_to_str(status)), file=sys.stderr)
             poa_index += 1
 
         # Once batch is full or no groups are left, run POA processing.
@@ -83,14 +83,14 @@ def poagen(groups, gpu_percent=0.8):
             consensus, coverage, con_status = batch.get_consensus()
             for p, status in enumerate(con_status):
                 if status != 0:
-                    print("Could not get consensus for POA group {} - {}".format(initial_count + p, status_to_str(status)))
+                    print("Could not get consensus for POA group {} - {}".format(initial_count + p, status_to_str(status)), file=sys.stderr)
             yield from consensus
             initial_count = poa_index
             batch.reset()
 
         # In the case where POA group wasn't processed correctly.
         elif group_status != 0:
-            print("Could not add POA group {} to batch - {}".format(poa_index, status_to_str(group_status)))
+            print("Could not add POA group {} to batch - {}".format(poa_index, status_to_str(group_status)), file=sys.stderr)
             poa_index += 1
 
 
