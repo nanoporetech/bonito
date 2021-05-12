@@ -3,7 +3,7 @@ toml==0.10.2
 tqdm==4.60.0
 numpy<=1.18.5
 scipy==1.5.4
-torch==1.8.0
+torch~=1.8
 parasail==1.2
 seqdist==0.0.3
 pandas>=0.24.2
