@@ -2,8 +2,8 @@ mappy==2.18
 toml==0.10.2
 tqdm==4.31.1
 scipy==1.4.1
-torch==1.8.0
-numpy==1.18.5
+torch~=1.8.0
+numpy~=1.17.5
 pyspoa==0.0.8
 parasail==1.2
 seqdist==0.0.3
@@ -12,5 +12,6 @@ requests==2.25.1
 crf-beam==0.0.1a0
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
-#cupy-cuda102==8.6.0
-#genomeworks-cuda-10-2==2021.2.0
+cupy-cuda102==8.6.0
+genomeworks-cuda-10-2==2021.2.2
+
