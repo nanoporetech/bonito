@@ -31,7 +31,7 @@ from genomeworks import cuda
 from genomeworks.cudapoa import CudaPoaBatch, status_to_str
 
 import bonito
-from bonito.io import Writer
+from bonito.io import Writer, devnull
 from bonito.aligner import Aligner, align_map
 from bonito.util import load_model, half_supported
 from bonito.crf.basecall import transfer, split_read, stitch
@@ -378,7 +378,8 @@ def main(args):
         print("> no matched pairs found in given directory", file=sys.stderr)
         exit(1)
 
-    CudaPoaBatch(1000, 1000, 3724032) # logger chatter
+    # https://github.com/clara-parabricks/GenomeWorks/issues/648
+    with devnull(): CudaPoaBatch(1000, 1000, 3724032)
 
     basecalls = call(model, args.reads_directory, temp_reads, comp_reads, aligner=aligner)
     writer = Writer(tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, duplex=True)

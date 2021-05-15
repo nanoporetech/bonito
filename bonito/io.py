@@ -4,12 +4,13 @@ Bonito Input/Output
 
 import os
 import sys
+import csv
 import pandas as pd
 from warnings import warn
 from threading import Thread
 from logging import getLogger
+from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
-import csv
 
 import numpy as np
 from mappy import revcomp
@@ -56,6 +57,23 @@ class CSVLogger:
 
     def __exit__(self, *args):
         self.close()
+
+
+@contextmanager
+def devnull(*args, **kwds):
+    """
+    A context manager that sends all out stdout & stderr to devnull.
+    """
+    save_fds = [os.dup(1), os.dup(2)]
+    null_fds = [os.open(os.devnull, os.O_RDWR) for _ in range(2)]
+    os.dup2(null_fds[0], 1)
+    os.dup2(null_fds[1], 2)
+    try:
+        yield
+    finally:
+        os.dup2(save_fds[0], 1)
+        os.dup2(save_fds[1], 2)
+        for fd in null_fds + save_fds: os.close(fd)
 
 
 def write_fasta(header, sequence, fd=sys.stdout):
