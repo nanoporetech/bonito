@@ -91,7 +91,7 @@ def split_read(read, split_read_length=400000):
     """
     if len(read.signal) <= split_read_length:
         return [(read, 0, len(read.signal))]
-    breaks = np.arange(0, len(read.signal)+split_read_length, split_read_length)
+    breaks = np.arange(0, len(read.signal) + split_read_length, split_read_length)
     return [(read, start, min(end, len(read.signal))) for (start, end) in zip(breaks[:-1], breaks[1:])]
 
 

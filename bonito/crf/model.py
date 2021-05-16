@@ -60,6 +60,21 @@ class CTC_CRF(SequenceDist):
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
 
+    def compute_transition_probs(self, scores, betas):
+        T, N, C = scores.shape
+        # add bwd scores to edge scores
+        log_trans_probs = (scores.reshape(T, N, -1, self.n_base + 1) + betas[1:, :, :, None])
+        # transpose from (new_state, dropped_base) to (old_state, emitted_base) layout
+        log_trans_probs = torch.cat([
+            log_trans_probs[:, :, :, [0]],
+            log_trans_probs[:, :, :, 1:].transpose(3, 2).reshape(T, N, -1, self.n_base)
+        ], dim=-1)
+        # convert from log probs to probs by exponentiating and normalising
+        trans_probs = torch.softmax(log_trans_probs, dim=-1)
+        #convert first bwd score to initial state probabilities
+        init_state_probs = torch.softmax(betas[0], dim=-1)
+        return trans_probs, init_state_probs
+
     def reverse_complement(self, scores):
         T, N, C = scores.shape
         expand_dims = T, N, *(self.n_base for _ in range(self.state_len)), self.n_base + 1
