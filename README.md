@@ -78,6 +78,12 @@ $ bonito duplex dna_r9.4.1 /data/reads --pairs pairs.txt --reference ref.mmi > b
 
 The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
 
+Follow on reads can also be automatically paired if an alignment summary file is provided instead of a `pairs.csv`.
+
+```bash
+$ bonito duplex dna_r9.4.1 /data/reads --summary sequencing_summary.txt --reference ref.mmi > basecalls.sam
+```
+
 ## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
