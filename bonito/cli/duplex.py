@@ -336,6 +336,10 @@ def main(args):
         sys.stderr.write("> finding follow on strands\n")
         pairs = pd.read_csv(args.summary, '\t', low_memory=False)
         pairs = pairs[pairs.sequence_length_template.gt(0)]
+        if 'filename' in pairs.columns:
+            pairs = pairs.rename(columns={'filename': 'filename_fast5'})
+        if 'alignment_strand_coverage' in pairs.columns:
+            pairs = pairs.rename(columns={'alignment_strand_coverage': 'alignment_coverage'})
         valid_fast5s = [
             f for f in pairs.filename_fast5.unique()
             if ((args.reads_directory / Path(f)).exists())
