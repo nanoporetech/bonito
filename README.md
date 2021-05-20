@@ -70,7 +70,7 @@ All training calls use Automatic Mixed Precision to speed up training. To disabl
 
 ## Duplex
 
-Duplex calling takes a template and complement read to produce a single higher quaility calls.
+Duplex calling takes template and complement reads and produces a single higher quality call.
 
 ```bash
 $ bonito duplex dna_r9.4.1 /data/reads --pairs pairs.txt --reference ref.mmi > basecalls.sam
