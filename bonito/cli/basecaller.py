@@ -49,7 +49,7 @@ def main(args):
 
     if args.save_ctc:
         reads = (
-            chunk for read in reads for chunk in read_chunks(read)
+            chunk for read in reads for chunk in read_chunks(read, chunksize=args.chunksize)
         )
         basecalls = basecall(
             model, reads, batchsize=64, chunksize=args.chunksize,
