@@ -12,7 +12,7 @@ from bonito.util import mean_qscore_from_qstring, half_supported
 from bonito.util import chunk, stitch, batchify, unbatchify, permute, concat
 
 
-def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1, qscores=False):
+def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1, qscores=False, reverse=None):
     """
     Basecalls a set of reads.
     """

@@ -3,7 +3,7 @@ Bonito Model template
 """
 
 import numpy as np
-from bonito.nn import Permute, activations
+from bonito.nn import Permute, layers
 from torch.nn.functional import log_softmax
 from torch.nn import Module, ModuleList, Sequential, Conv1d, BatchNorm1d, Dropout
 
@@ -55,7 +55,7 @@ class Encoder(Module):
         self.config = config
 
         features = self.config['input']['features']
-        activation = activations[self.config['encoder']['activation']]()
+        activation = layers[self.config['encoder']['activation']]()
         encoder_layers = []
 
         for layer in self.config['block']:
@@ -190,7 +190,7 @@ class Decoder(Module):
         super(Decoder, self).__init__()
         self.layers = Sequential(
             Conv1d(features, classes, kernel_size=1, bias=True),
-            Permute(2, 0, 1)
+            Permute([2, 0, 1])
         )
 
     def forward(self, x):
