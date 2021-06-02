@@ -1,4 +1,4 @@
-mappy==2.18
+mappy==2.20
 toml==0.10.2
 tqdm==4.31.1
 scipy==1.4.1
