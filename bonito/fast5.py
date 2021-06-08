@@ -45,7 +45,7 @@ class Read:
         trim_start, _ = trim(scaled[:8000])
         scaled = scaled[trim_start:]
         self.template_start = self.start + (1 / self.sampling_rate) * trim_start
-        self.template_duration = self.duration + (1 / self.sampling_rate) * trim_start
+        self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
 
         if len(scaled) > 8000:
             med, mad = med_mad(scaled)
