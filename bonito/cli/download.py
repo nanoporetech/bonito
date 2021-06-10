@@ -113,7 +113,7 @@ def main(args):
     if args.training or args.all:
         print("[downloading training data]")
         for train in training:
-            File(__models__, train, args.force).download()
+            File(__data__, train, args.force).download()
 
 
 def argparser():
