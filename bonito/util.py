@@ -354,13 +354,14 @@ def accuracy(ref, seq, balanced=False, min_coverage=0.0):
     """
     alignment = parasail.sw_trace_striped_32(seq, ref, 8, 4, parasail.dnafull)
     counts = defaultdict(int)
-    _, cigar = parasail_to_sam(alignment, seq)
 
     q_coverage = len(alignment.traceback.query) / len(seq)
     r_coverage = len(alignment.traceback.ref) / len(ref)
 
     if r_coverage < min_coverage:
         return 0.0
+
+    _, cigar = parasail_to_sam(alignment, seq)
 
     for count, op  in re.findall(split_cigar, cigar):
         counts[op] += int(count)
