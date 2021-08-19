@@ -61,13 +61,8 @@ def main(args):
 
     argsdict = dict(training=vars(args))
 
-    chunk_config = {}
-    chunk_config_file = os.path.join(args.directory, 'config.toml')
-    if os.path.isfile(chunk_config_file):
-        chunk_config = toml.load(os.path.join(chunk_config_file))
-
     os.makedirs(workdir, exist_ok=True)
-    toml.dump({**config, **argsdict, **chunk_config}, open(os.path.join(workdir, 'config.toml'), 'w'))
+    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     print("[loading model]")
     if args.pretrained:
@@ -75,6 +70,7 @@ def main(args):
         model = load_model(args.pretrained, device, half=False)
     else:
         model = load_symbol(config, 'Model')(config)
+
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
     scaler = GradScaler(enabled=half_supported() and not args.no_amp)
