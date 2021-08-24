@@ -15,6 +15,12 @@ If a reference is provided in either `.fasta` or `.mmi` format then bonito will 
 $ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
 ```
 
+The default `ont-bonito` package is built against CUDA 10.2 however a CUDA 11.1 build is available.
+
+```
+$ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
+```
+
 ## Developer Quickstart
 
 ```bash

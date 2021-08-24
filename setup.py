@@ -15,7 +15,18 @@ if mo:
 else:
     raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
 
-with open('requirements.txt') as f:
+USE_CUDA111 = False
+
+if USE_CUDA111:
+    print("Building with CUDA 11.1")
+    require_file = 'requirements-cuda111.txt'
+    package_name = "ont-%s-cuda111" % __pkg_name__
+else:
+    print("Building with CUDA 10.2")
+    require_file = 'requirements.txt'
+    package_name = "ont-%s" % __pkg_name__
+
+with open(require_file) as f:
     requirements = f.read().splitlines()
 
 with open('README.md', encoding='utf-8') as f:
@@ -27,7 +38,7 @@ class download_latest_model(install):
         check_call("bonito download --models --latest -f".split())
 
 setup(
-    name="ont-%s" % __pkg_name__,
+    name=package_name,
     version=__version__,
     packages=find_packages(),
     include_package_data=True,
@@ -45,4 +56,7 @@ setup(
             '{0} = {0}:main'.format(__pkg_name__)
         ]
     },
+    dependency_links=[
+        'https://download.pytorch.org/whl/torch_stable.html',
+    ]
 )

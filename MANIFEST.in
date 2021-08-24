@@ -1,6 +1,6 @@
 include README.md
 include LICENCE.txt
-include requirements.txt
+include requirements*.txt
 include bonito/models/configs/dna_r9.4.1@v[123].toml
 include bonito/data/README.md
 include bonito/models/README.md
