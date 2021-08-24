@@ -194,4 +194,4 @@ class Decoder(Module):
         )
 
     def forward(self, x):
-        return log_softmax(self.layers(x), dim=2)
+        return log_softmax(self.layers(x), dim=-1)
