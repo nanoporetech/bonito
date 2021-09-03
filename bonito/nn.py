@@ -3,6 +3,7 @@ Bonito nn modules.
 """
 
 import torch
+from torch import nn
 from torch.nn import Module
 from torch.nn.init import orthogonal_
 
@@ -126,6 +127,54 @@ class LinearCRFEncoder(Module):
             }
         return res
 
+
+@register
+class SHA(Module):
+
+    def __init__(self, dim, bidirectional=False):
+        super().__init__()
+        self.scale = dim ** -0.5
+        self.bidirectional = bidirectional
+        self.to_q = nn.Linear(dim, dim, bias=False)
+        self.to_kv = nn.Linear(dim, dim, bias=False)
+
+    def forward(self, x):
+        q, kv = self.to_q(x), self.to_kv(x)
+        sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
+
+        if not self.bidirectional:
+            mask = torch.ones(*sim.shape[-2:], dtype=torch.bool).triu(1)
+            mask = mask.unsqueeze(0)
+            mask_value = -torch.finfo(sim.dtype).max
+            sim = sim.masked_fill(mask, mask_value)
+
+        attn = sim.softmax(dim=-1)
+        return torch.matmul(attn, kv)
+
+@register
+class SHABlock(Module):
+    """ https://arxiv.org/abs/1911.11423 """
+
+    def __init__(self, dim, bidirectional=False, ff_mult=4):
+        super().__init__()
+        self.attn = Serial([
+            nn.LayerNorm(dim),
+            Permute([1, 0, 2]),
+            SHA(dim=dim, bidirectional=bidirectional),
+            Permute([1, 0, 2])
+        ])
+
+        self.ff = Serial([
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim * ff_mult),
+            nn.GELU(),
+            nn.Linear(dim * ff_mult, dim),
+        ])
+
+    def forward(self, x):
+        x = self.attn(x) + x
+        x = self.ff(x) + x
+        return x
 
 @register
 class Permute(Module):
