@@ -135,11 +135,22 @@ class SHA(Module):
         super().__init__()
         self.scale = dim ** -0.5
         self.bidirectional = bidirectional
-        self.to_q = nn.Linear(dim, dim, bias=False)
-        self.to_kv = nn.Linear(dim, dim, bias=False)
+        self.qs = nn.Parameter(torch.zeros(1, 1, dim))
+        self.ks = nn.Parameter(torch.zeros(1, 1, dim))
+        self.vs = nn.Parameter(torch.zeros(1, 1, dim))
 
-    def forward(self, x):
-        q, kv = self.to_q(x), self.to_kv(x)
+        self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
+        self.to_kv = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
+
+    def forward(self, x, kv):
+        x = x.transpose(0, 1)
+        kv = kv.transpose(0, 1)
+
+        qs, ks, vs = self.qs.sigmoid(), self.ks.sigmoid(), self.vs.sigmoid()
+
+        q, k, v = self.to_q(x), self.to_kv(kv), self.to_kv(kv)
+        q, k, v = q * qs, k * ks, v * vs
+
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
 
         if not self.bidirectional:
@@ -149,7 +160,8 @@ class SHA(Module):
             sim = sim.masked_fill(mask, mask_value)
 
         attn = sim.softmax(dim=-1)
-        return torch.matmul(attn, kv)
+        out = torch.matmul(attn, v)
+        return out.transpose(0, 1)
 
 @register
 class SHABlock(Module):
@@ -157,13 +169,11 @@ class SHABlock(Module):
 
     def __init__(self, dim, bidirectional=False, ff_mult=4):
         super().__init__()
-        self.attn = Serial([
-            nn.LayerNorm(dim),
-            Permute([1, 0, 2]),
-            SHA(dim=dim, bidirectional=bidirectional),
-            Permute([1, 0, 2])
-        ])
+        self.attn_query_norm = nn.LayerNorm(dim)
+        self.attn_kv_norm = nn.LayerNorm(dim)
+        self.attn = SHA(dim=dim, bidirectional=bidirectional)
 
+        self.ff_residual_norm = nn.LayerNorm(dim)
         self.ff = Serial([
             nn.LayerNorm(dim),
             nn.Linear(dim, dim * ff_mult),
@@ -172,8 +182,11 @@ class SHABlock(Module):
         ])
 
     def forward(self, x):
-        x = self.attn(x) + x
-        x = self.ff(x) + x
+        kv = self.attn_kv_norm(x)
+        x = self.attn_query_norm(x)
+        x = self.attn(x, kv) + x
+
+        x = self.ff(x) + self.ff_residual_norm(x)
         return x
 
 @register
