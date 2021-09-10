@@ -167,26 +167,29 @@ class SHA(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, bidirectional=False, ff_mult=4):
+    def __init__(self, dim, bidirectional=False, single_head_ff=False, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
         self.attn = SHA(dim=dim, bidirectional=bidirectional)
 
-        self.ff_residual_norm = nn.LayerNorm(dim)
-        self.ff = Serial([
-            nn.LayerNorm(dim),
-            nn.Linear(dim, dim * ff_mult),
-            nn.GELU(),
-            nn.Linear(dim * ff_mult, dim),
-        ])
+        self.single_head_ff = single_head_ff
+        if self.single_head_ff:
+            self.ff_residual_norm = nn.LayerNorm(dim)
+            self.ff = Serial([
+                nn.LayerNorm(dim),
+                nn.Linear(dim, dim * ff_mult),
+                nn.GELU(),
+                nn.Linear(dim * ff_mult, dim),
+            ])
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
         x = self.attn_query_norm(x)
         x = self.attn(x, kv) + x
 
-        x = self.ff(x) + self.ff_residual_norm(x)
+        if self.single_head_ff:
+            x = self.ff(x) + self.ff_residual_norm(x)
         return x
 
 @register
