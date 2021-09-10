@@ -3,6 +3,7 @@ Bonito Fast5 Utils
 """
 
 import sys
+from glob import glob
 from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
@@ -185,7 +186,7 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, r
     pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
     with Pool(n_proc) as pool:
-        for job in chain(pool.imap(get_filtered_reads, Path(directory).glob(pattern))):
+        for job in chain(pool.imap(get_filtered_reads, (Path(x) for x in glob(directory + "/" + pattern, recursive=True)))):
             for read in pool.imap(get_raw_data_for_read, job):
                 if max_read_size > 0 and len(read.signal) > max_read_size:
                     sys.stderr.write(
