@@ -22,7 +22,6 @@ rnn_type = "lstm"
 activation = "swish"
 blank_score = 2.0
 single_head_attn = true
-single_head_ff = false
 single_head_attn_bidirectional = true
 
 [global_norm]

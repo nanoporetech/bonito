@@ -135,21 +135,13 @@ class SHA(Module):
         super().__init__()
         self.scale = dim ** -0.5
         self.bidirectional = bidirectional
-        self.qs = nn.Parameter(torch.zeros(1, 1, dim))
-        self.ks = nn.Parameter(torch.zeros(1, 1, dim))
-        self.vs = nn.Parameter(torch.zeros(1, 1, dim))
-
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
-        self.to_kv = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
 
     def forward(self, x, kv):
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
 
-        qs, ks, vs = self.qs.sigmoid(), self.ks.sigmoid(), self.vs.sigmoid()
-
-        q, k, v = self.to_q(x), self.to_kv(kv), self.to_kv(kv)
-        q, k, v = q * qs, k * ks, v * vs
+        q, k, v = self.to_q(x), kv, kv
 
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
 
@@ -167,29 +159,25 @@ class SHA(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, bidirectional=False, single_head_ff=False, ff_mult=4):
+    def __init__(self, dim, bidirectional=False, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
         self.attn = SHA(dim=dim, bidirectional=bidirectional)
 
-        self.single_head_ff = single_head_ff
-        if self.single_head_ff:
-            self.ff_residual_norm = nn.LayerNorm(dim)
-            self.ff = Serial([
-                nn.LayerNorm(dim),
-                nn.Linear(dim, dim * ff_mult),
-                nn.GELU(),
-                nn.Linear(dim * ff_mult, dim),
-            ])
+        self.ff_residual_norm = nn.LayerNorm(dim)
+        self.ff = Serial([
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim * ff_mult),
+            nn.GELU(),
+            nn.Linear(dim * ff_mult, dim),
+        ])
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
         x = self.attn_query_norm(x)
         x = self.attn(x, kv) + x
-
-        if self.single_head_ff:
-            x = self.ff(x) + self.ff_residual_norm(x)
+        x = self.ff(x) + self.ff_residual_norm(x)
         return x
 
 @register
