@@ -131,10 +131,9 @@ class LinearCRFEncoder(Module):
 @register
 class SHA(Module):
 
-    def __init__(self, dim, bidirectional=False):
+    def __init__(self, dim):
         super().__init__()
         self.scale = dim ** -0.5
-        self.bidirectional = bidirectional
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
 
     def forward(self, x, kv):
@@ -144,14 +143,8 @@ class SHA(Module):
         q, k, v = self.to_q(x), kv, kv
 
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
-
-        if not self.bidirectional:
-            mask = torch.ones(*sim.shape[-2:], dtype=torch.bool).triu(1)
-            mask = mask.unsqueeze(0)
-            mask_value = -torch.finfo(sim.dtype).max
-            sim = sim.masked_fill(mask, mask_value)
-
         attn = sim.softmax(dim=-1)
+
         out = torch.matmul(attn, v)
         return out.transpose(0, 1)
 
@@ -159,11 +152,11 @@ class SHA(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, bidirectional=False, ff_mult=4):
+    def __init__(self, dim, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
-        self.attn = SHA(dim=dim, bidirectional=bidirectional)
+        self.attn = SHA(dim=dim)
 
         self.ff_residual_norm = nn.LayerNorm(dim)
         self.ff = Serial([
