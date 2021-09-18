@@ -140,12 +140,11 @@ class SHA(Module):
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
 
-        q, k, v = self.to_q(x), kv, kv
-
+        q = self.to_q(x)
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
         attn = sim.softmax(dim=-1)
 
-        out = torch.matmul(attn, v)
+        out = torch.matmul(attn, kv)
         return out.transpose(0, 1)
 
 @register
