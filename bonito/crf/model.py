@@ -139,17 +139,28 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_attn=False):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_layers=[]):
     rnn = layers[rnn_type]
+
+    rnns = [
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True)
+    ]
+
+    backbone = []
+    for layer, rnn in enumerate(rnns):
+        backbone.append(rnn)
+
+        if layer in single_head_layers:
+            backbone.append(SHABlock(features))
+
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
             conv(4, 16, ks=5, bias=True, activation=activation),
             conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
             Permute([2, 0, 1]),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True), rnn(features, features),
-            *([SHABlock(features)] if single_head_attn else []),
-            rnn(features, features, reverse=True),
+            *backbone,
             LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
     ])
 

@@ -135,6 +135,7 @@ class SHA(Module):
         super().__init__()
         self.scale = dim ** -0.5
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
+        self.layerscale = LayerScale(dim)
 
     def forward(self, x, kv):
         x = x.transpose(0, 1)
@@ -145,7 +146,20 @@ class SHA(Module):
         attn = sim.softmax(dim=-1)
 
         out = torch.matmul(attn, kv)
-        return out.transpose(0, 1)
+        out = out.transpose(0, 1)
+        return self.layerscale(out)
+
+@register
+class LayerScale(Module):
+    """ https://arxiv.org/abs/2103.17239 """
+
+    def __init__(self, features, eps=1e-5):
+        super().__init__()
+        scale = torch.zeros(1, 1, features).fill_(eps)
+        self.scale = nn.Parameter(scale)
+
+    def forward(self, x):
+        return self.scale * x
 
 @register
 class SHABlock(Module):
@@ -157,19 +171,19 @@ class SHABlock(Module):
         self.attn_kv_norm = nn.LayerNorm(dim)
         self.attn = SHA(dim=dim)
 
-        self.ff_residual_norm = nn.LayerNorm(dim)
         self.ff = Serial([
             nn.LayerNorm(dim),
             nn.Linear(dim, dim * ff_mult),
             nn.GELU(),
             nn.Linear(dim * ff_mult, dim),
+            LayerScale(dim)
         ])
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
-        x = self.attn_query_norm(x)
-        x = self.attn(x, kv) + x
-        x = self.ff(x) + self.ff_residual_norm(x)
+        q = self.attn_query_norm(x)
+        x = self.attn(q, kv) + x
+        x = self.ff(x) + x
         return x
 
 @register
