@@ -21,7 +21,9 @@ features = 768
 rnn_type = "lstm"
 activation = "swish"
 blank_score = 2.0
-single_head_attn = true
+
+residualized_rnn = true
+single_head_layers = [ 2, 3 ]
 
 [global_norm]
 state_len = 5

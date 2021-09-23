@@ -194,12 +194,14 @@ def truncated_normal(size, dtype=torch.float32, device=None, num_resample=5):
 
 class RNNWrapper(Module):
     def __init__(
-            self, rnn_type, *args, reverse=False, orthogonal_weight_init=True, disable_state_bias=True, bidirectional=False, **kwargs
+            self, rnn_type, *args, reverse=False, orthogonal_weight_init=True, disable_state_bias=True, bidirectional=False, residual=False, **kwargs
     ):
         super().__init__()
         if reverse and bidirectional:
             raise Exception("'reverse' and 'bidirectional' should not both be set to True")
         self.reverse = reverse
+        self.residual = residual
+        self.norm = torch.nn.LayerNorm(args[0]) if residual else nn.Identity()
         self.rnn = rnn_type(*args, bidirectional=bidirectional, **kwargs)
         self.init_orthogonal(orthogonal_weight_init)
         self.init_biases()
@@ -207,8 +209,11 @@ class RNNWrapper(Module):
 
     def forward(self, x):
         if self.reverse: x = x.flip(0)
-        y, h = self.rnn(x)
+        normed_x = self.norm(x)
+        y, h = self.rnn(normed_x)
         if self.reverse: y = y.flip(0)
+        if self.residual:
+            y = y + x
         return y
 
     def init_biases(self, types=('bias_ih',)):
@@ -235,8 +240,8 @@ class RNNWrapper(Module):
 @register
 class LSTM(RNNWrapper):
 
-    def __init__(self, size, insize, bias=True, reverse=False):
-        super().__init__(torch.nn.LSTM, size, insize, bias=bias, reverse=reverse)
+    def __init__(self, size, insize, bias=True, reverse=False, residual=False):
+        super().__init__(torch.nn.LSTM, size, insize, bias=bias, reverse=reverse, residual=residual)
 
     def to_dict(self, include_weights=False):
         res = {
