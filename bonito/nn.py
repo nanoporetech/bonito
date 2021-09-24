@@ -157,7 +157,6 @@ class SHABlock(Module):
         self.attn_kv_norm = nn.LayerNorm(dim)
         self.attn = SHA(dim=dim)
 
-        self.ff_residual_norm = nn.LayerNorm(dim)
         self.ff = Serial([
             nn.LayerNorm(dim),
             nn.Linear(dim, dim * ff_mult),
@@ -167,9 +166,9 @@ class SHABlock(Module):
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
-        x = self.attn_query_norm(x)
-        x = self.attn(x, kv) + x
-        x = self.ff(x) + self.ff_residual_norm(x)
+        q = self.attn_query_norm(x)
+        x = self.attn(q, kv) + x
+        x = self.ff(x) + x
         return x
 
 @register
@@ -208,12 +207,13 @@ class RNNWrapper(Module):
         if disable_state_bias: self.disable_state_bias()
 
     def forward(self, x):
+        res = x.clone()
         if self.reverse: x = x.flip(0)
         normed_x = self.norm(x)
         y, h = self.rnn(normed_x)
         if self.reverse: y = y.flip(0)
         if self.residual:
-            y = y + x
+            y = y + res
         return y
 
     def init_biases(self, types=('bias_ih',)):
