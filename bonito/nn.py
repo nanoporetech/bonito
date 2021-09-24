@@ -165,8 +165,10 @@ class LayerScale(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, ff_mult=4):
+    def __init__(self, dim, ff_mult=4, gradient_mult=1.):
         super().__init__()
+        self.gradient_mult = gradient_mult
+
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
         self.attn = SHA(dim=dim)
@@ -180,10 +182,18 @@ class SHABlock(Module):
         ])
 
     def forward(self, x):
+        mult = self.gradient_mult
+
         kv = self.attn_kv_norm(x)
         q = self.attn_query_norm(x)
-        x = self.attn(q, kv) + x
-        x = self.ff(x) + x
+
+        attn_out = self.attn(q, kv)
+        attn_out = (mult * attn_out) * ((1 - mult) * attn_out).detach()
+        x = attn_out + x
+
+        ff_out = self.ff(x)
+        ff_out = (mult * ff_out) * ((1 - mult) * ff_out).detach()
+        x = ff_out + x
         return x
 
 @register

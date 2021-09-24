@@ -139,7 +139,7 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_layers=[]):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_layers=[], single_head_gradient_mult=1.):
     rnn = layers[rnn_type]
 
     rnns = [
@@ -153,7 +153,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         backbone.append(rnn)
 
         if layer in single_head_layers:
-            backbone.append(SHABlock(features))
+            backbone.append(SHABlock(features, gradient_mult=single_head_gradient_mult))
 
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
