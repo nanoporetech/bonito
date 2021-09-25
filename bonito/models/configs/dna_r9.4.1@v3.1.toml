@@ -22,6 +22,8 @@ rnn_type = "lstm"
 activation = "swish"
 blank_score = 2.0
 single_head_layers = [ 2, 3 ]
+attn_dropout = 0.2
+ff_dropout = 0.2
 
 [global_norm]
 state_len = 5
