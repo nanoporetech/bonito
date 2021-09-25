@@ -22,7 +22,6 @@ rnn_type = "lstm"
 activation = "swish"
 blank_score = 2.0
 single_head_layers = [ 2, 3 ]
-single_head_gradient_mult = 1.0
 
 [global_norm]
 state_len = 5
