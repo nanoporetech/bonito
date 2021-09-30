@@ -71,7 +71,14 @@ def main(args):
     else:
         model = load_symbol(config, 'Model')(config)
 
-    optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
+    # exclude norm scales and biases from weight decay
+
+    parameters = set(model.parameters())
+    no_wd_params = set([param for param in parameters if param.ndim < 2])
+    remain_params = parameters - no_wd_params
+    param_groups = [{'params': list(no_wd_params), 'weight_decay': 0}, {'params': list(remain_params)}]
+
+    optimizer = AdamW(param_groups, amsgrad=False, lr=args.lr, weight_decay=args.wd)
 
     scaler = GradScaler(enabled=half_supported() and not args.no_amp)
 
@@ -99,7 +106,7 @@ def main(args):
             with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=half_supported() and not args.no_amp, scaler=scaler, lr_scheduler=lr_scheduler,
+                    use_amp=half_supported() and not args.no_amp, scaler=scaler, grad_clip_norm=args.clip, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
 
@@ -139,6 +146,8 @@ def argparser():
     parser.add_argument("--directory", default=default_data)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
+    parser.add_argument("--wd", default=1e-2, type=float)
+    parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
