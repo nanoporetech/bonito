@@ -13,6 +13,7 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
 from bonito.io import CSVLogger
+from bonito.nn import SHABlock
 from bonito.util import __models__, default_config, default_data
 from bonito.util import load_data, load_model, load_symbol, init, half_supported
 from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
@@ -24,6 +25,10 @@ from torch.optim import AdamW
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
+def separate_weight_decayable_params(params):
+    no_wd_params = set([param for param in params if param.ndim < 2])
+    wd_params = set(params) - no_wd_params
+    return wd_params, no_wd_params
 
 def main(args):
 
@@ -73,10 +78,24 @@ def main(args):
 
     # exclude norm scales and biases from weight decay
 
-    parameters = set(model.parameters())
-    no_wd_params = set([param for param in parameters if param.ndim < 2])
-    remain_params = parameters - no_wd_params
-    param_groups = [{'params': list(no_wd_params), 'weight_decay': 0}, {'params': list(remain_params)}]
+    params = set(model.parameters())
+
+    attn_params = set()
+    for m in model.modules():
+        if isinstance(m, SHABlock):
+            attn_params.update(m.parameters())
+
+    non_attn_params = params - attn_params
+
+    wd_params, no_wd_params = separate_weight_decayable_params(non_attn_params)
+    attn_wd_params, attn_no_wd_params = separate_weight_decayable_params(attn_params)
+
+    param_groups = [
+        {'params': list(attn_wd_params), 'lr': args.sha_lr},
+        {'params': list(attn_no_wd_params), 'weight_decay': 0, 'lr': args.sha_lr},
+        {'params': list(wd_params)},
+        {'params': list(no_wd_params), 'weight_decay': 0},
+    ]
 
     optimizer = AdamW(param_groups, amsgrad=False, lr=args.lr, weight_decay=args.wd)
 
@@ -146,6 +165,7 @@ def argparser():
     parser.add_argument("--directory", default=default_data)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
+    parser.add_argument("--sha-lr", default=5e-4, type=float)
     parser.add_argument("--wd", default=1e-2, type=float)
     parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
