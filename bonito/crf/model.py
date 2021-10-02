@@ -4,6 +4,7 @@ Bonito CTC-CRF Model.
 
 import torch
 import numpy as np
+from collections import Counter
 from bonito.nn import Module, Convolution, SHABlock, LinearCRFEncoder, Serial, Permute, layers, from_dict
 
 import seqdist.sparse
@@ -149,11 +150,13 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
     ]
 
     backbone = []
+    single_head_layers_count = Counter(single_head_layers) # allows for multiple SHA blocks per layer
+
     for layer, rnn in enumerate(rnns):
         backbone.append(rnn)
 
-        if layer in single_head_layers:
-            backbone.append(SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, boom=boom))
+        if layer in single_head_layers_count:
+            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, boom=boom) for _ in range(single_head_layers_count[layer])])
 
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
