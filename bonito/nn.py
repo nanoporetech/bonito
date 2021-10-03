@@ -161,6 +161,7 @@ class MHA(Module):
         self.dim_head = dim_head
         self.scale = dim_head ** -0.5
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
+        self.norm_q = nn.LayerNorm(dim_head)
         self.to_kv = nn.Linear(dim, inner_dim, bias=False)
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
@@ -176,6 +177,7 @@ class MHA(Module):
         kv = self.to_kv(kv)
 
         q, kv = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, kv))
+        q = self.norm_q(q)
 
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
         attn = sim.softmax(dim=-1)
