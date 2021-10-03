@@ -159,10 +159,10 @@ class MHA(Module):
         inner_dim = heads * dim_head
         self.heads = heads
         self.dim_head = dim_head
-        self.scale = dim ** -0.5
+        self.scale = dim_head ** -0.5
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_kv = nn.Linear(dim, inner_dim * 2, bias=False)
-        self.to_out = nn.Linear(inner_dim, dim)
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
         self.layerscale = LayerScale(dim)
 
