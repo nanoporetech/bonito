@@ -12,11 +12,9 @@ from collections import OrderedDict
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
-from bonito.io import CSVLogger
 from bonito.util import __models__, default_config, default_data
 from bonito.util import load_data, load_model, load_symbol, init, half_supported
-from bonito.training import ChunkDataSet, load_state, train, test, func_scheduler, cosine_decay_schedule
-
+from bonito.training import ChunkDataSet, load_state, Trainer
 import toml
 import torch
 import numpy as np
@@ -73,14 +71,7 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
 
-    scaler = GradScaler(enabled=half_supported() and not args.no_amp)
-
     last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=not args.no_amp)
-
-    lr_scheduler = func_scheduler(
-        optimizer, cosine_decay_schedule(1.0, 0.1), args.epochs * len(train_loader),
-        warmup_steps=500, start_step=last_epoch*len(train_loader)
-    )
 
     if args.multi_gpu:
         from torch.nn import DataParallel
@@ -88,44 +79,8 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    if hasattr(model, 'seqdist'):
-        criterion = model.seqdist.ctc_loss
-    else:
-        criterion = None
-
-    for epoch in range(1 + last_epoch, args.epochs + 1 + last_epoch):
-
-        try:
-            with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
-                train_loss, duration = train(
-                    model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=half_supported() and not args.no_amp, scaler=scaler, lr_scheduler=lr_scheduler,
-                    loss_log = loss_log
-                )
-
-            model_state = model.state_dict() if not args.multi_gpu else model.module.state_dict()
-            torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
-
-            val_loss, val_mean, val_median = test(
-                model, device, valid_loader, criterion=criterion
-            )
-        except KeyboardInterrupt:
-            break
-
-        print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
-            epoch, workdir, val_loss, val_mean, val_median
-        ))
-
-        with CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
-            training_log.append(OrderedDict([
-                ('time', datetime.today()),
-                ('duration', int(duration)),
-                ('epoch', epoch),
-                ('train_loss', train_loss),
-                ('validation_loss', val_loss),
-                ('validation_mean', val_mean),
-                ('validation_median', val_median)
-            ]))
+    trainer = Trainer(model, device, train_loader, valid_loader, optimizer=optimizer, use_amp=half_supported() and not args.no_amp)
+    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
 
 def argparser():
     parser = ArgumentParser(
