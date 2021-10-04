@@ -8,11 +8,10 @@ from glob import glob
 from functools import partial
 from time import perf_counter
 from collections import OrderedDict
-
+from datetime import datetime
 
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
-from bonito.io import CSVLogger
-from bonito.training import func_scheduler, cosine_decay_schedule
+import bonito
 
 import torch
 import numpy as np
@@ -122,7 +121,7 @@ class Trainer:
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.optimizer = optimizer
-        self.criterion = criterion or (model.seqdist.ctc_loss if model.hasattr('seqdist') else model.ctc_label_smoothing_loss)
+        self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
@@ -143,7 +142,7 @@ class Trainer:
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-        return losses
+        return losses, grad_norm
 
     def train_one_epoch(self, loss_log, lr_scheduler):
         t0 = perf_counter()
@@ -158,11 +157,11 @@ class Trainer:
 
         with progress_bar:
 
-            for batch in train_loader:
+            for batch in self.train_loader:
 
                 chunks += batch[0].shape[0]
 
-                losses = self.train_one_step(batch)
+                losses, grad_norm = self.train_one_step(batch)
                 losses = {k: v.item() for k,v in losses.items()}
 
                 if lr_scheduler is not None: lr_scheduler.step()
@@ -184,10 +183,10 @@ class Trainer:
         scores = self.model(data.to(self.device))
         losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
-        if hasattr(model, 'decode_batch'):
-            seqs = model.decode_batch(scores)
+        if hasattr(self.model, 'decode_batch'):
+            seqs = self.model.decode_batch(scores)
         else:
-            seqs = [model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
+            seqs = [self.model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
         refs = [decode_ref(target, self.model.alphabet) for target in targets]
         accs = [
             accuracy(ref, seq, min_coverage=0.5) if len(seq) else 0. for ref, seq in zip(refs, seqs)
@@ -219,13 +218,13 @@ class Trainer:
 
         for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
             try:
-                with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
+                with bonito.io.CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                     train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler)
 
-                model_state = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
+                model_state = self.model.module.state_dict() if hasattr(self.model, 'module') else self.model.state_dict()
                 torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
 
-                val_loss, val_mean, val_median = self.validate_epoch()
+                val_loss, val_mean, val_median = self.validate_one_epoch()
             except KeyboardInterrupt:
                 break
 
@@ -233,7 +232,7 @@ class Trainer:
                 epoch, workdir, val_loss, val_mean, val_median
             ))
 
-            with CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
+            with bonito.io.CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
                 training_log.append({
                     'time': datetime.today(),
                     'duration': int(duration),

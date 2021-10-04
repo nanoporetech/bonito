@@ -5,10 +5,6 @@ Bonito training.
 """
 
 import os
-import csv
-from functools import partial
-from datetime import datetime
-from collections import OrderedDict
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 
@@ -19,7 +15,6 @@ import toml
 import torch
 import numpy as np
 from torch.optim import AdamW
-from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 
