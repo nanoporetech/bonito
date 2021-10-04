@@ -25,7 +25,6 @@ single_head_layers = [ 2, 3, 3 ]
 attn_dropout = 0.1
 ff_dropout = 0.1
 num_attn_heads = 1
-boom = false
 
 [global_norm]
 state_len = 5

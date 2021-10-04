@@ -220,30 +220,10 @@ class FeedForward(Module):
         return self.net(x)
 
 @register
-class Boom(Module):
-
-    def __init__(self, dim, mult=4, dropout=0.):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, dim * mult),
-            nn.GELU(),
-            nn.Dropout(dropout)
-        )
-        self.layerscale = LayerScale(dim)
-
-    def forward(self, x):
-        *precede_dims, dim = x.shape
-        out = self.net(x)
-        out = out.reshape(*precede_dims, -1, dim)
-        out = out.sum(dim = -2)
-        return self.layerscale(out)
-
-@register
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4, boom=False):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
@@ -255,10 +235,7 @@ class SHABlock(Module):
         else:
             self.attn = SHA(dim=dim, dropout=attn_dropout)
 
-        if boom:
-            self.ff = Boom(dim=dim, dropout=ff_dropout, mult=ff_mult)
-        else:
-            self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
+        self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
