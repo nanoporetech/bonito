@@ -9,9 +9,9 @@ import numpy as np
 from itertools import starmap
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.training import ChunkDataSet
+from bonito.data import ChunkDataSet, load_numpy_datasets
 from bonito.util import accuracy, poa, decode_ref, half_supported
-from bonito.util import init, load_data, load_model, concat, permute
+from bonito.util import init, load_model, concat, permute
 
 from torch.utils.data import DataLoader
 
@@ -28,7 +28,7 @@ def main(args):
         directory = os.path.join(directory, 'validation')
 
     testdata = ChunkDataSet(
-        *load_data(
+        *load_numpy_datasets(
             limit=args.chunks, directory=directory
         )
     )

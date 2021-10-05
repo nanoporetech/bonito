@@ -7,15 +7,15 @@ Bonito training.
 import os
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
+from pathlib import Path
 
 from bonito.util import __models__, default_config, default_data
 from bonito.util import load_data, load_model, load_symbol, init, half_supported
-from bonito.training import ChunkDataSet, load_state, Trainer
+from bonito.training import load_state, Trainer
+
 import toml
 import torch
 import numpy as np
-from torch.optim import AdamW
-from torch.utils.data import DataLoader
 
 
 def main(args):
@@ -30,17 +30,16 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    train_data = load_data(limit=args.chunks, directory=args.directory)
-    if os.path.exists(os.path.join(args.directory, 'validation')):
-        valid_data = load_data(directory=os.path.join(args.directory, 'validation'))
+    if args.directory is not None:
+        train_loader, valid_loader = load_numpy(
+            args.chunks, args.directory, args.batch
+        )
+    elif args.dataset_config is not None:
+        train_loader, valid_loader = load_bonito_datasets(
+            args.dataset_config, args.seed, args.batch, args.chunks, args.valid_chunks
+        )
     else:
-        print("[validation set not found: splitting training set]")
-        split = np.floor(len(train_data[0]) * 0.97).astype(np.int32)
-        valid_data = [x[split:] for x in train_data]
-        train_data = [x[:split] for x in train_data]
-
-    train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
-    valid_loader = DataLoader(ChunkDataSet(*valid_data), batch_size=args.batch, num_workers=4, pin_memory=True)
+        raise ValueError(f"failed to load data")
 
     if args.pretrained:
         dirname = args.pretrained
@@ -84,13 +83,18 @@ def argparser():
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--config', default=default_config)
     group.add_argument('--pretrained', default="")
-    parser.add_argument("--directory", default=default_data)
+
+    data = parser.add_mutually_exclusive_group(required=True)
+    data.add_argument("--directory", type=Path)
+    data.add_argument("--dataset-config", type=Path)
+
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--chunks", default=0, type=int)
+    parser.add_argument("--valid_chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
