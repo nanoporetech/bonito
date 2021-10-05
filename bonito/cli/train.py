@@ -64,9 +64,7 @@ def main(args):
     else:
         model = load_symbol(config, 'Model')(config)
 
-    optimizer = AdamW(model.parameters(), amsgrad=False, lr=args.lr)
-
-    last_epoch = load_state(workdir, args.device, model, optimizer, use_amp=not args.no_amp)
+    last_epoch = load_state(workdir, args.device, model)
 
     if args.multi_gpu:
         from torch.nn import DataParallel
@@ -74,7 +72,7 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, optimizer=optimizer, use_amp=half_supported() and not args.no_amp)
+    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
     trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
 
 def argparser():

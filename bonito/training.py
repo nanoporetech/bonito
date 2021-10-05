@@ -83,9 +83,9 @@ def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio
     return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
 
-def load_state(dirname, device, model, optim, use_amp=False):
+def load_state(dirname, device, model):
     """
-    Load a model and optimizer state dict from disk
+    Load a model state dict from disk
     """
     model.to(device)
 
@@ -115,15 +115,15 @@ def load_state(dirname, device, model, optim, use_amp=False):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, optimizer=None, criterion=None, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
         self.valid_loader = valid_loader
-        self.optimizer = optimizer
         self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        self.optimizer = None
 
     def train_one_step(self, batch):
         data, targets, lengths = batch
@@ -214,6 +214,7 @@ class Trainer:
     def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
         if self.optimizer is None:
             self.init_optimizer(lr)
+
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
         for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
