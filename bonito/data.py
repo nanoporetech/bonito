@@ -71,6 +71,9 @@ class WeightedConcatDatasetRandomSampler(torch.utils.data.Sampler):
 
 
 def load_numpy(limit, directory, batch):
+    """
+    Returns training and validation DataLoaders for data in directory.
+    """
     train_data = load_numpy_datasets(limit=limit, directory=directory)
     if os.path.exists(os.path.join(directory, 'validation')):
         valid_data = load_numpy_datasets(
@@ -89,6 +92,9 @@ def load_numpy(limit, directory, batch):
 
 
 def load_bonito_datasets(config, seed, batch, train_chunks, valid_chunks):
+    """
+    Returns training and validation DataLoaders for data in config.
+    """
     dataset_config = toml.load(config)
 
     (t_ds, t_weights), (v_ds, v_weights) = load_bd_datasets(
@@ -124,7 +130,7 @@ def load_bonito_datasets(config, seed, batch, train_chunks, valid_chunks):
 
 def load_numpy_datasets(limit=None, directory=None):
     """
-    Load the training data
+    Returns numpy chunks, targets and lengths arrays.
     """
     if directory is None:
         directory = default_data
@@ -151,6 +157,9 @@ def load_numpy_datasets(limit=None, directory=None):
 
 
 def load_bd_datasets(config, seed):
+    """
+    Returns (datasets, weights) tuples for training and validation.
+    """
     train_data = load_subsets_data(config["train"].items(), config["params"])
 
     if "valid" in config:
@@ -190,7 +199,8 @@ def load_subsets_data(subset_configs, params=None):
         params.update(dataset_config.get("params", {}))
         weight = dataset_config.get("weight", 1)
         subset_data.append([df, params, weight])
-        print(name, params, weight)
+        print(f"[{name} params: {params}]")
+        print(f"[{name} weighting: {weight}]")
     return subset_data
 
 

@@ -9,8 +9,9 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 from pathlib import Path
 
+from bonito.data import load_bonito_datasets, load_numpy
 from bonito.util import __models__, default_config, default_data
-from bonito.util import load_data, load_model, load_symbol, init, half_supported
+from bonito.util import load_model, load_symbol, init, half_supported
 from bonito.training import load_state, Trainer
 
 import toml
