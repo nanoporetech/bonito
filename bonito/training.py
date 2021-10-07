@@ -12,6 +12,7 @@ from datetime import datetime
 
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
 import bonito
+from bonito.nn import SHABlock
 
 import torch
 import numpy as np
