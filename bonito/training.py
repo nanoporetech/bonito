@@ -8,18 +8,17 @@ from glob import glob
 from functools import partial
 from time import perf_counter
 from collections import OrderedDict
+from datetime import datetime
 
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
+import bonito
 
 import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
-from torch.nn.functional import ctc_loss
 from torch.optim.lr_scheduler import LambdaLR
-
 import torch.cuda.amp as amp
-
 
 class ChunkDataSet:
     def __init__(self, chunks, targets, lengths):
@@ -84,9 +83,9 @@ def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio
     return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
 
-def load_state(dirname, device, model, optim, use_amp=False):
+def load_state(dirname, device, model):
     """
-    Load a model and optimizer state dict from disk
+    Load a model state dict from disk
     """
     model.to(device)
 
@@ -115,103 +114,132 @@ def load_state(dirname, device, model, optim, use_amp=False):
     return epoch
 
 
-def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
-    T, N, C = log_probs.shape
-    log_probs_lengths = torch.full(size=(N, ), fill_value=T, dtype=torch.int64)
-    loss = ctc_loss(log_probs.to(torch.float32), targets, log_probs_lengths, lengths, reduction='mean')
-    label_smoothing_loss = -((log_probs * weights.to(log_probs.device)).mean())
-    return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
+class Trainer:
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True):
+        self.model = model.to(device)
+        self.device = device
+        self.train_loader = train_loader
+        self.valid_loader = valid_loader
+        self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
+        self.use_amp = use_amp
+        self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        self.optimizer = None
 
+    def train_one_step(self, batch):
+        data, targets, lengths = batch
 
-def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, scaler=None, lr_scheduler=None, loss_log=None):
+        self.optimizer.zero_grad()
+        with amp.autocast(enabled=self.use_amp):
+            scores = self.model(data.to(self.device))
+            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
 
-    if criterion is None:
-        C = len(model.alphabet)
-        weights = torch.cat([torch.tensor([0.4]), (0.1 / (C - 1)) * torch.ones(C - 1)]).to(device)
-        criterion = partial(ctc_label_smoothing_loss, weights=weights)
+        if not isinstance(losses, dict):
+            losses = {'loss': losses}
 
-    chunks = 0
-    model.train()
-    t0 = perf_counter()
+        self.scaler.scale(losses['loss']).backward()
+        self.scaler.unscale_(self.optimizer)
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
-    progress_bar = tqdm(
-        total=len(train_loader), desc='[0/{}]'.format(len(train_loader.dataset)),
-        ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
-    )
-    smoothed_loss = None
-    max_norm = 2.0
+        return losses, grad_norm
 
-    with progress_bar:
+    def train_one_epoch(self, loss_log, lr_scheduler):
+        t0 = perf_counter()
+        chunks = 0
+        self.model.train()
 
-        for data, targets, lengths in train_loader:
+        progress_bar = tqdm(
+            total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.dataset)),
+            ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
+        )
+        smoothed_loss = None
 
-            optimizer.zero_grad()
+        with progress_bar:
 
-            chunks += data.shape[0]
+            for batch in self.train_loader:
 
-            with amp.autocast(enabled=use_amp):
-                scores = model(data.to(device))
-                losses = criterion(scores, targets.to(device), lengths.to(device))
+                chunks += batch[0].shape[0]
 
-            if not isinstance(losses, dict):
-                losses = {'loss': losses}
+                losses, grad_norm = self.train_one_step(batch)
+                losses = {k: v.item() for k,v in losses.items()}
 
-            if use_amp:
-                scaler.scale(losses['loss']).backward()
-                scaler.unscale_(optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                losses['loss'].backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
-                optimizer.step()
+                if lr_scheduler is not None: lr_scheduler.step()
 
-            if lr_scheduler is not None: lr_scheduler.step()
+                smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
-            losses = {k: v.item() for k,v in losses.items()}
+                progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
+                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.dataset)))
+                progress_bar.update()
 
-            smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
+                if loss_log is not None:
+                    loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, 'grad_norm': grad_norm, **losses})
 
-            progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
-            progress_bar.set_description("[{}/{}]".format(chunks, len(train_loader.dataset)))
-            progress_bar.update()
+        return smoothed_loss, perf_counter() - t0
 
-            if loss_log is not None:
-                loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, 'grad_norm': grad_norm, **losses})
+    def validate_one_step(self, batch):
+        data, targets, lengths = batch
 
-    return smoothed_loss, perf_counter() - t0
+        scores = self.model(data.to(self.device))
+        losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+        losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
+        if hasattr(self.model, 'decode_batch'):
+            seqs = self.model.decode_batch(scores)
+        else:
+            seqs = [self.model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
+        refs = [decode_ref(target, self.model.alphabet) for target in targets]
+        accs = [
+            accuracy(ref, seq, min_coverage=0.5) if len(seq) else 0. for ref, seq in zip(refs, seqs)
+        ]
+        return seqs, refs, accs, losses
 
+    def validate_one_epoch(self):
+        self.model.eval()
+        with torch.no_grad():
+            seqs, refs, accs, losses = zip(*(self.validate_one_step(batch) for batch in self.valid_loader))
+        seqs, refs, accs = (sum(x, []) for x in (seqs, refs, accs))
+        loss = np.mean([(x['ctc_loss'] if isinstance(x, dict) else x) for x in losses])
+        return loss, np.mean(accs), np.median(accs)
 
-def test(model, device, test_loader, min_coverage=0.5, criterion=None):
+    def init_optimizer(self, lr, **kwargs):
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
 
-    if criterion is None:
-        C = len(model.alphabet)
-        weights = torch.cat([torch.tensor([0.4]), (0.1 / (C - 1)) * torch.ones(C - 1)]).to(device)
-        criterion = partial(ctc_label_smoothing_loss, weights=weights)
+    def get_lr_scheduler(self, epochs, last_epoch=0):
+        return func_scheduler(
+            self.optimizer, cosine_decay_schedule(1.0, 0.1), epochs * len(self.train_loader),
+            warmup_steps=500,
+            start_step=last_epoch*len(self.train_loader)
+        )
 
-    seqs = []
-    model.eval()
-    test_loss = 0
-    accuracy_with_cov = lambda ref, seq: accuracy(ref, seq, min_coverage=min_coverage)
+    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
+        if self.optimizer is None:
+            self.init_optimizer(lr)
 
-    with torch.no_grad():
-        for batch_idx, (data, target, lengths) in enumerate(test_loader, start=1):
-            scores = model(data.to(device))
-            loss = criterion(scores, target.to(device), lengths.to(device))
-            test_loss += loss['ctc_loss'] if isinstance(loss, dict) else loss
-            if hasattr(model, 'decode_batch'):
-                seqs.extend(model.decode_batch(scores))
-            else:
-                seqs.extend([model.decode(x) for x in permute(scores, 'TNC', 'NTC')])
+        lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
-    refs = [
-        decode_ref(target, model.alphabet) for target in test_loader.dataset.targets
-    ]
-    accuracies = [
-        accuracy_with_cov(ref, seq) if len(seq) else 0. for ref, seq in zip(refs, seqs)
-    ]
+        for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
+            try:
+                with bonito.io.CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
+                    train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler)
 
-    mean = np.mean(accuracies)
-    median = np.median(accuracies)
-    return test_loss.item() / batch_idx, mean, median
+                model_state = self.model.module.state_dict() if hasattr(self.model, 'module') else self.model.state_dict()
+                torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
+
+                val_loss, val_mean, val_median = self.validate_one_epoch()
+            except KeyboardInterrupt:
+                break
+
+            print("[epoch {}] directory={} loss={:.4f} mean_acc={:.3f}% median_acc={:.3f}%".format(
+                epoch, workdir, val_loss, val_mean, val_median
+            ))
+
+            with bonito.io.CSVLogger(os.path.join(workdir, 'training.csv')) as training_log:
+                training_log.append({
+                    'time': datetime.today(),
+                    'duration': int(duration),
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'validation_loss': val_loss,
+                    'validation_mean': val_mean,
+                    'validation_median': val_median
+                })
