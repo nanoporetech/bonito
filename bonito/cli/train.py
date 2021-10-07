@@ -125,7 +125,7 @@ def main(args):
             with CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                 train_loss, duration = train(
                     model, device, train_loader, optimizer, criterion=criterion,
-                    use_amp=half_supported() and not args.no_amp, scaler=scaler, grad_clip_norm=args.clip, lr_scheduler=lr_scheduler,
+                    use_amp=half_supported() and not args.no_amp, scaler=scaler, lr_scheduler=lr_scheduler,
                     loss_log = loss_log
                 )
 
@@ -167,7 +167,6 @@ def argparser():
     parser.add_argument("--lr", default=2e-3, type=float)
     parser.add_argument("--sha-lr", default=5e-4, type=float)
     parser.add_argument("--wd", default=1e-2, type=float)
-    parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)

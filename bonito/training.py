@@ -123,7 +123,7 @@ def ctc_label_smoothing_loss(log_probs, targets, lengths, weights):
     return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
 
-def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, scaler=None, grad_clip_norm=None, lr_scheduler=None, loss_log=None):
+def train(model, device, train_loader, optimizer, use_amp=False, criterion=None, scaler=None, lr_scheduler=None, loss_log=None):
 
     if criterion is None:
         C = len(model.alphabet)
@@ -139,7 +139,7 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
         ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
     )
     smoothed_loss = None
-    max_norm = grad_clip_norm
+    max_norm = 2.0
 
     with progress_bar:
 
@@ -159,18 +159,12 @@ def train(model, device, train_loader, optimizer, use_amp=False, criterion=None,
             if use_amp:
                 scaler.scale(losses['loss']).backward()
                 scaler.unscale_(optimizer)
-            else:
-                losses['loss'].backward()
-
-            # gradient clipping
-            grad_norm = None
-            if grad_clip_norm is not None:
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm).item()
-
-            if use_amp:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
                 scaler.step(optimizer)
                 scaler.update()
             else:
+                losses['loss'].backward()
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm).item()
                 optimizer.step()
 
             if lr_scheduler is not None: lr_scheduler.step()
