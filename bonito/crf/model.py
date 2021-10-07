@@ -9,7 +9,7 @@ from bonito.nn import Module, Convolution, SHABlock, LinearCRFEncoder, Serial, P
 import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
-
+from collections import Counter
 
 def get_stride(m):
     if hasattr(m, 'stride'):
@@ -139,17 +139,30 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_attn=False):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_layers=[], num_attn_heads=1, attn_dropout=0., ff_dropout=0.):
     rnn = layers[rnn_type]
+
+    rnns = [
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True)
+    ]
+
+    backbone = []
+    single_head_layers_count = Counter(single_head_layers) # allows for multiple SHA blocks per layer
+
+    for layer, rnn in enumerate(rnns):
+        backbone.append(rnn)
+
+        if layer in single_head_layers_count:
+            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer])])
+
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
             conv(4, 16, ks=5, bias=True, activation=activation),
             conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
             Permute([2, 0, 1]),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True), rnn(features, features),
-            *([SHABlock(features)] if single_head_attn else []),
-            rnn(features, features, reverse=True),
+            *backbone,
             LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
     ])
 

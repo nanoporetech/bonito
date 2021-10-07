@@ -82,6 +82,13 @@ def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio
         )
     return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
+def separate_weight_decayable_params(params):
+    """
+    Separate weight decayable parameters from non-weight decayable
+    """
+    no_wd_params = set([param for param in params if param.ndim < 2])
+    wd_params = set(params) - no_wd_params
+    return wd_params, no_wd_params
 
 def load_state(dirname, device, model):
     """
@@ -201,8 +208,31 @@ class Trainer:
         loss = np.mean([(x['ctc_loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, **kwargs):
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
+    def init_optimizer(self, lr, sha_lr = None, **kwargs):
+        # exclude norm scales and biases from weight decay
+
+        params = set(self.model.parameters())
+
+        attn_params = set()
+        for m in model.modules():
+            if isinstance(m, SHABlock):
+                attn_params.update(m.parameters())
+
+        non_attn_params = params - attn_params
+
+        wd_params, no_wd_params = separate_weight_decayable_params(non_attn_params)
+        attn_wd_params, attn_no_wd_params = separate_weight_decayable_params(attn_params)
+
+        sha_lr = sha_lr if sha_lr is not None else lr
+
+        param_groups = [
+            {'params': list(attn_wd_params), 'lr': sha_lr},
+            {'params': list(attn_no_wd_params), 'weight_decay': 0, 'lr': sha_lr},
+            {'params': list(wd_params)},
+            {'params': list(no_wd_params), 'weight_decay': 0},
+        ]
+
+        self.optimizer = torch.optim.AdamW(param_groups, lr=lr, **kwargs)
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return func_scheduler(
@@ -211,9 +241,9 @@ class Trainer:
             start_step=last_epoch*len(self.train_loader)
         )
 
-    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
+    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0, sha_lr=None):
         if self.optimizer is None:
-            self.init_optimizer(lr)
+            self.init_optimizer(lr, sha_lr=sha_lr)
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 

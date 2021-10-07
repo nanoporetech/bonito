@@ -131,10 +131,12 @@ class LinearCRFEncoder(Module):
 @register
 class SHA(Module):
 
-    def __init__(self, dim):
+    def __init__(self, dim, dropout=0.):
         super().__init__()
         self.scale = dim ** -0.5
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
+        self.dropout = nn.Dropout(dropout)
+        self.layerscale = LayerScale(dim)
 
     def forward(self, x, kv):
         x = x.transpose(0, 1)
@@ -143,33 +145,104 @@ class SHA(Module):
         q = self.to_q(x)
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
         attn = sim.softmax(dim=-1)
+        attn = self.dropout(attn)
 
         out = torch.matmul(attn, kv)
-        return out.transpose(0, 1)
+        out = out.transpose(0, 1)
+        return self.layerscale(out)
+
+@register
+class MHA(Module):
+
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0.):
+        super().__init__()
+        inner_dim = heads * dim_head
+        self.heads = heads
+        self.dim_head = dim_head
+        self.scale = dim_head ** -0.5
+        self.to_q = nn.Linear(dim, inner_dim, bias=False)
+        self.norm_q = nn.LayerNorm(dim_head)
+        self.to_kv = nn.Linear(dim, inner_dim, bias=False)
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
+        self.dropout = nn.Dropout(dropout)
+        self.layerscale = LayerScale(dim)
+
+    def forward(self, x, kv):
+        n, b, d, h = *x.shape, self.heads
+
+        x = x.transpose(0, 1)
+        kv = kv.transpose(0, 1)
+
+        q = self.to_q(x)
+        kv = self.to_kv(kv)
+
+        q, kv = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, kv))
+        q = self.norm_q(q)
+
+        sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
+        attn = sim.softmax(dim=-1)
+        attn = self.dropout(attn)
+
+        out = torch.matmul(attn, kv)
+        out = out.transpose(1, 2).reshape(b, n, -1)
+        out = self.to_out(out)
+
+        out = out.transpose(0, 1)
+        return self.layerscale(out)
+
+@register
+class LayerScale(Module):
+    """ https://arxiv.org/abs/2103.17239 """
+
+    def __init__(self, features, eps=1e-5):
+        super().__init__()
+        scale = torch.zeros(1, 1, features).fill_(eps)
+        self.scale = nn.Parameter(scale)
+
+    def forward(self, x):
+        return self.scale * x
+
+@register
+class FeedForward(Module):
+
+    def __init__(self, dim, mult=4, dropout=0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim * mult),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim * mult, dim),
+            LayerScale(dim)
+        )
+
+    def forward(self, x):
+        return self.net(x)
 
 @register
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, ff_mult=4):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
-        self.attn = SHA(dim=dim)
 
-        self.ff_residual_norm = nn.LayerNorm(dim)
-        self.ff = Serial([
-            nn.LayerNorm(dim),
-            nn.Linear(dim, dim * ff_mult),
-            nn.GELU(),
-            nn.Linear(dim * ff_mult, dim),
-        ])
+        is_multiheaded = num_attn_heads > 1
+
+        if is_multiheaded:
+            self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads)
+        else:
+            self.attn = SHA(dim=dim, dropout=attn_dropout)
+
+        self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 
     def forward(self, x):
         kv = self.attn_kv_norm(x)
-        x = self.attn_query_norm(x)
-        x = self.attn(x, kv) + x
-        x = self.ff(x) + self.ff_residual_norm(x)
+        q = self.attn_query_norm(x)
+
+        x = self.attn(q, kv) + x
+        x = self.ff(x) + x
         return x
 
 @register
