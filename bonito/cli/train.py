@@ -73,7 +73,7 @@ def main(args):
         model.alphabet = model.module.alphabet
 
     trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
-    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, sha_lr = args.sha_lr)
+    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, sha_lr=args.sha_lr)
 
 def argparser():
     parser = ArgumentParser(
