@@ -152,10 +152,11 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
     single_head_layers_count = Counter(single_head_layers) # allows for multiple SHA blocks per layer
 
     for layer, rnn in enumerate(rnns):
+        layer_num = layer + 1
         backbone.append(rnn)
 
-        if layer in single_head_layers_count:
-            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer])])
+        if layer_num in single_head_layers_count:
+            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer_num])])
 
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
