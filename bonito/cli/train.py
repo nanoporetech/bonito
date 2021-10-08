@@ -37,7 +37,7 @@ def main(args):
         )
     elif args.dataset_config is not None:
         train_loader, valid_loader = load_bonito_datasets(
-            args.dataset_config, args.seed, args.batch, args.chunks, args.valid_chunks
+            args.dataset_config, args.batch, args.chunks, args.valid_chunks, args.seed
         )
     else:
         raise ValueError(f"failed to load data")

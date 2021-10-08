@@ -31,7 +31,7 @@ def main(args):
         dataloader = DataLoader(testdata, batch_size=args.batchsize)
     elif args.dataset_config is not None:
         _, dataloader = load_bonito_datasets(
-            args.dataset_config, args.seed, args.batchsize, args.chunks, args.chunks
+            args.dataset_config, args.batchsize, args.chunks, args.chunks, args.seed
         )
     else:
         raise ValueError(f"failed to load data")

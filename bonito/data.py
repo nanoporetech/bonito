@@ -91,21 +91,21 @@ def load_numpy(limit, directory, batch):
     return train_loader, valid_loader
 
 
-def load_bonito_datasets(config, seed, batch, train_chunks, valid_chunks):
+def load_bonito_datasets(config, batch, train_chunks, valid_chunks, train_seed, valid_sample_seed=42):
     """
     Returns training and validation DataLoaders for data in config.
     """
     dataset_config = toml.load(config)
 
     (t_ds, t_weights), (v_ds, v_weights) = load_bd_datasets(
-        dataset_config, seed
+        dataset_config, valid_sample_seed
     )
 
     train_sampler = WeightedConcatDatasetRandomSampler(
-        t_ds, t_weights, num_samples=train_chunks, seed=seed
+        t_ds, t_weights, num_samples=train_chunks, seed=train_seed
     )
     valid_sampler = WeightedConcatDatasetRandomSampler(
-        v_ds, v_weights, num_samples=valid_chunks, seed=seed,
+        v_ds, v_weights, num_samples=valid_chunks, seed=valid_sample_seed,
         inter_iter_randomness=False
     )
 
@@ -156,7 +156,7 @@ def load_numpy_datasets(limit=None, directory=None):
     return np.array(chunks), np.array(targets), np.array(lengths)
 
 
-def load_bd_datasets(config, seed):
+def load_bd_datasets(config, valid_sample_seed):
     """
     Returns (datasets, weights) tuples for training and validation.
     """
@@ -168,7 +168,7 @@ def load_bd_datasets(config, seed):
         valid_data = []
         for i in range(len(train_data)):
             df = train_data[i][0]
-            train_df = df.sample(frac=0.97, random_state=seed)
+            train_df = df.sample(frac=0.97, random_state=valid_sample_seed)
             valid_df = df.drop(train_df.index)
             train_data[i][0] = train_df
             valid_data.append(
