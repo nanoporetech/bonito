@@ -160,8 +160,11 @@ class MHA(Module):
         self.heads = heads
         self.dim_head = dim_head
         self.scale = dim_head ** -0.5
+
+        # proposed https://openreview.net/forum?id=GMYWzWztDx5
+        self.head_scale = nn.Parameter(torch.ones(1, heads, 1, 1))
+
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.norm_q = nn.LayerNorm(dim_head)
         self.to_kv = nn.Linear(dim, inner_dim, bias=False)
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
@@ -177,13 +180,13 @@ class MHA(Module):
         kv = self.to_kv(kv)
 
         q, kv = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, kv))
-        q = self.norm_q(q)
 
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
-        out = torch.matmul(attn, kv)
+        out = torch.matmul(attn, kv) * self.head_scale
+
         out = out.transpose(1, 2).reshape(b, n, -1)
         out = self.to_out(out)
 
