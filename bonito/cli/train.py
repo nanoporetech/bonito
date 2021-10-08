@@ -87,7 +87,7 @@ def argparser():
     parser.add_argument("--directory", default=default_data)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
-    parser.add_argument("--sha-lr", default=5e-4, type=float)
+    parser.add_argument("--sha-lr", default=1e-4, type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
