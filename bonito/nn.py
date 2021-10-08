@@ -131,11 +131,12 @@ class LinearCRFEncoder(Module):
 @register
 class SHA(Module):
 
-    def __init__(self, dim, dropout=0.):
+    def __init__(self, dim, dropout=0., sha_sandwich_norm=False):
         super().__init__()
         self.scale = dim ** -0.5
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
+        self.bottom_sandwich_norm = nn.LayerNorm(dim) if sha_sandwich_norm else nn.Identity()
         self.layerscale = LayerScale(dim)
 
     def forward(self, x, kv):
@@ -149,6 +150,7 @@ class SHA(Module):
 
         out = torch.matmul(attn, kv)
         out = out.transpose(0, 1)
+        out = self.bottom_sandwich_norm(out)
         return self.layerscale(out)
 
 @register
@@ -226,7 +228,7 @@ class FeedForward(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, sha_sandwich_norm=False, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
@@ -236,7 +238,7 @@ class SHABlock(Module):
         if is_multiheaded:
             self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads)
         else:
-            self.attn = SHA(dim=dim, dropout=attn_dropout)
+            self.attn = SHA(dim=dim, dropout=attn_dropout, sha_sandwich_norm=sha_sandwich_norm)
 
         self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 
