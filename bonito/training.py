@@ -123,7 +123,7 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., use_amp=True):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -132,6 +132,7 @@ class Trainer:
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
+        self.grad_clip_max_norm = grad_clip_max_norm
 
     def train_one_step(self, batch):
         data, targets, lengths = batch
@@ -146,7 +147,7 @@ class Trainer:
 
         self.scaler.scale(losses['loss']).backward()
         self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_clip_max_norm).item()
         self.scaler.step(self.optimizer)
         self.scaler.update()
 

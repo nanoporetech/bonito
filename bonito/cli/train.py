@@ -72,7 +72,7 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
+    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, use_amp=half_supported() and not args.no_amp)
     trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, sha_lr=args.sha_lr)
 
 def argparser():
@@ -88,6 +88,7 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
     parser.add_argument("--sha-lr", default=1e-4, type=float)
+    parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
