@@ -218,6 +218,7 @@ class FeedForward(Module):
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(dim * mult, dim),
+            nn.LayerNorm(dim),
             LayerScale(dim)
         )
 
