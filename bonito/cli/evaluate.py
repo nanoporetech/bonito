@@ -10,7 +10,7 @@ from itertools import starmap
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 
-from bonito.data import ChunkDataSet, load_numpy_datasets, load_bonito_datasets
+from bonito.data import load_numpy, load_script
 from bonito.util import accuracy, poa, decode_ref, half_supported
 from bonito.util import init, load_model, concat, permute
 
@@ -23,18 +23,20 @@ def main(args):
     init(args.seed, args.device)
 
     print("* loading data")
-    if args.directory is not None:
-        directory = args.directory
-        if os.path.exists(os.path.join(directory, 'validation')):
-            directory = os.path.join(directory, 'validation')
-        testdata = ChunkDataSet(*load_numpy_datasets(args.chunks, directory))
-        dataloader = DataLoader(testdata, batch_size=args.batchsize)
-    elif args.dataset_config is not None:
-        _, dataloader = load_bonito_datasets(
-            args.dataset_config, args.batchsize, args.chunks, args.chunks, args.seed
+    try:
+        _, valid_loader_kwargs = load_numpy(args.chunks, args.directory)
+    except FileNotFoundError:
+        _, valid_loader_kwargs = load_script(
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.chunks
         )
-    else:
-        raise ValueError(f"failed to load data")
+
+    dataloader = DataLoader(
+        batch_size=args.batchsize, num_workers=4, pin_memory=True,
+        **valid_loader_kwargs
+    )
 
     accuracy_with_cov = lambda ref, seq: accuracy(ref, seq, min_coverage=args.min_coverage)
 
@@ -98,9 +100,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument("model_directory")
-    data = parser.add_mutually_exclusive_group(required=True)
-    data.add_argument("--directory", type=Path)
-    data.add_argument("--dataset-config", type=Path)
+    parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)

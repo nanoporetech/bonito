@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 from pathlib import Path
 
-from bonito.data import load_bonito_datasets, load_numpy
+from bonito.data import load_numpy, load_script
 from bonito.util import __models__, default_config, default_data
 from bonito.util import load_model, load_symbol, init, half_supported
 from bonito.training import load_state, Trainer
@@ -17,6 +17,7 @@ from bonito.training import load_state, Trainer
 import toml
 import torch
 import numpy as np
+from torch.utils.data import DataLoader
 
 
 def main(args):
@@ -31,16 +32,23 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    if args.directory is not None:
-        train_loader, valid_loader = load_numpy(
-            args.chunks, args.directory, args.batch
+    try:
+        train_loader_kwargs, valid_loader_kwargs = load_numpy(
+            args.chunks, args.directory
         )
-    elif args.dataset_config is not None:
-        train_loader, valid_loader = load_bonito_datasets(
-            args.dataset_config, args.batch, args.chunks, args.valid_chunks, args.seed
+    except FileNotFoundError:
+        train_loader_kwargs, valid_loader_kwargs = load_script(
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.valid_chunks
         )
-    else:
-        raise ValueError(f"failed to load data")
+
+    loader_kwargs = {
+        "batch_size": args.batch, "num_workers": 4, "pin_memory": True
+    }
+    train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
+    valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
 
     if args.pretrained:
         dirname = args.pretrained
