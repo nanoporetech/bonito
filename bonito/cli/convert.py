@@ -14,7 +14,7 @@ from itertools import islice as take
 from argparse import ArgumentDefaultsHelpFormatter
 
 from tqdm import tqdm
-from bonito.training import ChunkDataSet
+from bonito.data import ChunkDataSet
 
 
 def align(samples, pointers, reference):

@@ -8,10 +8,11 @@ import torch
 import numpy as np
 from itertools import starmap
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from pathlib import Path
 
-from bonito.training import ChunkDataSet
+from bonito.data import load_numpy, load_script
 from bonito.util import accuracy, poa, decode_ref, half_supported
-from bonito.util import init, load_data, load_model, concat, permute
+from bonito.util import init, load_model, concat, permute
 
 from torch.utils.data import DataLoader
 
@@ -22,17 +23,21 @@ def main(args):
     init(args.seed, args.device)
 
     print("* loading data")
-
-    directory = args.directory
-    if os.path.exists(os.path.join(directory, 'validation')):
-        directory = os.path.join(directory, 'validation')
-
-    testdata = ChunkDataSet(
-        *load_data(
-            limit=args.chunks, directory=directory
+    try:
+        _, valid_loader_kwargs = load_numpy(args.chunks, args.directory)
+    except FileNotFoundError:
+        _, valid_loader_kwargs = load_script(
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.chunks
         )
+
+    dataloader = DataLoader(
+        batch_size=args.batchsize, num_workers=4, pin_memory=True,
+        **valid_loader_kwargs
     )
-    dataloader = DataLoader(testdata, batch_size=args.batchsize)
+
     accuracy_with_cov = lambda ref, seq: accuracy(ref, seq, min_coverage=args.min_coverage)
 
     for w in [int(i) for i in args.weights.split(',')]:
@@ -45,8 +50,11 @@ def main(args):
         print("* calling")
         t0 = time.perf_counter()
 
+        targets = []
+
         with torch.no_grad():
-            for data, *_ in dataloader:
+            for data, target, *_ in dataloader:
+                targets.extend(torch.unbind(target, 0))
                 if half_supported():
                     data = data.type(torch.float16).to(args.device)
                 else:
@@ -61,7 +69,7 @@ def main(args):
 
         duration = time.perf_counter() - t0
 
-        refs = [decode_ref(target, model.alphabet) for target in dataloader.dataset.targets]
+        refs = [decode_ref(target, model.alphabet) for target in targets]
         accuracies = [accuracy_with_cov(ref, seq) if len(seq) else 0. for ref, seq in zip(refs, seqs)]
 
         if args.poa: poas.append(sequences)
@@ -92,7 +100,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument("model_directory")
-    parser.add_argument("--directory", default=None)
+    parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=9, type=int)
     parser.add_argument("--weights", default="0", type=str)
