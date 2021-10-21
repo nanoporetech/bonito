@@ -2,11 +2,13 @@
 Bonito nn modules.
 """
 
+import math
 import torch
 from torch import nn
 from torch.nn import Module
 from torch.nn.init import orthogonal_
-
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 layers = {}
 
@@ -156,12 +158,15 @@ class SHA(Module):
 @register
 class MHA(Module):
 
-    def __init__(self, dim, heads=4, dim_head=64, dropout=0.):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal = False, norm_inputs=False, rel_pos_emb=None):
         super().__init__()
         inner_dim = heads * dim_head
         self.heads = heads
         self.dim_head = dim_head
         self.scale = dim_head ** -0.5
+        self.causal = causal
+
+        self.rel_pos_emb = rel_pos_emb
 
         # proposed https://openreview.net/forum?id=GMYWzWztDx5
         self.head_scale = nn.Parameter(torch.ones(1, heads, 1, 1))
@@ -172,8 +177,13 @@ class MHA(Module):
         self.dropout = nn.Dropout(dropout)
         self.layerscale = LayerScale(dim)
 
-    def forward(self, x, kv):
+        self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
+
+    def forward(self, x, kv=None):
         n, b, d, h = *x.shape, self.heads
+
+        x = self.norm(x)
+        kv = x if kv is None else kv
 
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
@@ -184,6 +194,17 @@ class MHA(Module):
         q, kv = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, kv))
 
         sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
+
+        if self.rel_pos_emb is not None:
+            pos_bias = self.rel_pos_emb(sim)
+            sim = sim + pos_bias
+
+        if self.causal:
+            i, j = sim.shape[-2:]
+            mask = torch.ones(i, j).triu(j - i + 1).bool()
+            mask_value = -torch.finfo(sim.dtype).max
+            sim.masked_fill_(mask[None, None, :, :], mask_value)
+
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
@@ -194,6 +215,138 @@ class MHA(Module):
 
         out = out.transpose(0, 1)
         return self.layerscale(out)
+
+class AlibiPositionalBias(nn.Module):
+    """
+    ALiBi - positional encoding for improving extrapolation, for decoders
+    https://arxiv.org/abs/2108.12409
+    """
+
+    def __init__(self, heads):
+        super().__init__()
+        self.heads = heads
+        slopes = torch.Tensor(self._get_slopes(heads))
+        self.register_buffer('slopes', slopes, persistent=False)
+        self.register_buffer('bias', None, persistent=False)
+
+    @staticmethod
+    def _get_slopes(heads):
+        def get_slopes_power_of_2(n):
+            start = (2**(-2**-(math.log2(n)-3)))
+            ratio = start
+            return [start*ratio**i for i in range(n)]
+
+        if math.log2(heads).is_integer():
+            return get_slopes_power_of_2(heads)
+
+        closest_power_of_2 = 2 ** math.floor(math.log2(heads))
+        return get_slopes_power_of_2(closest_power_of_2) + get_slopes_power_of_2(2 * closest_power_of_2)[0::2][:heads-closest_power_of_2]
+
+    def forward(self, qk_dots):
+        h, i, j, device = *qk_dots.shape[-3:], qk_dots.device
+
+        if self.bias is not None and self.bias.shape[-1] >= j:
+            return qk_dots + self.bias[..., :j]
+
+        bias = torch.arange(j, device = device)
+        bias = bias[None, None, None, :]
+        bias = bias * self.slopes[None, :, None, None]
+        self.register_buffer('bias', bias, persistent=False)
+        return self.bias
+
+class Decoder(Module):
+
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, max_seq_len=1024, loss_weight=0.25):
+        super().__init__()
+        self.loss_weight = loss_weight
+        self.token_emb = nn.Embedding(num_tokens + 2, dim)
+        self.pos_emb = nn.Embedding(max_seq_len, dim)
+        self.norm_context = nn.LayerNorm(dim)
+
+        self.layers = nn.ModuleList([])
+        rel_pos_emb = AlibiPositionalBias(heads=heads)
+
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                MHA(dim, heads=heads, causal=True, rel_pos_emb=rel_pos_emb, norm_inputs=True),
+                MHA(dim, heads=heads, norm_inputs=True),
+                FeedForward(dim)
+            ]))
+
+        self.to_logits = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, num_tokens + 2)
+        )
+
+    def forward(self, x, encoded, return_loss=False):
+        device = x.device
+        encoded = self.norm_context(encoded)
+
+        if return_loss:
+            is_padding = (x == 0)
+
+            # reserve 2 special tokens for SOS and EOS. 0 is reused as SOS for non-reversed seq
+            x = x + 2
+            x = x.masked_fill(is_padding, 0)
+
+            # unbind and reverse the nucleotide sequences and pad with batch first
+            reversed_x_list = list(map(lambda t: t[t.nonzero()], torch.flip(x, (1,)).unbind(dim=0)))
+            reversed_x = pad_sequence(reversed_x_list, batch_first=True).squeeze(-1)
+
+            # add SOS token for reversed nucleotide sequence as 1
+            reversed_x = F.pad(reversed_x, (1, 0), value=1)
+
+            # add SOS token for nucleotide sequence as 0 (it is fine, even though it is padding)
+            x = F.pad(x, (1, 0), value=0)
+
+            # make room for EOS token for both original and reversed sequence
+            x = F.pad(x, (0, 1), value=0)
+            reversed_x = F.pad(reversed_x, (0, 1), value=0)
+
+            # make sure original sequence and reverse sequence batches are concatenatable
+            x = x[:, :reversed_x.shape[-1]]
+
+            # set EOS as 2
+            eos_indices = (x != 0).sum(dim=-1) + 1
+            eos_mask = eos_indices[:, None] == torch.arange(reversed_x.shape[-1], device=device)
+            x = x.masked_fill(eos_mask, 2)
+            reversed_x = reversed_x.masked_fill(eos_mask, 2)
+
+            x, labels = x[:, :-1], x[:, 1:]
+            reversed_x, reversed_labels = reversed_x[:, :-1], reversed_x[:, 1:]
+
+            # concatenate original sequence and reversed sequence, and duplicate encoded memories for cross attention
+            x = torch.cat((x, reversed_x), dim=0)
+            encoded = torch.cat((encoded, encoded), dim=1)
+
+        # embed tokens and add absolute positions
+        x = self.token_emb(x)
+        pos_emb = self.pos_emb(torch.arange(x.shape[-2], device = device))
+        x = x + pos_emb[None, :, :]
+        x = x.transpose(0, 1)
+
+        # transformer layers
+        for self_attn, cross_attn, ff in self.layers:
+            x = self_attn(x) + x
+            x = cross_attn(x, encoded) + x
+            x = ff(x) + x
+
+        x = x.transpose(0, 1)
+        logits = self.to_logits(x)
+
+        if not return_loss:
+            return logits
+
+        logits = logits.transpose(1, 2)
+        forward_logits, reversed_logits = logits.chunk(2, dim = 0)
+
+        # calculate forward and backward cross-entropy losses
+        forward_loss = F.cross_entropy(forward_logits, labels, ignore_index = 0)
+        backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index = 0)
+        loss = (forward_loss + backward_loss) * 0.5
+
+        # return loss, weighted
+        return loss * self.loss_weight
 
 @register
 class LayerScale(Module):

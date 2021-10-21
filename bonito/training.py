@@ -139,13 +139,14 @@ class Trainer:
 
         self.optimizer.zero_grad()
         with amp.autocast(enabled=self.use_amp):
-            scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+            data, targets, lengths = data.to(self.device), targets.to(self.device), lengths.to(self.device)
+            scores, aux_loss = self.model(data, targets)
+            losses = self.criterion(scores, targets, lengths)
 
         if not isinstance(losses, dict):
-            losses = {'loss': losses}
+            losses = {'loss': losses, 'aux_loss': aux_loss}
 
-        self.scaler.scale(losses['loss']).backward()
+        self.scaler.scale(losses['loss'] + losses['aux_loss']).backward()
         self.scaler.unscale_(self.optimizer)
         grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_clip_max_norm).item()
         self.scaler.step(self.optimizer)

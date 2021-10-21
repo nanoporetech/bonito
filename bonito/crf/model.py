@@ -4,7 +4,7 @@ Bonito CTC-CRF Model.
 
 import torch
 import numpy as np
-from bonito.nn import Module, Convolution, SHABlock, LinearCRFEncoder, Serial, Permute, layers, from_dict
+from bonito.nn import Module, Convolution, SHABlock, LinearCRFEncoder, Serial, Permute, layers, Decoder, from_dict
 
 import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
@@ -158,26 +158,36 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         if layer_num in single_head_layers_count:
             backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, sha_sandwich_norm=sha_sandwich_norm) for _ in range(single_head_layers_count[layer_num])])
 
-    return Serial([
-            conv(insize, 4, ks=5, bias=True, activation=activation),
-            conv(4, 16, ks=5, bias=True, activation=activation),
-            conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
-            Permute([2, 0, 1]),
-            *backbone,
-            LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+    encoder = Serial([
+        conv(insize, 4, ks=5, bias=True, activation=activation),
+        conv(4, 16, ks=5, bias=True, activation=activation),
+        conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
+        Permute([2, 0, 1]),
+        *backbone
     ])
 
+    linear_crf = LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+    return encoder, linear_crf
 
 class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist):
+    def __init__(self, encoder, linear_crf, decoder, seqdist):
         super().__init__()
         self.seqdist = seqdist
         self.encoder = encoder
+        self.decoder = decoder
+        self.linear_crf = linear_crf
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
 
-    def forward(self, x):
-        return self.encoder(x).to(torch.float32)
+    def forward(self, x, targets = None):
+        encoded = self.encoder(x)
+        scores = self.linear_crf(encoded.to(torch.float32))
+
+        if targets is not None:
+            aux_loss = self.decoder(targets, encoded, return_loss=True) if self.decoder is not None else 0
+            return scores, aux_loss
+
+        return scores
 
     def decode_batch(self, x):
         scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
@@ -198,6 +208,7 @@ class Model(SeqdistModel):
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])
         else: #old-style
-            encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
-        super().__init__(encoder, seqdist)
+            encoder, linear_crf = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
+            decoder = Decoder(config['encoder']['features'], **config['aux_decoder']) if config['aux_decoder']['loss_weight'] > 0 else None
+        super().__init__(encoder, linear_crf, decoder, seqdist)
         self.config = config
