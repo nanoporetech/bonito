@@ -153,6 +153,8 @@ class Trainer:
 
             if not isinstance(losses, dict):
                 losses = {'loss': losses, 'aux_loss': aux_loss}
+            else:
+                losses['aux_loss'] = aux_loss
 
             total_loss = losses['loss'] + losses['aux_loss']
             self.scaler.scale(total_loss / self.grad_accum_steps).backward()
