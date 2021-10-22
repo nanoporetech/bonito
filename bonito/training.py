@@ -143,11 +143,9 @@ class Trainer:
         self.grad_accum_steps = grad_accum_steps
 
     def train_one_step(self, batch):
-        data, targets, lengths = batch
-
         self.optimizer.zero_grad()
 
-        for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_steps, dim=0), (data, targets, lengths))):
+        for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_steps, dim=0), batch)):
             with amp.autocast(enabled=self.use_amp):
                 data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
                 scores, aux_loss = self.model(data, targets)
