@@ -31,20 +31,22 @@ def load_state(dirname, device, model, optim=None):
 
     weight_no = optim_no = None
 
-    weight_files = glob(os.path.join(dirname, "weights_*.tar"))
-    if weight_files:
-        weight_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-
     optim_files = glob(os.path.join(dirname, "optim_*.tar"))
-    if optim_files:
-        optim_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in optim_files])
+    optim_nos = {int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in optim_files}
 
-    if optim is None and weight_no:
-        to_load = [("weights", model)]
-    elif optim is not None and weight_no and optim_no and weight_no == optim_no:
-        to_load = [("weights", model), ("optim", optim)]
+    weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+    weight_nos = {int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files}
+
+    if optim is not None:
+        weight_no = optim_no = max(optim_nos & weight_nos, default=None)
     else:
-        to_load = []
+        weight_no = max(weight_nos, default=None)
+
+    to_load = []
+    if weight_no:
+        to_load.append(("weights", model))
+    if optim_no:
+        to_load.append(("optim", optim))
 
     if to_load:
         print("[picking up %s state from epoch %s]" % (', '.join([n for n, _ in to_load]), weight_no))

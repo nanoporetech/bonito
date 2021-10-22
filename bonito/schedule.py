@@ -21,13 +21,14 @@ def linear_warmup_const_inverse_sqrt_decay(warmup_steps, decay_start_step, **kwa
     """
     Linear warmup, hold constant, inverse sqrt decay scheduler
     """
-    def gen_sched(train_loader):
+    def gen_sched(optimizer, train_loader, epochs, last_epoch):
         def sched(step):
+            step = step + last_epoch*len(train_loader)
             if step < decay_start_step:
                 return min(1.0, 0.1 + 0.9*step/warmup_steps)
             return 1.0 / math.sqrt(1 + ((step - decay_start_step) / len(train_loader)))
-        return sched
-    return lambda optimizer, train_loader, epochs, last_epoch: LambdaLR(optimizer, gen_sched(train_loader))
+        return LambdaLR(optimizer, sched)
+    return gen_sched
 
 
 def linear_cooldown(**kwargs):
