@@ -130,7 +130,7 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., grad_accum_steps=1, use_amp=True):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -140,20 +140,25 @@ class Trainer:
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
         self.grad_clip_max_norm = grad_clip_max_norm
+        self.grad_accum_steps = grad_accum_steps
 
     def train_one_step(self, batch):
         data, targets, lengths = batch
 
         self.optimizer.zero_grad()
-        with amp.autocast(enabled=self.use_amp):
-            data, targets, lengths = data.to(self.device), targets.to(self.device), lengths.to(self.device)
-            scores, aux_loss = self.model(data, targets)
-            losses = self.criterion(scores, targets, lengths)
 
-        if not isinstance(losses, dict):
-            losses = {'loss': losses, 'aux_loss': aux_loss}
+        for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_steps, dim=0), (data, targets, lengths))):
+            with amp.autocast(enabled=self.use_amp):
+                data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
+                scores, aux_loss = self.model(data, targets)
+                losses = self.criterion(scores, targets, lengths)
 
-        self.scaler.scale(losses['loss'] + losses['aux_loss']).backward()
+            if not isinstance(losses, dict):
+                losses = {'loss': losses, 'aux_loss': aux_loss}
+
+            total_loss = losses['loss'] + losses['aux_loss']
+            self.scaler.scale(total_loss / self.grad_accum_steps).backward()
+
         self.scaler.unscale_(self.optimizer)
 
         attn_params = get_params_from_optim(self.optimizer, 0, 1)

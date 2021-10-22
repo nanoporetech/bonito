@@ -39,7 +39,7 @@ def main(args):
         valid_data = [x[split:] for x in train_data]
         train_data = [x[:split] for x in train_data]
 
-    train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch * args.accum, shuffle=True, num_workers=4, pin_memory=True)
     valid_loader = DataLoader(ChunkDataSet(*valid_data), batch_size=args.batch, num_workers=4, pin_memory=True)
 
     if args.pretrained:
@@ -72,7 +72,7 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, use_amp=half_supported() and not args.no_amp)
+    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, grad_accum_steps = args.accum, use_amp=half_supported() and not args.no_amp)
     trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, sha_lr=args.sha_lr)
 
 def argparser():
@@ -92,6 +92,7 @@ def argparser():
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
+    parser.add_argument("--accum", default=1, type=int)
     parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
