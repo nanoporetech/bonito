@@ -6,6 +6,7 @@ import os
 import re
 from glob import glob
 from functools import partial
+from itertools import chain
 from time import perf_counter
 from collections import OrderedDict
 from datetime import datetime
@@ -91,6 +92,12 @@ def separate_weight_decayable_params(params):
     wd_params = set(params) - no_wd_params
     return wd_params, no_wd_params
 
+def get_params_from_optim(optimizer, *param_group_indices):
+    """
+    Get flattened parameters from param group indices of an optimizer
+    """
+    return list(chain(*map(lambda indice: optimizer.param_groups[indice]['params'], param_group_indices)))
+
 def load_state(dirname, device, model):
     """
     Load a model state dict from disk
@@ -148,7 +155,13 @@ class Trainer:
 
         self.scaler.scale(losses['loss'] + losses['aux_loss']).backward()
         self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_clip_max_norm).item()
+
+        attn_params = get_params_from_optim(self.optimizer, 0, 1)
+        non_attn_params = get_params_from_optim(self.optimizer, 2, 3)
+
+        torch.nn.utils.clip_grad_norm_(attn_params, 1.)
+        grad_norm = torch.nn.utils.clip_grad_norm_(non_attn_params, max_norm=self.grad_clip_max_norm).item()
+
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
