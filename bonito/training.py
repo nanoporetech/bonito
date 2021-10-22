@@ -21,30 +21,45 @@ from tqdm import tqdm
 import torch.cuda.amp as amp
 
 
-def load_state(dirname, device, model):
+def load_state(dirname, device, model, optim=None):
     """
     Load a model state dict from disk
     """
     model.to(device)
+    if hasattr(model, "module"):
+        model = model.module
 
-    weight_no = None
+    weight_no = optim_no = None
 
     weight_files = glob(os.path.join(dirname, "weights_*.tar"))
     if weight_files:
         weight_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
 
-    if weight_no:
-        print("[picking up from epoch %s]" % weight_no)
-        state_dict = torch.load(
-            os.path.join(dirname, 'weights_%s.tar' % weight_no), map_location=device
-        )
-        state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k.replace('module.', '')
-            new_state_dict[name] = v
+    optim_files = glob(os.path.join(dirname, "optim_*.tar"))
+    if optim_files:
+        optim_no = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in optim_files])
 
-        model.load_state_dict(new_state_dict)
+    if optim is None and weight_no:
+        to_load = [("weights", model)]
+    elif optim is not None and weight_no and optim_no and weight_no == optim_no:
+        to_load = [("weights", model), ("optim", optim)]
+    else:
+        to_load = []
+
+    if to_load:
+        print("[picking up %s state from epoch %s]" % (', '.join([n for n, _ in to_load]), weight_no))
+        for name, obj in to_load:
+            state_dict = torch.load(
+                os.path.join(dirname, '%s_%s.tar' % (name, weight_no)), map_location=device
+            )
+            if name == "weights":
+                state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, obj).items()}
+                new_state_dict = OrderedDict()
+                for k, v in state_dict.items():
+                    name = k.replace('module.', '')
+                    new_state_dict[name] = v
+                state_dict = new_state_dict
+            obj.load_state_dict(state_dict)
         epoch = weight_no
     else:
         epoch = 0
@@ -53,7 +68,11 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True, lr_scheduler_fn=None):
+    def __init__(
+        self, model, device, train_loader, valid_loader, criterion=None,
+        use_amp=True, lr_scheduler_fn=None, restore_optim=False,
+        save_optim_every=10
+    ):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -61,6 +80,8 @@ class Trainer:
         self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
         self.use_amp = use_amp
         self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
+        self.restore_optim = restore_optim
+        self.save_optim_every = save_optim_every
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
@@ -154,9 +175,11 @@ class Trainer:
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
 
-    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
+    def fit(self, workdir, epochs=1, lr=2e-3):
         if self.optimizer is None:
             self.init_optimizer(lr)
+
+        last_epoch = load_state(workdir, self.device, self.model, self.optimizer if self.restore_optim else None)
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
@@ -167,6 +190,8 @@ class Trainer:
 
                 model_state = self.model.module.state_dict() if hasattr(self.model, 'module') else self.model.state_dict()
                 torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
+                if epoch % self.save_optim_every == 0:
+                    torch.save(self.optimizer.state_dict(), os.path.join(workdir, "optim_%s.tar" % epoch))
 
                 val_loss, val_mean, val_median = self.validate_one_epoch()
             except KeyboardInterrupt:

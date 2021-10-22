@@ -73,8 +73,6 @@ def main(args):
     else:
         model = load_symbol(config, 'Model')(config)
 
-    last_epoch = load_state(workdir, args.device, model)
-
     if args.multi_gpu:
         from torch.nn import DataParallel
         model = DataParallel(model)
@@ -90,8 +88,14 @@ def main(args):
     else:
         lr_scheduler_fn = None
 
-    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp, lr_scheduler_fn=lr_scheduler_fn)
-    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
+    trainer = Trainer(
+        model, device, train_loader, valid_loader,
+        use_amp=half_supported() and not args.no_amp,
+        lr_scheduler_fn=lr_scheduler_fn,
+        restore_optim=args.restore_optim,
+        save_optim_every=args.save_optim_every
+    )
+    trainer.fit(workdir, args.epochs, args.lr)
 
 def argparser():
     parser = ArgumentParser(
@@ -113,4 +117,6 @@ def argparser():
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
+    parser.add_argument("--restore-optim", action="store_true", default=False)
+    parser.add_argument("--save-optim-every", default=10, type=int)
     return parser
