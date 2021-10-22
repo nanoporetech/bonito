@@ -29,7 +29,7 @@ num_attn_heads = 1
 sha_sandwich_norm = true
 
 [aux_decoder]
-loss_weight = 0.25
+loss_weight = 0.5
 depth = 2
 heads = 4
 max_seq_len = 1024
