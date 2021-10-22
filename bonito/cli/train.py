@@ -8,6 +8,7 @@ import os
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 from pathlib import Path
+from importlib import import_module
 
 from bonito.data import load_numpy, load_script
 from bonito.util import __models__, default_config, default_data
@@ -80,7 +81,16 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
+    if config.get("lr_scheduler"):
+        sched_config = config["lr_scheduler"]
+        lr_scheduler_fn = getattr(
+            import_module(sched_config["package"]),
+            sched_config["symbol"]
+        )(**sched_config)
+    else:
+        lr_scheduler_fn = None
+
+    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp, lr_scheduler_fn=lr_scheduler_fn)
     trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
 
 def argparser():

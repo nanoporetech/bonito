@@ -10,6 +10,7 @@ from time import perf_counter
 from collections import OrderedDict
 from datetime import datetime
 
+from bonito.schedule import linear_warmup_cosine_decay
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
 import bonito
 
@@ -17,54 +18,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
-from torch.optim.lr_scheduler import LambdaLR
 import torch.cuda.amp as amp
-
-
-def const_schedule(y):
-    """
-    Constant Scheduler
-    """
-    return lambda t: y
-
-
-def linear_schedule(y0, y1):
-    """
-    Linear Scheduler
-    """
-    return lambda t: y0 + (y1 - y0) * t
-
-
-def cosine_decay_schedule(y0, y1):
-    """
-    Cosine Decay Scheduler
-    """
-    return lambda t: y1 + 0.5 * (y0 - y1) * (np.cos(t * np.pi) + 1.0)
-
-
-def piecewise_schedule(knots, funcs):
-    """
-    Piecewise Scheduler
-    """
-    def f(t):
-        i = np.searchsorted(knots, t)
-        t0 = 0.0 if i == 0 else knots[i - 1]
-        t1 = 1.0 if i == len(knots) else knots[i]
-        return funcs[i]((t - t0) / (t1 - t0))
-    return f
-
-
-def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio=0.1, start_step=0):
-    """
-    Learning Rate Scheduler
-    """
-    if warmup_steps:
-        y0 = func(0.0)
-        func = piecewise_schedule(
-            [warmup_steps / total_steps],
-            [linear_schedule(warmup_ratio * y0, y0), func]
-        )
-    return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
 
 def load_state(dirname, device, model):
@@ -99,13 +53,14 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True, lr_scheduler_fn=None):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
         self.use_amp = use_amp
+        self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
@@ -148,8 +103,6 @@ class Trainer:
                 losses, grad_norm = self.train_one_step(batch)
                 losses = {k: v.item() for k,v in losses.items()}
 
-                if lr_scheduler is not None: lr_scheduler.step()
-
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
                 progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
@@ -157,7 +110,17 @@ class Trainer:
                 progress_bar.update()
 
                 if loss_log is not None:
-                    loss_log.append({'chunks': chunks, 'time': perf_counter() - t0, 'grad_norm': grad_norm, **losses})
+                    lr = lr_scheduler.get_last_lr() if lr_scheduler is not None else [pg["lr"] for pg in optim.param_groups]
+                    if len(lr) == 1: lr = lr[0]
+                    loss_log.append({
+                        'chunks': chunks,
+                        'time': perf_counter() - t0,
+                        'grad_norm': grad_norm,
+                        'lr': lr,
+                        **losses
+                    })
+
+                if lr_scheduler is not None: lr_scheduler.step()
 
         return smoothed_loss, perf_counter() - t0
 
@@ -189,11 +152,7 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
-        return func_scheduler(
-            self.optimizer, cosine_decay_schedule(1.0, 0.1), epochs * len(self.train_loader),
-            warmup_steps=500,
-            start_step=last_epoch*len(self.train_loader)
-        )
+        return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
 
     def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
         if self.optimizer is None:
