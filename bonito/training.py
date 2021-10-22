@@ -13,7 +13,7 @@ from datetime import datetime
 
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
 import bonito
-from bonito.nn import SHABlock
+from bonito.nn import SHABlock, Decoder
 
 import torch
 import numpy as np
@@ -234,7 +234,7 @@ class Trainer:
 
         attn_params = set()
         for m in model.modules():
-            if isinstance(m, SHABlock):
+            if isinstance(m, (SHABlock, Decoder)):
                 attn_params.update(m.parameters())
 
         non_attn_params = params - attn_params
