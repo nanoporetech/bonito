@@ -183,11 +183,14 @@ class SeqdistModel(Module):
         encoded = self.encoder(x)
         scores = self.linear_crf(encoded.to(torch.float32))
 
-        if targets is not None:
-            aux_loss = self.decoder(targets, encoded, return_loss=True) if self.decoder is not None else 0
-            return scores, aux_loss
+        if targets is None:
+            return scores
 
-        return scores
+        if self.decoder is None
+            return scores, torch.tensor([0], device=x.device)
+
+        aux_loss = self.decoder(targets, encoded, return_loss=True)
+        return scores, aux_loss
 
     def decode_batch(self, x):
         scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
