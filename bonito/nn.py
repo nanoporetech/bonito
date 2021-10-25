@@ -180,7 +180,7 @@ class MHA(Module):
         self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
 
     def forward(self, x, kv=None):
-        n, b, d, h = *x.shape, self.heads
+        n, b, d, h, device = *x.shape, self.heads, x.device
 
         x = self.norm(x)
         kv = x if kv is None else kv
@@ -201,7 +201,7 @@ class MHA(Module):
 
         if self.causal:
             i, j = sim.shape[-2:]
-            mask = torch.ones(i, j).triu(j - i + 1).bool()
+            mask = torch.ones(i, j, device=device).triu(j - i + 1).bool()
             mask_value = -torch.finfo(sim.dtype).max
             sim.masked_fill_(mask[None, None, :, :], mask_value)
 
@@ -321,7 +321,7 @@ class Decoder(Module):
 
         # embed tokens and add absolute positions
         x = self.token_emb(x)
-        pos_emb = self.pos_emb(torch.arange(x.shape[-2], device = device))
+        pos_emb = self.pos_emb(torch.arange(x.shape[-2], device=device))
         x = x + pos_emb[None, :, :]
         x = x.transpose(0, 1)
 
@@ -338,11 +338,11 @@ class Decoder(Module):
             return logits
 
         logits = logits.transpose(1, 2)
-        forward_logits, reversed_logits = logits.chunk(2, dim = 0)
+        forward_logits, reversed_logits = logits.chunk(2, dim=0)
 
         # calculate forward and backward cross-entropy losses
-        forward_loss = F.cross_entropy(forward_logits, labels, ignore_index = 0)
-        backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index = 0)
+        forward_loss = F.cross_entropy(forward_logits, labels, ignore_index=0)
+        backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index=0)
         loss = (forward_loss + backward_loss) * 0.5
 
         # return loss, weighted

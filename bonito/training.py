@@ -236,7 +236,7 @@ class Trainer:
         params = set(self.model.parameters())
 
         attn_params = set()
-        for m in model.modules():
+        for m in self.model.modules():
             if isinstance(m, (SHABlock, Decoder)):
                 attn_params.update(m.parameters())
 

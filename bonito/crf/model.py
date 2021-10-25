@@ -186,7 +186,7 @@ class SeqdistModel(Module):
         if targets is None:
             return scores
 
-        if self.decoder is None
+        if self.decoder is None:
             return scores, torch.tensor([0], device=x.device)
 
         aux_loss = self.decoder(targets, encoded, return_loss=True)
