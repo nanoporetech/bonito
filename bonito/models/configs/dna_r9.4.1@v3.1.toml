@@ -33,6 +33,8 @@ loss_weight = 0.5
 depth = 2
 heads = 4
 max_seq_len = 1024
+attn_dropout = 0.1
+ff_dropout = 0.1
 
 [global_norm]
 state_len = 5

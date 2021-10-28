@@ -253,7 +253,7 @@ def apply_rotary_pos_emb(freqs, t):
 
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, max_seq_len=1024, loss_weight=0.25):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, max_seq_len=1024, loss_weight=0.25, attn_dropout=0., ff_dropout=0.):
         super().__init__()
         self.loss_weight = loss_weight
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
@@ -265,9 +265,9 @@ class Decoder(Module):
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                MHA(dim, heads=heads, causal=True, norm_inputs=True),
-                MHA(dim, heads=heads, norm_inputs=True),
-                FeedForward(dim)
+                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout),
+                MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
+                FeedForward(dim, dropout=ff_dropout)
             ]))
 
         self.to_logits = nn.Sequential(
