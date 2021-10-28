@@ -217,9 +217,9 @@ class MHA(Module):
         out = out.transpose(0, 1)
         return self.layerscale(out)
 
-# sinusoidal positional embedding
+# rotary positional embedding
 
-class SinusoidalEmbedding(nn.Module):
+class RotaryEmbedding(nn.Module):
     def __init__(self, dim, theta = 10000):
         super().__init__()
         inv_freq = 1. / (theta ** (torch.arange(0, dim, 2).float() / dim))
@@ -228,11 +228,9 @@ class SinusoidalEmbedding(nn.Module):
     def forward(self, x):
         seq_len = x.shape[-2]
         t = torch.arange(seq_len, device = x.device).type_as(self.inv_freq)
-        sinusoid_inp = t[:, None] * self.inv_freq[None, :]
-        emb = torch.stack((sinusoid_inp.sin(), sinusoid_inp.cos()), dim=-1)
-        return emb.reshape(1, seq_len, -1)
-
-# rotary embedding helper functions
+        freqs = t[:, None] * self.inv_freq[None, :]
+        freqs = torch.stack((freqs, freqs), dim=-1)
+        return freqs.reshape(1, seq_len, -1)
 
 def rotate_half(x):
     preceding_dims = x.shape[:-1]
@@ -249,7 +247,7 @@ def apply_rotary_pos_emb(freqs, t):
     rot_dim = freqs.shape[-1]
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
     t =  (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
-    return t
+    return torch.cat((t, t_pass), dim = -1)
 
 class Decoder(Module):
 
@@ -261,7 +259,7 @@ class Decoder(Module):
         self.norm_context = nn.LayerNorm(dim)
 
         self.layers = nn.ModuleList([])
-        self.rot_pos_emb = SinusoidalEmbedding(dim_head)
+        self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32))
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
