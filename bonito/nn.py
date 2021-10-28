@@ -363,6 +363,13 @@ class LayerScale(Module):
         return self.scale * x
 
 @register
+class ReluSquared(Module):
+    """ https://arxiv.org/abs/2109.08668 """
+
+    def forward(self, x):
+        return F.relu(x) ** 2
+
+@register
 class FeedForward(Module):
 
     def __init__(self, dim, mult=4, dropout=0.):
@@ -370,7 +377,7 @@ class FeedForward(Module):
         self.net = nn.Sequential(
             nn.LayerNorm(dim),
             nn.Linear(dim, dim * mult),
-            nn.GELU(),
+            ReluSquared(),
             nn.Dropout(dropout),
             nn.Linear(dim * mult, dim),
             nn.LayerNorm(dim),
