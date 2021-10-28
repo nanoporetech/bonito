@@ -172,14 +172,15 @@ class MHA(Module):
         self.head_scale = nn.Parameter(torch.ones(1, heads, 1, 1))
 
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.to_kv = nn.Linear(dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(dim, inner_dim, bias=False)
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
         self.layerscale = LayerScale(dim)
 
         self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
 
-    def forward(self, x, kv=None):
+    def forward(self, x, kv=None, rot_pos_emb=None):
         n, b, d, h, device = *x.shape, self.heads, x.device
 
         x = self.norm(x)
@@ -188,16 +189,16 @@ class MHA(Module):
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
 
-        q = self.to_q(x)
-        kv = self.to_kv(kv)
+        q, k, v = self.to_q(x), self.to_k(kv), self.to_v(kv)
 
-        q, kv = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, kv))
+        q, k, v = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, k, v))
 
-        sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
+        if rot_pos_emb is not None:
+            rot_pos_emb = rot_pos_emb[:, None]
+            q = apply_rotary_pos_emb(rot_pos_emb, q)
+            k = apply_rotary_pos_emb(rot_pos_emb, k)
 
-        if self.rel_pos_emb is not None:
-            pos_bias = self.rel_pos_emb(sim)
-            sim = sim + pos_bias
+        sim = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
         if self.causal:
             i, j = sim.shape[-2:]
@@ -208,7 +209,7 @@ class MHA(Module):
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
-        out = torch.matmul(attn, kv) * self.head_scale
+        out = torch.matmul(attn, v) * self.head_scale
 
         out = out.transpose(1, 2).reshape(b, n, -1)
         out = self.to_out(out)
@@ -216,47 +217,43 @@ class MHA(Module):
         out = out.transpose(0, 1)
         return self.layerscale(out)
 
-class AlibiPositionalBias(nn.Module):
-    """
-    ALiBi - positional encoding for improving extrapolation, for decoders
-    https://arxiv.org/abs/2108.12409
-    """
+# sinusoidal positional embedding
 
-    def __init__(self, heads):
+class SinusoidalEmbedding(nn.Module):
+    def __init__(self, dim, theta = 10000):
         super().__init__()
-        self.heads = heads
-        slopes = torch.Tensor(self._get_slopes(heads))
-        self.register_buffer('slopes', slopes, persistent=False)
-        self.register_buffer('bias', None, persistent=False)
+        inv_freq = 1. / (theta ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer('inv_freq', inv_freq)
 
-    @staticmethod
-    def _get_slopes(heads):
-        def get_slopes_power_of_2(n):
-            start = (2**(-2**-(math.log2(n)-3)))
-            ratio = start
-            return [start*ratio**i for i in range(n)]
+    def forward(self, x):
+        seq_len = x.shape[-2]
+        t = torch.arange(seq_len, device = x.device).type_as(self.inv_freq)
+        sinusoid_inp = t[:, None] * self.inv_freq[None, :]
+        emb = torch.stack((sinusoid_inp.sin(), sinusoid_inp.cos()), dim=-1)
+        return emb.reshape(1, seq_len, -1)
 
-        if math.log2(heads).is_integer():
-            return get_slopes_power_of_2(heads)
+# rotary embedding helper functions
 
-        closest_power_of_2 = 2 ** math.floor(math.log2(heads))
-        return get_slopes_power_of_2(closest_power_of_2) + get_slopes_power_of_2(2 * closest_power_of_2)[0::2][:heads-closest_power_of_2]
+def rotate_half(x):
+    preceding_dims = x.shape[:-1]
+    x = x.reshape(*preceding_dims, -1, 2)
+    x1, x2 = x.unbind(dim=-1)
+    out = torch.stack((-x2, x1), dim=-1)
+    return out.reshape(*preceding_dims, -1)
 
-    def forward(self, qk_dots):
-        h, i, j, device = *qk_dots.shape[-3:], qk_dots.device
-
-        if self.bias is not None and self.bias.shape[-1] >= j:
-            return self.bias[..., :j]
-
-        bias = torch.arange(j, device = device)
-        bias = bias[None, None, None, :]
-        bias = bias * self.slopes[None, :, None, None]
-        self.register_buffer('bias', bias, persistent=False)
-        return self.bias
+def apply_rotary_pos_emb(freqs, t):
+    """
+    Rotary embedding - parameter-less relative positional encoding in the context of attention
+    https://arxiv.org/abs/2104.09864
+    """
+    rot_dim = freqs.shape[-1]
+    t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
+    t =  (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
+    return t
 
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, max_seq_len=1024, loss_weight=0.25):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, max_seq_len=1024, loss_weight=0.25):
         super().__init__()
         self.loss_weight = loss_weight
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
@@ -264,11 +261,11 @@ class Decoder(Module):
         self.norm_context = nn.LayerNorm(dim)
 
         self.layers = nn.ModuleList([])
-        rel_pos_emb = AlibiPositionalBias(heads=heads)
+        self.rot_pos_emb = SinusoidalEmbedding(dim_head)
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                MHA(dim, heads=heads, causal=True, rel_pos_emb=rel_pos_emb, norm_inputs=True),
+                MHA(dim, heads=heads, causal=True, norm_inputs=True),
                 MHA(dim, heads=heads, norm_inputs=True),
                 FeedForward(dim)
             ]))
@@ -308,7 +305,7 @@ class Decoder(Module):
 
             # set EOS as 2
             eos_indices = (x != 0).sum(dim=-1) + 1
-            eos_mask = eos_indices[:, None] == torch.arange(reversed_x.shape[-1], device=device)
+            eos_mask = eos_indices[:, None] == torch.arange(reversed_x.shape[-1], device=device)[None, :]
             x = x.masked_fill(eos_mask, 2)
             reversed_x = reversed_x.masked_fill(eos_mask, 2)
 
@@ -321,13 +318,18 @@ class Decoder(Module):
 
         # embed tokens and add absolute positions
         x = self.token_emb(x)
+
+        # positional embeddings
         pos_emb = self.pos_emb(torch.arange(x.shape[-2], device=device))
         x = x + pos_emb[None, :, :]
-        x = x.transpose(0, 1)
+
+        rot_pos_emb = self.rot_pos_emb(x)
 
         # transformer layers
+        x = x.transpose(0, 1)
+
         for self_attn, cross_attn, ff in self.layers:
-            x = self_attn(x) + x
+            x = self_attn(x, rot_pos_emb=rot_pos_emb) + x
             x = cross_attn(x, encoded) + x
             x = ff(x) + x
 
