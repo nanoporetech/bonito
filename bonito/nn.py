@@ -249,13 +249,30 @@ def apply_rotary_pos_emb(freqs, t):
     t =  (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
     return torch.cat((t, t_pass), dim = -1)
 
+# convolutional layer for absolute positional embedding
+
+class CausalDepthwiseConv(Module):
+    def __init__(self, dim, kernel_size):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.norm = nn.LayerNorm(dim)
+        self.conv = nn.Conv1d(dim, dim, kernel_size, groups=dim)
+
+    def forward(self, x):
+        x = self.norm(x)
+        x = x.permute(1, 2, 0)
+        x = F.pad(x, (self.kernel_size - 1, 0), value = 0.)
+        x = self.conv(x)
+        x = x.permute(2, 0, 1)
+        return x
+
+# transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, max_seq_len=1024, loss_weight=0.25, attn_dropout=0., ff_dropout=0.):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0.):
         super().__init__()
         self.loss_weight = loss_weight
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
-        self.pos_emb = nn.Embedding(max_seq_len, dim)
         self.norm_context = nn.LayerNorm(dim)
 
         self.layers = nn.ModuleList([])
@@ -263,6 +280,7 @@ class Decoder(Module):
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
+                CausalDepthwiseConv(dim, kernel_size=5),
                 MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout),
                 MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
                 FeedForward(dim, dropout=ff_dropout)
@@ -316,17 +334,13 @@ class Decoder(Module):
 
         # embed tokens and add absolute positions
         x = self.token_emb(x)
-
-        # positional embeddings
-        pos_emb = self.pos_emb(torch.arange(x.shape[-2], device=device))
-        x = x + pos_emb[None, :, :]
-
         rot_pos_emb = self.rot_pos_emb(x)
 
         # transformer layers
         x = x.transpose(0, 1)
 
-        for self_attn, cross_attn, ff in self.layers:
+        for conv, self_attn, cross_attn, ff in self.layers:
+            x = conv(x) + x
             x = self_attn(x, rot_pos_emb=rot_pos_emb) + x
             x = cross_attn(x, encoded) + x
             x = ff(x) + x
