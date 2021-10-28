@@ -181,7 +181,8 @@ class SeqdistModel(Module):
 
     def forward(self, x, targets = None):
         encoded = self.encoder(x)
-        scores = self.linear_crf(encoded.to(torch.float32))
+        scores = self.linear_crf(encoded)
+        scores = scores.to(torch.float32)
 
         if targets is None:
             return scores
