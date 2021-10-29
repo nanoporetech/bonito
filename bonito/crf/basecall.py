@@ -4,7 +4,8 @@ Bonito CRF basecall
 
 import torch
 import numpy as np
-from kbeam import beamsearch
+from crf_beam import beam_search
+
 from itertools import groupby
 from functools import partial
 from operator import itemgetter
@@ -36,27 +37,16 @@ def compute_scores(model, batch, reverse=False):
     with torch.no_grad():
         device = next(model.parameters()).device
         dtype = torch.float16 if half_supported() else torch.float32
-        scores = model(batch.to(dtype).to(device))
+        scores = model(batch.to(dtype).to(device)).to(torch.float32)
         if reverse: scores = model.seqdist.reverse_complement(scores)
-        betas = model.seqdist.backward_scores(scores.to(torch.float32))
-        betas -= (betas.max(2, keepdim=True)[0] - 5.0)
+        betas = model.seqdist.backward_scores(scores)
+        fwd = model.seqdist.forward_scores(scores)
+        posts = torch.softmax(fwd + betas, dim=-1)
     return {
         'scores': scores.transpose(0, 1),
         'betas': betas.transpose(0, 1),
+        'posts': posts.transpose(0, 1),
     }
-
-
-def quantise_int8(x, scale=127/5):
-    """
-    Quantise scores to int8.
-    """
-    scores = x['scores']
-    scores *= scale
-    scores = torch.round(scores).to(torch.int8).detach()
-    betas = x['betas']
-    betas *= scale
-    betas = torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach()
-    return {'scores': scores, 'betas': betas}
 
 
 def transfer(x):
@@ -64,25 +54,20 @@ def transfer(x):
     Device to host transfer using pinned memory.
     """
     torch.cuda.synchronize()
+
     with torch.cuda.stream(torch.cuda.Stream()):
         return {
-            k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v).numpy()
+            k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v)
             for k, v in x.items()
         }
 
 
-def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
-    """
-    Beamsearch decode.
-    """
-    path, _ = beamsearch(
-        scores['scores'], scale, seqdist.n_base, beamsize,
-        guide=scores['betas'], beam_cut=beamcut
-    )
-    try:
-        return seqdist.path_to_str(path % 4 + 1)
-    except IndexError:
-        return ""
+def decode(scores):
+    return beam_search(
+        scores['scores'].to(torch.float32),
+        scores['betas'].to(torch.float32),
+        scores['posts'].to(torch.float32),
+    )[0]
 
 
 def split_read(read, split_read_length=400000):
@@ -99,14 +84,13 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     """
     Basecalls a set of reads.
     """
-    _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
     reads = (read_chunk for read in reads for read_chunk in split_read(read)[::-1 if reverse else 1])
     chunks = (
         ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
         for (read, start, end) in reads
     )
     batches = (
-        (k, quantise_int8(compute_scores(model, batch, reverse=reverse)))
+        (k, compute_scores(model, batch, reverse=reverse))
         for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = (
@@ -115,7 +99,7 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     )
 
     transferred = thread_map(transfer, stitched, n_thread=1)
-    basecalls = thread_map(_decode, transferred, n_thread=8)
+    basecalls = thread_map(decode, transferred, n_thread=8)
 
     basecalls = (
         (read, ''.join(seq for k, seq in parts))
