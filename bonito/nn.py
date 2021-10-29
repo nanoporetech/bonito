@@ -158,15 +158,13 @@ class SHA(Module):
 @register
 class MHA(Module):
 
-    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal = False, norm_inputs=False, rel_pos_emb=None):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal = False, norm_inputs=False):
         super().__init__()
         inner_dim = heads * dim_head
         self.heads = heads
         self.dim_head = dim_head
         self.scale = dim_head ** -0.5
         self.causal = causal
-
-        self.rel_pos_emb = rel_pos_emb
 
         # proposed https://openreview.net/forum?id=GMYWzWztDx5
         self.head_scale = nn.Parameter(torch.ones(1, heads, 1, 1))
@@ -269,7 +267,7 @@ class CausalDepthwiseConv(Module):
 # transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0.):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5):
         super().__init__()
         self.loss_weight = loss_weight
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
@@ -280,7 +278,7 @@ class Decoder(Module):
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                CausalDepthwiseConv(dim, kernel_size=5),
+                CausalDepthwiseConv(dim, kernel_size=conv_kernel_size),
                 MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout),
                 MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
                 FeedForward(dim, dropout=ff_dropout)
