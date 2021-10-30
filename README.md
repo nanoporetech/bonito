@@ -6,7 +6,7 @@ A PyTorch Basecaller for Oxford Nanopore Reads.
 
 ```bash
 $ pip install ont-bonito
-$ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fasta
+$ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fastq
 ```
 
 If a reference is provided in either `.fasta` or `.mmi` format then bonito will output in `sam` format.
@@ -97,7 +97,7 @@ $ bonito duplex dna_r9.4.1 /data/reads --summary sequencing_summary.txt --refere
  - `bonito convert` - convert a hdf5 training file into a bonito format.
  - `bonito evaluate` - evaluate a model performance.
  - `bonito download` - download pretrained models and training datasets.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fasta`)*.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.fastq`)*.
 
 ### References
 

@@ -53,7 +53,7 @@ def main(args):
         )
         basecalls = basecall(
             model, reads, batchsize=64, chunksize=args.chunksize,
-            aligner=aligner, qscores=args.fastq, reverse=args.revcomp,
+            aligner=aligner, reverse=args.revcomp,
         )
         writer = CTCWriter(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
@@ -62,12 +62,12 @@ def main(args):
     else:
         basecalls = basecall(
             model, reads, aligner=aligner, reverse=args.revcomp,
-            qscores=args.fastq, batchsize=args.batchsize, chunksize=args.chunksize,
+            batchsize=args.batchsize, chunksize=args.chunksize,
         )
         writer = Writer(
-            tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
-            aligner, fastq=args.fastq
+            tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner
         )
+
     t0 = perf_counter()
     writer.start()
     writer.join()
@@ -92,7 +92,6 @@ def argparser():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--skip", action="store_true", default=False)
-    parser.add_argument("--fastq", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)

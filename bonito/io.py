@@ -17,6 +17,7 @@ from mappy import revcomp
 
 import bonito
 from bonito.cli.convert import typical_indices
+from bonito.util import mean_qscore_from_qstring
 
 
 logger = getLogger('bonito')
@@ -323,11 +324,10 @@ def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
 
 class Writer(Thread):
 
-    def __init__(self, iterator, aligner, fd=sys.stdout, fastq=False, duplex=False):
+    def __init__(self, iterator, aligner, fd=sys.stdout, duplex=False):
         super().__init__()
         self.fd = fd
         self.log = []
-        self.fastq = fastq
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
@@ -344,7 +344,7 @@ class Writer(Thread):
 
                 seq = res['sequence']
                 qstring = res.get('qstring', '*')
-                mean_qscore = res.get('mean_qscore', 0.0)
+                mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = res.get('mapping', False)
 
                 if self.duplex:
@@ -358,10 +358,7 @@ class Writer(Thread):
                     if self.aligner:
                         write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
                     else:
-                        if self.fastq:
-                            write_fastq(read_id, seq, qstring, fd=self.fd)
-                        else:
-                            write_fasta(read_id, seq, fd=self.fd)
+                        write_fastq(read_id, seq, qstring, fd=self.fd)
 
                     if self.duplex:
                         summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
