@@ -62,12 +62,15 @@ def transfer(x):
         }
 
 
-def decode(scores):
-    return beam_search(
-        scores['scores'].to(torch.float32),
-        scores['betas'].to(torch.float32),
-        scores['posts'].to(torch.float32),
-    )[0]
+def decode(scores, beam_size=40, qshift=0.0, qscale=1.0):
+    """
+    Decode sequence and qstring from model scores.
+    """
+    sequence, qstring, moves = beam_search(
+        scores['scores'], scores['betas'], scores['posts'],
+        beam_size=beam_size, q_shift=qshift, q_scale=qscale
+    )
+    return {'sequence': sequence, 'qstring': qstring}
 
 
 def split_read(read, split_read_length=400000):
@@ -80,7 +83,7 @@ def split_read(read, split_read_length=400000):
     return [(read, start, min(end, len(read.signal))) for (start, end) in zip(breaks[:-1], breaks[1:])]
 
 
-def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, qscores=False, reverse=False):
+def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=32, reverse=False):
     """
     Basecalls a set of reads.
     """
@@ -102,12 +105,8 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     basecalls = thread_map(decode, transferred, n_thread=8)
 
     basecalls = (
-        (read, ''.join(seq for k, seq in parts))
-        for read, parts in groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
-    )
-    basecalls = (
-        (read, {'sequence': seq, 'qstring': '?' * len(seq) if qscores else '*', 'mean_qscore': 0.0})
-        for read, seq in basecalls
+        (read, concat([v for k, v in parts])) for read, parts in
+        groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
     )
 
     if aligner: return align_map(aligner, basecalls)
