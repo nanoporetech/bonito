@@ -182,6 +182,8 @@ class Trainer:
             self.init_optimizer(lr)
 
         last_epoch = load_state(workdir, self.device, self.model, self.optimizer if self.restore_optim else None)
+        # override learning rate to new value
+        for pg in self.optimizer.param_groups: pg["initial_lr"] = pg["lr"] = lr
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
