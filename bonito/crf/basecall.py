@@ -62,10 +62,16 @@ def transfer(x):
         }
 
 
-def decode(scores, beam_size=40, qshift=0.0, qscale=1.0):
+def decode(model, scores, beam_size=40):
     """
     Decode sequence and qstring from model scores.
     """
+    try:
+        qshift = model.config['qscore']['bias']
+        qscale = model.config['qscore']['scale']
+    except:
+        qshift = 0.0
+        qscale = 1.0
     sequence, qstring, moves = beam_search(
         scores['scores'], scores['betas'], scores['posts'],
         beam_size=beam_size, q_shift=qshift, q_scale=qscale
@@ -102,7 +108,7 @@ def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=
     )
 
     transferred = thread_map(transfer, stitched, n_thread=1)
-    basecalls = thread_map(decode, transferred, n_thread=8)
+    basecalls = thread_map(partial(decode, model), transferred, n_thread=8)
 
     basecalls = (
         (read, concat([v for k, v in parts])) for read, parts in
