@@ -4,7 +4,7 @@ import numpy as np
 from torch.optim.lr_scheduler import LambdaLR
 
 
-def linear_warmup_cosine_decay(end_ratio=0.1, **kwargs):
+def linear_warmup_cosine_decay(end_ratio=0.01, warmup_steps=500, **kwargs):
     """
     Linear warmup, cosine decay scheduler
     """
@@ -12,12 +12,14 @@ def linear_warmup_cosine_decay(end_ratio=0.1, **kwargs):
         optimizer=optimizer,
         func=cosine_decay_schedule(1.0, end_ratio),
         total_steps=epochs * len(train_loader),
-        warmup_steps=500,
+        warmup_steps=warmup_steps,
         start_step=last_epoch*len(train_loader)
     )
 
 
-def linear_warmup_const_inverse_sqrt_decay(warmup_steps, decay_start_step, scale, **kwargs):
+def linear_warmup_const_inverse_sqrt_decay(
+    warmup_steps=1000, decay_start_step=312500, scale=1.0, **kwargs
+):
     """
     Linear warmup, hold constant, inverse sqrt decay scheduler
     """
@@ -26,12 +28,12 @@ def linear_warmup_const_inverse_sqrt_decay(warmup_steps, decay_start_step, scale
             step = step + last_epoch*len(train_loader)
             if step < decay_start_step:
                 return min(1.0, 0.1 + 0.9*step/warmup_steps)
-            return 1.0 / math.sqrt(1 + ((step - decay_start_step) / scale))
+            return 1.0 / math.sqrt(1 + ((step - decay_start_step) / (scale * len(train_loader))))
         return LambdaLR(optimizer, sched)
     return gen_sched
 
 
-def linear_cooldown(end_ratio, **kwargs):
+def linear_cooldown(end_ratio=0.0, **kwargs):
     """
     Linear Cooldown Scheduler
     """
@@ -41,30 +43,6 @@ def linear_cooldown(end_ratio, **kwargs):
         total_steps=epochs * len(train_loader),
         start_step=0,
     )
-
-
-def cosine_cooldown(end_ratio, **kwargs):
-    """
-    Cosine Cooldown Scheduler
-    """
-    return lambda optimizer, train_loader, epochs, last_epoch: func_scheduler(
-        optimizer=optimizer,
-        func=cosine_decay_schedule(1.0, end_ratio),
-        total_steps=epochs * len(train_loader),
-        warmup_steps=None,
-        start_step=0
-    )
-
-
-def const_cooldown(**kwargs):
-    return lambda optimizer, train_loader, epochs, last_epoch: func_scheduler(
-        optimizer=optimizer,
-        func=const_schedule(1.0),
-        total_steps=epochs * len(train_loader),
-        warmup_steps=None,
-        start_step=0
-    )
-
 
 
 #-------------------------------------------------------------------------------

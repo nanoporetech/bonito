@@ -73,17 +73,10 @@ def main(args):
     else:
         model = load_symbol(config, 'Model')(config)
 
-    if args.multi_gpu:
-        from torch.nn import DataParallel
-        model = DataParallel(model)
-        model.decode = model.module.decode
-        model.alphabet = model.module.alphabet
-
     if config.get("lr_scheduler"):
         sched_config = config["lr_scheduler"]
         lr_scheduler_fn = getattr(
-            import_module(sched_config["package"]),
-            sched_config["symbol"]
+            import_module(sched_config["package"]), sched_config["symbol"]
         )(**sched_config)
     else:
         lr_scheduler_fn = None
@@ -115,7 +108,6 @@ def argparser():
     parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--valid-chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
-    parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     parser.add_argument("--restore-optim", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
