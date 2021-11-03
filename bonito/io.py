@@ -92,7 +92,7 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, mods_tags=None):
     Write a fastq record to a file descriptor.
     """
     if mods_tags is not None:
-        fd.write("@%s %s\n" % header, mods_tags_to_str(mods_tags))
+        fd.write("@%s %s;\t%s\n" % header, *mods_tags_to_str(mods_tags))
     else:
         fd.write("@%s\n" % header)
     fd.write("%s\n" % sequence)
