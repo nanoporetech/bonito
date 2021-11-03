@@ -7,14 +7,16 @@ Bonito training.
 import os
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
+from pathlib import Path
 
+from bonito.data import load_numpy, load_script
 from bonito.util import __models__, default_config, default_data
-from bonito.util import load_data, load_model, load_symbol, init, half_supported
-from bonito.training import ChunkDataSet, load_state, Trainer
+from bonito.util import load_model, load_symbol, init, half_supported
+from bonito.training import load_state, Trainer
+
 import toml
 import torch
 import numpy as np
-from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
 
@@ -30,17 +32,24 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
-    train_data = load_data(limit=args.chunks, directory=args.directory)
-    if os.path.exists(os.path.join(args.directory, 'validation')):
-        valid_data = load_data(directory=os.path.join(args.directory, 'validation'))
-    else:
-        print("[validation set not found: splitting training set]")
-        split = np.floor(len(train_data[0]) * 0.97).astype(np.int32)
-        valid_data = [x[split:] for x in train_data]
-        train_data = [x[:split] for x in train_data]
 
-    train_loader = DataLoader(ChunkDataSet(*train_data), batch_size=args.batch * args.accum, shuffle=True, num_workers=4, pin_memory=True)
-    valid_loader = DataLoader(ChunkDataSet(*valid_data), batch_size=args.batch, num_workers=4, pin_memory=True)
+    try:
+        train_loader_kwargs, valid_loader_kwargs = load_numpy(
+            args.chunks, args.directory
+        )
+    except FileNotFoundError:
+        train_loader_kwargs, valid_loader_kwargs = load_script(
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.valid_chunks
+        )
+
+    loader_kwargs = {
+        "batch_size": args.batch, "num_workers": 4, "pin_memory": True
+    }
+    train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
+    valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
 
     if args.pretrained:
         dirname = args.pretrained
@@ -84,7 +93,7 @@ def argparser():
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--config', default=default_config)
     group.add_argument('--pretrained', default="")
-    parser.add_argument("--directory", default=default_data)
+    parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
     parser.add_argument("--sha-lr", default=1e-4, type=float)
@@ -94,6 +103,7 @@ def argparser():
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--accum", default=1, type=int)
     parser.add_argument("--chunks", default=0, type=int)
+    parser.add_argument("--valid-chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)

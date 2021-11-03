@@ -11,6 +11,7 @@ from itertools import groupby
 from operator import itemgetter
 from importlib import import_module
 from collections import deque, defaultdict, OrderedDict
+from torch.utils.data import DataLoader
 
 import toml
 import torch
@@ -221,34 +222,6 @@ def unbatchify(batches, dim=0):
         (k, concat([v for (k, v) in group], dim))
         for k, group in groupby(batches, itemgetter(0))
     )
-
-
-def load_data(limit=None, directory=None):
-    """
-    Load the training data
-    """
-    if directory is None:
-        directory = default_data
-
-    chunks = np.load(os.path.join(directory, "chunks.npy"), mmap_mode='r')
-    targets = np.load(os.path.join(directory, "references.npy"), mmap_mode='r')
-    lengths = np.load(os.path.join(directory, "reference_lengths.npy"), mmap_mode='r')
-
-    indices = os.path.join(directory, "indices.npy")
-    
-    if os.path.exists(indices):
-        idx = np.load(indices, mmap_mode='r')
-        idx = idx[idx < lengths.shape[0]]
-        if limit:
-            idx = idx[:limit]
-        return chunks[idx, :], targets[idx, :], lengths[idx]
-
-    if limit:
-        chunks = chunks[:limit]
-        targets = targets[:limit]
-        lengths = lengths[:limit]
-
-    return np.array(chunks), np.array(targets), np.array(lengths)
 
 
 def load_symbol(config, symbol):

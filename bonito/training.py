@@ -22,22 +22,6 @@ from tqdm import tqdm
 from torch.optim.lr_scheduler import LambdaLR
 import torch.cuda.amp as amp
 
-class ChunkDataSet:
-    def __init__(self, chunks, targets, lengths):
-        self.chunks = np.expand_dims(chunks, axis=1)
-        self.targets = targets
-        self.lengths = lengths
-
-    def __getitem__(self, i):
-        return (
-            self.chunks[i].astype(np.float32),
-            self.targets[i].astype(np.int64),
-            self.lengths[i].astype(np.int64),
-        )
-
-    def __len__(self):
-        return len(self.lengths)
-
 
 def const_schedule(y):
     """
@@ -179,7 +163,7 @@ class Trainer:
         self.model.train()
 
         progress_bar = tqdm(
-            total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.dataset)),
+            total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.sampler)),
             ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
         )
         smoothed_loss = None
@@ -198,7 +182,7 @@ class Trainer:
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
                 progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
-                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.dataset)))
+                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.sampler)))
                 progress_bar.update()
 
                 if loss_log is not None:
