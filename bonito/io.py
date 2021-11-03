@@ -16,6 +16,7 @@ import numpy as np
 from mappy import revcomp
 
 import bonito
+from bonito.mod_util import mods_tags_to_str
 from bonito.cli.convert import typical_indices
 from bonito.util import mean_qscore_from_qstring
 
@@ -86,11 +87,14 @@ def write_fasta(header, sequence, fd=sys.stdout):
     fd.flush()
 
 
-def write_fastq(header, sequence, qstring, fd=sys.stdout):
+def write_fastq(header, sequence, qstring, fd=sys.stdout, mods_tags=None):
     """
     Write a fastq record to a file descriptor.
     """
-    fd.write("@%s\n" % header)
+    if mods_tags is not None:
+        fd.write("@%s %s\n" % header, mods_tags_to_str(mods_tags))
+    else:
+        fd.write("@%s\n" % header)
     fd.write("%s\n" % sequence)
     fd.write("+\n")
     fd.write("%s\n" % qstring)
@@ -117,21 +121,21 @@ def write_sam_header(aligner, fd=sys.stdout, sep='\t'):
     fd.flush()
 
 
-def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=False, sep='\t'):
+def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=False, sep='\t', mods_tags=None):
     """
     Write a sam record to a file descriptor.
     """
     if unaligned:
-        fd.write("%s\n" % sep.join(map(str, [
+        fields = [
             read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
-        ])))
+        ]
     else:
         softclip = [
             '%sS' % mapping.q_st if mapping.q_st else '',
             mapping.cigar_str,
             '%sS' % (len(sequence) - mapping.q_en) if len(sequence) - mapping.q_en else ''
         ]
-        fd.write("%s\n" % sep.join(map(str, [
+        fields = [
             read_id,
             0 if mapping.strand == +1 else 16,
             mapping.ctg,
@@ -143,7 +147,10 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
             qstring,
             'NM:i:%s' % mapping.NM,
             'MD:Z:%s' % mapping.MD,
-        ])))
+        ]
+    if mods_tags is not None:
+        fields.extend(mods_tags_to_str(mods_tags))
+    fd.write("%s\n" % sep.join(map(str, fields)))
     fd.flush()
 
 
@@ -346,6 +353,7 @@ class Writer(Thread):
                 qstring = res.get('qstring', '*')
                 mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = res.get('mapping', False)
+                mods_tags = res.get('mods', False)
 
                 if self.duplex:
                     samples = len(read[0].signal) + len(read[1].signal)
@@ -356,9 +364,9 @@ class Writer(Thread):
 
                 if len(seq):
                     if self.aligner:
-                        write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                        write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None, mods_tags=mods_tags)
                     else:
-                        write_fastq(read_id, seq, qstring, fd=self.fd)
+                        write_fastq(read_id, seq, qstring, fd=self.fd, mods_tags=mods_tags)
 
                     if self.duplex:
                         summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))

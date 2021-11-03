@@ -12,6 +12,7 @@ from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.aligner import Aligner
+from bonito.mod_util import RemoraMods
 from bonito.io import CTCWriter, Writer
 from bonito.fast5 import get_reads, read_chunks
 from bonito.multiprocessing import process_cancel
@@ -35,6 +36,10 @@ def main(args):
             exit(1)
     else:
         aligner = None
+
+    remora_model = None
+    if args.remora_model is not None:
+        remora_model = RemoraMods(args.remora_model)
 
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
@@ -63,6 +68,7 @@ def main(args):
         basecalls = basecall(
             model, reads, aligner=aligner, reverse=args.revcomp,
             batchsize=args.batchsize, chunksize=args.chunksize,
+            remora_model=remora_model
         )
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner
@@ -88,6 +94,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
+    parser.add_argument("--remora-model")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)
