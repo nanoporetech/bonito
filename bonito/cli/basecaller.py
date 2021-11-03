@@ -40,6 +40,7 @@ def main(args):
     remora_model = None
     if args.remora_model is not None:
         remora_model = RemoraMods(args.remora_model)
+        sys.stderr.write(f"> {remora_model.alphabet_str}\n")
 
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
