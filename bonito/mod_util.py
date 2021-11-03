@@ -181,7 +181,9 @@ class RemoraWorker(Thread):
                 self.output_queue.put(item)
                 break
             read, read_attrs = item
-            seq_to_sig_map = np.where(read_attrs['moves'])[0] * self.stride
+            seq_to_sig_map = np.empty(read_attrs['sequence'], dtype=np.int32)
+            seq_to_sig_map[-1] = read.signal.shape[0]
+            seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
             mod_scores = self.remora_model.call_mods(
                 read.signal, read_attrs['sequence'], seq_to_sig_map
             )
