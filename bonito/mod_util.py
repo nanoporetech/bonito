@@ -1,7 +1,6 @@
 import array
 from threading import Thread
 from functools import partial
-from collections import defaultdict
 
 import numpy as np
 
@@ -37,17 +36,17 @@ def log_softmax_axis1(x):
         return np.log((e_x.T / e_x.sum(axis=1)).T)
 
 
-def format_mm_ml_tags(seq, mod_scores):
+def format_mm_ml_tags(seq, poss, log_probs, mod_bases, can_base):
     """Format MM and ML tags for BAM output. See
     https://samtools.github.io/hts-specs/SAMtags.pdf for format details.
 
     Args:
-        seq (str): Read-centric read sequence. For reference-anchored calls this
+        seq (str): read-centric read sequence. For reference-anchored calls this
             should be the reverse complement sequence.
-        mod_scores (list): List of 3-tuples containing:
-            1. Position relative to seq
-            2. np.array or log probabilties for modified bases
-            3. Modified base single letter codes (str)
+        poss (list): positions relative to seq
+        log_probs (np.array): log probabilties for modified bases
+        mod_bases (str): modified base single letter codes
+        can_base (str): canonical base
 
     Returns:
         MM string tag and ML array tag
@@ -55,8 +54,8 @@ def format_mm_ml_tags(seq, mod_scores):
 
     # initialize dict with all called mods to make sure all called mods are
     # shown in resulting tags
-    per_mod_probs = defaultdict(list)
-    for pos, mod_lps, mod_bases, can_base in sorted(mod_scores):
+    per_mod_probs = dict((mod_base, []) for mod_base in mod_bases)
+    for pos, mod_lps in sorted(zip(poss, log_probs)):
         # mod_lps is set to None if invalid sequence is encountered or too
         # few events are found around a mod
         if mod_lps is None:
@@ -124,7 +123,7 @@ class RemoraMods:
             )
         )
         return (
-            "Loaded Remora model calls modified bases (alt to "
+            "loaded modified base model to call (alt to "
             f"{self.can_base}): {mod_str}"
         )
 
@@ -139,18 +138,15 @@ class RemoraMods:
             remora_read.check()
         except RemoraError as e:
             raise RuntimeError(f"Remora read prep error: {e}")
+        if len(seq) == 0:
+            return []
         mod_calls, _, pos = call_read_mods(
             remora_read,
             self.remora_model,
             self.remora_metadata,
         )
         log_probs = log_softmax_axis1(mod_calls)[:, 1:].astype(np.float64)
-        return zip(
-            map(int, pos),
-            log_probs,
-            self.remora_metadata["mod_bases"],
-            self.can_base,
-        )
+        return pos, log_probs, self.remora_metadata["mod_bases"], self.can_base
 
     def call_mods_map(self, basecalls, stride, n_thread=1):
         """
@@ -181,13 +177,13 @@ class RemoraWorker(Thread):
                 self.output_queue.put(item)
                 break
             read, read_attrs = item
-            seq_to_sig_map = np.empty(read_attrs['sequence'], dtype=np.int32)
+            seq_to_sig_map = np.empty(len(read_attrs['sequence']) + 1, dtype=np.int32)
             seq_to_sig_map[-1] = read.signal.shape[0]
             seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
             mod_scores = self.remora_model.call_mods(
                 read.signal, read_attrs['sequence'], seq_to_sig_map
             )
-            mod_tags = format_mm_ml_tags(read_attrs['sequence'], mod_scores)
+            mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)
             self.output_queue.put(
                 (read, {**read_attrs, 'mods': mod_tags})
             )

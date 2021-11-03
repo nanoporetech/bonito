@@ -25,6 +25,12 @@ def main(args):
         sys.stderr.write("> a reference is needed to output ctc training data\n")
         exit(1)
 
+    remora_model = None
+    if args.remora_model is not None:
+        sys.stderr.write("> loading modified base model\n")
+        remora_model = RemoraMods(args.remora_model)
+        sys.stderr.write(f"> {remora_model.alphabet_str}\n")
+
     sys.stderr.write("> loading model\n")
     model = load_model(args.model_directory, args.device, weights=int(args.weights))
 
@@ -36,11 +42,6 @@ def main(args):
             exit(1)
     else:
         aligner = None
-
-    remora_model = None
-    if args.remora_model is not None:
-        remora_model = RemoraMods(args.remora_model)
-        sys.stderr.write(f"> {remora_model.alphabet_str}\n")
 
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
