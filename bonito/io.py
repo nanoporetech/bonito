@@ -82,8 +82,7 @@ def write_fasta(header, sequence, fd=sys.stdout):
     """
     Write a fasta record to a file descriptor.
     """
-    fd.write(">%s\n" % header)
-    fd.write("%s\n" % sequence)
+    fd.write(f">{header}\n{sequence}\n")
     fd.flush()
 
 
@@ -92,12 +91,11 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, mods_tags=None):
     Write a fastq record to a file descriptor.
     """
     if mods_tags is not None:
-        fd.write("@%s %s;\t%s\n" % header, *mods_tags_to_str(mods_tags))
+        mm_tag, ml_tag = mods_tags_to_str(mods_tags)
+        fd.write(f"@{header} {mm_tag};\t{ml_tag}\n")
     else:
-        fd.write("@%s\n" % header)
-    fd.write("%s\n" % sequence)
-    fd.write("+\n")
-    fd.write("%s\n" % qstring)
+        fd.write(f"@{header}\n")
+    fd.write(f"{sequence}\n+\n{qstring}\n")
     fd.flush()
 
 
