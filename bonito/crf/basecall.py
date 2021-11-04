@@ -49,6 +49,22 @@ def compute_scores(model, batch, reverse=False):
     }
 
 
+def quantise_int8(x, scale=127/5):
+    """
+    Quantise scores to int8.
+    """
+    scores = x['scores'] * scale
+    betas = x['betas']
+    betas -= betas.max(2, keepdim=True)[0] - 5.0
+    betas *= scale
+    posts = x['posts'] * scale
+    return {
+        'scores': torch.round(scores).to(torch.int8).detach(),
+        'betas': torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach(),
+        'posts': torch.round(posts).to(torch.int8).detach(),
+    }
+
+
 def transfer(x):
     """
     Device to host transfer using pinned memory.
@@ -74,7 +90,8 @@ def decode(model, scores, beam_size=40):
         qscale = 1.0
     sequence, qstring, moves = beam_search(
         scores['scores'], scores['betas'], scores['posts'],
-        beam_size=beam_size, q_shift=qshift, q_scale=qscale
+        beam_size=beam_size, q_shift=qshift, q_scale=qscale,
+        temperature=127/5,
     )
     return {'sequence': sequence, 'qstring': qstring}
 
@@ -99,7 +116,7 @@ def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=
         for (read, start, end) in reads
     )
     batches = (
-        (k, compute_scores(model, batch, reverse=reverse))
+        (k, quantise_int8(compute_scores(model, batch, reverse=reverse)))
         for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = (
