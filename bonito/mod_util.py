@@ -8,25 +8,13 @@ from bonito.multiprocessing import ThreadMap
 
 try:
     from remora import RemoraError
-    from remora.model_util import load_onnx_model
-    from remora.inference import call_read_mods
+    from remora.util import seq_to_int
     from remora.data_chunks import RemoraRead
+    from remora.inference import call_read_mods
+    from remora.model_util import load_onnx_model
     REMORA_INSTALLED = True
 except ImportError:
     REMORA_INSTALLED = False
-
-SEQ_MIN = np.array(["A"], dtype="S1").view(np.uint8)[0]
-REMORA_SEQ_TO_INT_ARR = np.full(26, -1, dtype=np.int)
-REMORA_SEQ_TO_INT_ARR[0] = 0
-REMORA_SEQ_TO_INT_ARR[2] = 1
-REMORA_SEQ_TO_INT_ARR[6] = 2
-REMORA_SEQ_TO_INT_ARR[19] = 3
-
-
-def seq_to_int_remora(seq):
-    return REMORA_SEQ_TO_INT_ARR[
-        np.array(list(seq), dtype="c").view(np.uint8) - SEQ_MIN
-    ]
 
 
 def log_softmax_axis1(x):
@@ -101,7 +89,7 @@ def mods_tags_to_str(mods_tags):
     ]
 
 
-class RemoraMods:
+class ModsModel:
     def __init__(self, remora_model_filename):
         if not REMORA_INSTALLED:
             raise RuntimeError("Remora must be installed.")
@@ -128,7 +116,7 @@ class RemoraMods:
         )
 
     def call_mods(self, sig, seq, seq_to_sig_map):
-        int_seq = seq_to_int_remora(seq.upper())
+        int_seq = seq_to_int(seq.upper())
         remora_read = RemoraRead(
             sig,
             int_seq,
@@ -153,19 +141,19 @@ class RemoraMods:
         Call modified bases using Remora model using `n_thread` threads.
         """
         return ThreadMap(
-            partial(RemoraWorker, self, stride), basecalls, n_thread
+            partial(ModsWorker, self, stride), basecalls, n_thread
         )
 
 
-class RemoraWorker(Thread):
+class ModsWorker(Thread):
     """Process that reads items from an input_queue, applies a func to them and
     puts them on an output_queue
     """
     def __init__(
-        self, remora_model, stride, input_queue=None, output_queue=None
+        self, mods_model, stride, input_queue=None, output_queue=None
     ):
         super().__init__()
-        self.remora_model = remora_model
+        self.mods_model = mods_model
         self.stride = stride
         self.input_queue = input_queue
         self.output_queue = output_queue
@@ -180,7 +168,7 @@ class RemoraWorker(Thread):
             seq_to_sig_map = np.empty(len(read_attrs['sequence']) + 1, dtype=np.int32)
             seq_to_sig_map[-1] = read.signal.shape[0]
             seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
-            mod_scores = self.remora_model.call_mods(
+            mod_scores = self.mods_model.call_mods(
                 read.signal, read_attrs['sequence'], seq_to_sig_map
             )
             mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)

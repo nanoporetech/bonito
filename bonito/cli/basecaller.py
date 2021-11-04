@@ -12,7 +12,7 @@ from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.aligner import Aligner
-from bonito.mod_util import RemoraMods
+from bonito.mod_util import ModsModel
 from bonito.io import CTCWriter, Writer
 from bonito.fast5 import get_reads, read_chunks
 from bonito.multiprocessing import process_cancel
@@ -25,11 +25,11 @@ def main(args):
         sys.stderr.write("> a reference is needed to output ctc training data\n")
         exit(1)
 
-    remora_model = None
-    if args.remora_model is not None:
+    mods_model = None
+    if args.modified_base_model is not None:
         sys.stderr.write("> loading modified base model\n")
-        remora_model = RemoraMods(args.remora_model)
-        sys.stderr.write(f"> {remora_model.alphabet_str}\n")
+        mods_model = ModsModel(args.modified_base_model)
+        sys.stderr.write(f"> {mods_model.alphabet_str}\n")
 
     sys.stderr.write("> loading model\n")
     model = load_model(args.model_directory, args.device, weights=int(args.weights))
@@ -70,7 +70,7 @@ def main(args):
         basecalls = basecall(
             model, reads, aligner=aligner, reverse=args.revcomp,
             batchsize=args.batchsize, chunksize=args.chunksize,
-            remora_model=remora_model
+            mods_model=mods_model
         )
         writer = Writer(
             tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner
@@ -96,7 +96,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
-    parser.add_argument("--remora-model")
+    parser.add_argument("--modified-base-model")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", default="0", type=str)

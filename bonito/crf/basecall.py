@@ -89,7 +89,7 @@ def split_read(read, split_read_length=400000):
     return [(read, start, min(end, len(read.signal))) for (start, end) in zip(breaks[:-1], breaks[1:])]
 
 
-def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=32, reverse=False, remora_model=None):
+def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=32, reverse=False, mods_model=None):
     """
     Basecalls a set of reads.
     """
@@ -115,12 +115,13 @@ def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=
         groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
     )
 
-    if remora_model is not None:
-        basecalls = remora_model.call_mods_map(basecalls, model.stride)
+    if mods_model is not None:
+        basecalls = mods_model.call_mods_map(basecalls, model.stride)
 
     if aligner:
         basecalls = align_map(aligner, basecalls)
 
-    # TODO implement remora ref-anchored (need to consider multiple output streams)
+    # TODO implement reference-anchored modified base calling
+    # (need to consider multiple output streams)
 
     return basecalls
