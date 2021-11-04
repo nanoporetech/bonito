@@ -351,7 +351,7 @@ class Writer(Thread):
                 qstring = res.get('qstring', '*')
                 mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = res.get('mapping', False)
-                mods_tags = res.get('mods', False)
+                mods_tags = res.get('mods', None)
 
                 if self.duplex:
                     samples = len(read[0].signal) + len(read[1].signal)
