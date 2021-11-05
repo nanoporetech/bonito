@@ -37,8 +37,9 @@ def compute_scores(model, batch, reverse=False):
     with torch.no_grad():
         device = next(model.parameters()).device
         dtype = torch.float16 if half_supported() else torch.float32
-        scores = model(batch.to(dtype).to(device)).to(torch.float32)
+        scores = model(batch.to(dtype).to(device))
         if reverse: scores = model.seqdist.reverse_complement(scores)
+        scores = scores.to(torch.float32)
         betas = model.seqdist.backward_scores(scores)
         fwd = model.seqdist.forward_scores(scores)
         posts = torch.softmax(fwd + betas, dim=-1)
