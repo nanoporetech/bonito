@@ -146,7 +146,10 @@ class SHA(Module):
         kv = kv.transpose(0, 1)
 
         q = self.to_q(x)
-        sim = torch.matmul(q, kv.transpose(-1, -2)) * self.scale
+        q = q * self.scale
+
+        sim = torch.matmul(q, kv.transpose(-1, -2))
+        sim = sim - torch.amax(sim, dim=-1, keepdim=True)
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
@@ -191,12 +194,15 @@ class MHA(Module):
 
         q, k, v = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, k, v))
 
+        q = q * self.scale
+
         if rot_pos_emb is not None:
             rot_pos_emb = rot_pos_emb[:, None]
             q = apply_rotary_pos_emb(rot_pos_emb, q)
             k = apply_rotary_pos_emb(rot_pos_emb, k)
 
-        sim = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        sim = torch.matmul(q, k.transpose(-1, -2))
+        sim = sim - torch.amax(sim, dim=-1, keepdim=True)
 
         if self.causal:
             i, j = sim.shape[-2:]
