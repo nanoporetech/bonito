@@ -114,7 +114,7 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., grad_accum_steps=1, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., attn_grad_clip_max_norm=1., grad_accum_steps=1, use_amp=True):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -124,6 +124,7 @@ class Trainer:
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
         self.grad_clip_max_norm = grad_clip_max_norm
+        self.attn_grad_clip_max_norm = attn_grad_clip_max_norm
         self.grad_accum_steps = grad_accum_steps
 
     def train_one_step(self, batch):
@@ -149,7 +150,7 @@ class Trainer:
         attn_params = get_params_from_optim(self.optimizer, 0, 1)
         non_attn_params = get_params_from_optim(self.optimizer, 2, 3)
 
-        torch.nn.utils.clip_grad_norm_(attn_params, 1.)
+        torch.nn.utils.clip_grad_norm_(attn_params, max_norm=self.attn_grad_clip_max_norm)
         grad_norm = torch.nn.utils.clip_grad_norm_(non_attn_params, max_norm=self.grad_clip_max_norm).item()
 
         self.scaler.step(self.optimizer)
@@ -214,7 +215,7 @@ class Trainer:
         loss = np.mean([(x['ctc_loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, sha_lr = None, **kwargs):
+    def init_optimizer(self, lr, attn_lr = None, **kwargs):
         # exclude norm scales and biases from weight decay
 
         params = set(self.model.parameters())
@@ -229,11 +230,11 @@ class Trainer:
         wd_params, no_wd_params = separate_weight_decayable_params(non_attn_params)
         attn_wd_params, attn_no_wd_params = separate_weight_decayable_params(attn_params)
 
-        sha_lr = sha_lr if sha_lr is not None else lr
+        attn_lr = attn_lr if attn_lr is not None else lr
 
         param_groups = [
-            {'params': list(attn_wd_params), 'lr': sha_lr},
-            {'params': list(attn_no_wd_params), 'weight_decay': 0, 'lr': sha_lr},
+            {'params': list(attn_wd_params), 'lr': attn_lr},
+            {'params': list(attn_no_wd_params), 'weight_decay': 0, 'lr': attn_lr},
             {'params': list(wd_params)},
             {'params': list(no_wd_params), 'weight_decay': 0},
         ]
@@ -247,9 +248,9 @@ class Trainer:
             start_step=last_epoch*len(self.train_loader)
         )
 
-    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0, sha_lr=None):
+    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0, attn_lr=None):
         if self.optimizer is None:
-            self.init_optimizer(lr, sha_lr=sha_lr)
+            self.init_optimizer(lr, attn_lr=attn_lr)
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
