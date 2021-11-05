@@ -18,18 +18,40 @@ def linear_warmup_cosine_decay(end_ratio=0.01, warmup_steps=500, **kwargs):
 
 
 def linear_warmup_const_inverse_sqrt_decay(
-    warmup_steps=1000, decay_start_step=312500, scale=1.0, **kwargs
+    warmup_steps=1000,
+    decay_start_epoch=10,
+    decay_scale=1.0,
+    linear_cooldown_n_epochs=0,
+    linear_cooldown_end_ratio=0.0,
+    **kwargs
 ):
     """
-    Linear warmup, hold constant, inverse sqrt decay scheduler
+    Linear warmup, hold const, inverse sqrt decay, optional cooldown scheduler
     """
     def gen_sched(optimizer, train_loader, epochs, last_epoch):
-        def sched(step):
-            step = step + last_epoch*len(train_loader)
-            if step < decay_start_step:
-                return min(1.0, 0.1 + 0.9*step/warmup_steps)
-            return 1.0 / math.sqrt(1 + ((step - decay_start_step) / (scale * len(train_loader))))
-        return LambdaLR(optimizer, sched)
+        steps_per_epoch = len(train_loader)
+        start_step = steps_per_epoch*last_epoch
+        total_steps = steps_per_epoch * epochs
+
+        n_decay_epochs = epochs - decay_start_epoch - linear_cooldown_n_epochs
+        decay_sched = inverse_sqrt_decay_schedule(decay_scale*n_decay_epochs)
+        func = piecewise_schedule(
+            [
+                warmup_steps / total_steps,
+                decay_start_epoch / epochs,
+                (epochs - linear_cooldown_n_epochs) / epochs
+            ],
+            [
+                linear_schedule(0.0, 1.0),
+                const_schedule(1.0),
+                decay_sched,
+                linear_schedule(
+                    decay_sched(1.0),
+                    linear_cooldown_end_ratio
+                )
+            ]
+        )
+        return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
     return gen_sched
 
 
@@ -79,6 +101,10 @@ def piecewise_schedule(knots, funcs):
         t1 = 1.0 if i == len(knots) else knots[i]
         return funcs[i]((t - t0) / (t1 - t0))
     return f
+
+
+def inverse_sqrt_decay_schedule(scale):
+    return lambda t: 1.0 / math.sqrt(1 + scale*t)
 
 
 def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio=0.1, start_step=0):
