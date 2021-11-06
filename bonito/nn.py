@@ -350,6 +350,7 @@ class Decoder(Module):
             x = ff(x) + x
 
         x = x.transpose(0, 1)
+        x = x / torch.amax(x, dim=-1, keepdim=True)
         logits = self.to_logits(x)
 
         if not return_loss:
