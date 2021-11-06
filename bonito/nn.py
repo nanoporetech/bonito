@@ -273,10 +273,14 @@ class CausalDepthwiseConv(Module):
 # transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2):
         super().__init__()
         self.loss_weight = loss_weight
+
+        self.token_emb_grad_frac = token_emb_grad_frac
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
+        nn.init.kaiming_normal_(self.token_emb.weight)
+
         self.norm_context = nn.LayerNorm(dim)
 
         self.layers = nn.ModuleList([])
@@ -338,6 +342,10 @@ class Decoder(Module):
 
         # embed tokens and add absolute positions
         x = self.token_emb(x)
+
+        # stability measure from https://arxiv.org/abs/2105.13290
+        x = x * self.token_emb_grad_frac + x.detach() * (1 - self.token_emb_grad_frac)
+
         rot_pos_emb = self.rot_pos_emb(x)
 
         # transformer layers
