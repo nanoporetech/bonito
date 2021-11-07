@@ -4,7 +4,8 @@ Bonito CRF basecall
 
 import torch
 import numpy as np
-from kbeam import beamsearch
+from crf_beam import beam_search
+
 from itertools import groupby
 from functools import partial
 from operator import itemgetter
@@ -38,11 +39,14 @@ def compute_scores(model, batch, reverse=False):
         dtype = torch.float16 if half_supported() else torch.float32
         scores = model(batch.to(dtype).to(device))
         if reverse: scores = model.seqdist.reverse_complement(scores)
-        betas = model.seqdist.backward_scores(scores.to(torch.float32))
-        betas -= (betas.max(2, keepdim=True)[0] - 5.0)
+        scores = scores.to(torch.float32)
+        betas = model.seqdist.backward_scores(scores)
+        fwd = model.seqdist.forward_scores(scores)
+        posts = torch.softmax(fwd + betas, dim=-1)
     return {
         'scores': scores.transpose(0, 1),
         'betas': betas.transpose(0, 1),
+        'posts': posts.transpose(0, 1),
     }
 
 
@@ -50,13 +54,16 @@ def quantise_int8(x, scale=127/5):
     """
     Quantise scores to int8.
     """
-    scores = x['scores']
-    scores *= scale
-    scores = torch.round(scores).to(torch.int8).detach()
+    scores = x['scores'] * scale
     betas = x['betas']
+    betas -= betas.max(2, keepdim=True)[0] - 5.0
     betas *= scale
-    betas = torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach()
-    return {'scores': scores, 'betas': betas}
+    posts = x['posts'] * 255 - 128
+    return {
+        'scores': torch.round(scores).to(torch.int8).detach(),
+        'betas': torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach(),
+        'posts': torch.round(posts).to(torch.int8).detach(),
+    }
 
 
 def transfer(x):
@@ -64,25 +71,30 @@ def transfer(x):
     Device to host transfer using pinned memory.
     """
     torch.cuda.synchronize()
+
     with torch.cuda.stream(torch.cuda.Stream()):
         return {
-            k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v).numpy()
+            k: torch.empty(v.shape, pin_memory=True, dtype=v.dtype).copy_(v)
             for k, v in x.items()
         }
 
 
-def decode_int8(scores, seqdist, scale=127/5, beamsize=40, beamcut=100.0):
+def decode(model, scores, beam_size=40):
     """
-    Beamsearch decode.
+    Decode sequence and qstring from model scores.
     """
-    path, _ = beamsearch(
-        scores['scores'], scale, seqdist.n_base, beamsize,
-        guide=scores['betas'], beam_cut=beamcut
-    )
     try:
-        return seqdist.path_to_str(path % 4 + 1)
-    except IndexError:
-        return ""
+        qshift = model.config['qscore']['bias']
+        qscale = model.config['qscore']['scale']
+    except:
+        qshift = 0.0
+        qscale = 1.0
+    sequence, qstring, moves = beam_search(
+        scores['scores'], scores['betas'], scores['posts'],
+        beam_size=beam_size, q_shift=qshift, q_scale=qscale,
+        temperature=127/5,
+    )
+    return {'sequence': sequence, 'qstring': qstring}
 
 
 def split_read(read, split_read_length=400000):
@@ -95,11 +107,10 @@ def split_read(read, split_read_length=400000):
     return [(read, start, min(end, len(read.signal))) for (start, end) in zip(breaks[:-1], breaks[1:])]
 
 
-def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=500, batchsize=32, qscores=False, reverse=False):
+def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=32, reverse=False):
     """
     Basecalls a set of reads.
     """
-    _decode = partial(decode_int8, seqdist=model.seqdist, beamsize=beamsize)
     reads = (read_chunk for read in reads for read_chunk in split_read(read)[::-1 if reverse else 1])
     chunks = (
         ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
@@ -115,15 +126,11 @@ def basecall(model, reads, aligner=None, beamsize=40, chunksize=4000, overlap=50
     )
 
     transferred = thread_map(transfer, stitched, n_thread=1)
-    basecalls = thread_map(_decode, transferred, n_thread=8)
+    basecalls = thread_map(partial(decode, model), transferred, n_thread=8)
 
     basecalls = (
-        (read, ''.join(seq for k, seq in parts))
-        for read, parts in groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
-    )
-    basecalls = (
-        (read, {'sequence': seq, 'qstring': '?' * len(seq) if qscores else '*', 'mean_qscore': 0.0})
-        for read, seq in basecalls
+        (read, concat([v for k, v in parts])) for read, parts in
+        groupby(basecalls, lambda x: (x[0].parent if hasattr(x[0], 'parent') else x[0]))
     )
 
     if aligner: return align_map(aligner, basecalls)
