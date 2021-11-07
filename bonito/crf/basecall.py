@@ -58,7 +58,7 @@ def quantise_int8(x, scale=127/5):
     betas = x['betas']
     betas -= betas.max(2, keepdim=True)[0] - 5.0
     betas *= scale
-    posts = x['posts'] * scale
+    posts = x['posts'] * 255 - 128
     return {
         'scores': torch.round(scores).to(torch.int8).detach(),
         'betas': torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach(),
