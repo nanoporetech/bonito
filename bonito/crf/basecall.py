@@ -37,8 +37,9 @@ def compute_scores(model, batch, reverse=False):
     with torch.no_grad():
         device = next(model.parameters()).device
         dtype = torch.float16 if half_supported() else torch.float32
-        scores = model(batch.to(dtype).to(device)).to(torch.float32)
+        scores = model(batch.to(dtype).to(device))
         if reverse: scores = model.seqdist.reverse_complement(scores)
+        scores = scores.to(torch.float32)
         betas = model.seqdist.backward_scores(scores)
         fwd = model.seqdist.forward_scores(scores)
         posts = torch.softmax(fwd + betas, dim=-1)
@@ -46,6 +47,22 @@ def compute_scores(model, batch, reverse=False):
         'scores': scores.transpose(0, 1),
         'betas': betas.transpose(0, 1),
         'posts': posts.transpose(0, 1),
+    }
+
+
+def quantise_int8(x, scale=127/5):
+    """
+    Quantise scores to int8.
+    """
+    scores = x['scores'] * scale
+    betas = x['betas']
+    betas -= betas.max(2, keepdim=True)[0] - 5.0
+    betas *= scale
+    posts = x['posts'] * 255 - 128
+    return {
+        'scores': torch.round(scores).to(torch.int8).detach(),
+        'betas': torch.round(torch.clamp(betas, -127., 128.)).to(torch.int8).detach(),
+        'posts': torch.round(posts).to(torch.int8).detach(),
     }
 
 
@@ -74,7 +91,8 @@ def decode(model, scores, beam_size=40):
         qscale = 1.0
     sequence, qstring, moves = beam_search(
         scores['scores'], scores['betas'], scores['posts'],
-        beam_size=beam_size, q_shift=qshift, q_scale=qscale
+        beam_size=beam_size, q_shift=qshift, q_scale=qscale,
+        temperature=127/5,
     )
     return {'sequence': sequence, 'qstring': qstring, 'moves': moves}
 
@@ -99,7 +117,7 @@ def basecall(model, reads, aligner=None, chunksize=4000, overlap=500, batchsize=
         for (read, start, end) in reads
     )
     batches = (
-        (k, compute_scores(model, batch, reverse=reverse))
+        (k, quantise_int8(compute_scores(model, batch, reverse=reverse)))
         for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
     stitched = (
