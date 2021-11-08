@@ -15,7 +15,7 @@ from bonito.mod_util import ModsModel
 from bonito.io import CTCWriter, Writer
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
-from bonito.multiprocessing import process_cancel, thread_map
+from bonito.multiprocessing import process_cancel, thread_iter
 from bonito.util import column_to_set, load_symbol, load_model
 
 
@@ -68,10 +68,12 @@ def main(args):
     )
 
     if mods_model is not None:
-        results = thread_map(
-            partial(mods_model.call_mods_from_model, model.stride),
-            results,
-            n_thread=1,
+        results = thread_iter(
+            (
+                read,
+                mods_model.call_mods_from_model(model.stride, read, read_attrs)
+            )
+            for read, read_attrs in results
         )
     if aligner:
         results = align_map(aligner, results)

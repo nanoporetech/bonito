@@ -132,15 +132,14 @@ class ModsModel:
         log_probs = log_softmax_axis1(mod_calls)[:, 1:].astype(np.float64)
         return pos, log_probs, self.remora_metadata["mod_bases"], self.can_base
 
-    def call_mods_from_model(self, stride, read_item):
-        read, read_attrs = read_item
+    def call_mods_from_model(self, stride, read, read_attrs):
         seq_to_sig_map = np.empty(
             len(read_attrs['sequence']) + 1, dtype=np.int32
         )
         seq_to_sig_map[-1] = read.signal.shape[0]
-        seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
-        mod_scores = self.mods_model.call_mods(
+        seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * stride
+        mod_scores = self.call_mods(
             read.signal, read_attrs['sequence'], seq_to_sig_map
         )
         mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)
-        return read, {**read_attrs, 'mods': mod_tags}
+        return {**read_attrs, 'mods': mod_tags}
