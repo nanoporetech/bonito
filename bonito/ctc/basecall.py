@@ -3,16 +3,13 @@ Bonito basecall
 """
 
 import torch
-import numpy as np
 from functools import partial
-from bonito.fast5 import ReadChunk
-from bonito.aligner import align_map
-from bonito.multiprocessing import process_map, thread_map
-from bonito.util import mean_qscore_from_qstring, half_supported
-from bonito.util import chunk, stitch, batchify, unbatchify, permute, concat
+from bonito.multiprocessing import process_map
+from bonito.util import mean_qscore_from_qstring
+from bonito.util import chunk, stitch, batchify, unbatchify, permute
 
 
-def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, batchsize=1, qscores=False, reverse=None):
+def basecall(model, reads, beamsize=5, chunksize=0, overlap=0, batchsize=1, qscores=False, reverse=None):
     """
     Basecalls a set of reads.
     """
@@ -27,7 +24,6 @@ def basecall(model, reads, aligner=None, beamsize=5, chunksize=0, overlap=0, bat
     )
     decoder = partial(decode, decode=model.decode, beamsize=beamsize, qscores=qscores)
     basecalls = process_map(decoder, scores, n_proc=4)
-    if aligner: return align_map(aligner, basecalls)
     return basecalls
 
 

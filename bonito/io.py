@@ -6,7 +6,6 @@ import os
 import sys
 import csv
 import pandas as pd
-from warnings import warn
 from threading import Thread
 from logging import getLogger
 from contextlib import contextmanager
@@ -326,7 +325,6 @@ def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
     return dict(zip(duplex_summary_field_names, fields))
 
 
-
 class Writer(Thread):
 
     def __init__(self, iterator, aligner, fd=sys.stdout, duplex=False):
@@ -381,7 +379,7 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, iterator, aligner, min_coverage, min_accuracy, fd=sys.stdout):
+    def __init__(self, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -406,7 +404,7 @@ class CTCWriter(Thread):
 
                 seq = ctc_data['sequence']
                 qstring = ctc_data['qstring']
-                mean_qscore = ctc_data['mean_qscore']
+                mean_qscore = ctc_data.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = ctc_data.get('mapping', False)
 
                 self.log.append((read.read_id, len(read.signal)))
