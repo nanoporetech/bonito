@@ -3,7 +3,6 @@ Bonito Basecaller
 """
 
 import sys
-import torch
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
@@ -11,8 +10,8 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.aligner import Aligner
 from bonito.io import CTCWriter, Writer
+from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
 from bonito.multiprocessing import process_cancel
 from bonito.util import column_to_set, load_symbol, load_model
@@ -26,6 +25,7 @@ def main(args):
 
     sys.stderr.write("> loading model\n")
     model = load_model(args.model_directory, args.device, weights=int(args.weights))
+    basecall = load_symbol(args.model_directory, "basecall")
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -45,28 +45,26 @@ def main(args):
     if args.max_reads:
         reads = take(reads, args.max_reads)
 
-    basecall = load_symbol(args.model_directory, "basecall")
-
     if args.save_ctc:
         reads = (
-            chunk for read in reads for chunk in read_chunks(read, chunksize=args.chunksize)
+            chunk for read in reads
+            for chunk in read_chunks(read, chunksize=args.chunksize)
         )
-        basecalls = basecall(
-            model, reads, batchsize=64, chunksize=args.chunksize,
-            aligner=aligner, reverse=args.revcomp,
-        )
-        writer = CTCWriter(
-            tqdm(basecalls, desc="> calling", unit=" reads", leave=False),
-            aligner, args.ctc_min_coverage, args.ctc_min_accuracy
-        )
+        ResultsWriter = CTCWriter
     else:
-        basecalls = basecall(
-            model, reads, aligner=aligner, reverse=args.revcomp,
-            batchsize=args.batchsize, chunksize=args.chunksize,
-        )
-        writer = Writer(
-            tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner
-        )
+        ResultsWriter = Writer
+
+    results = basecall(
+        model, reads, reverse=args.revcomp,
+        batchsize=args.batchsize, chunksize=args.chunksize,
+    )
+
+    if aligner:
+        results = align_map(aligner, results)
+
+    writer = ResultsWriter(
+        tqdm(results, desc="> calling", unit=" reads", leave=False), aligner=aligner
+    )
 
     t0 = perf_counter()
     writer.start()
@@ -95,8 +93,6 @@ def argparser():
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
-    parser.add_argument("--ctc-min-coverage", default=0.9, type=float)
-    parser.add_argument("--ctc-min-accuracy", default=0.9, type=float)
     parser.add_argument("--batchsize", default=32, type=int)
     parser.add_argument("--chunksize", default=4000, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
