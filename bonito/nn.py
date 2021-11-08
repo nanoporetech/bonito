@@ -365,6 +365,7 @@ class Decoder(Module):
             return logits
 
         logits = logits.transpose(1, 2)
+        logits = logits.type(torch.float32)
         forward_logits, reversed_logits = logits.chunk(2, dim=0)
 
         # calculate forward and backward cross-entropy losses
