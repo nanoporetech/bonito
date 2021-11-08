@@ -9,6 +9,7 @@ from torch.nn import Module
 from torch.nn.init import orthogonal_
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
+import torch.cuda.amp as amp
 
 layers = {}
 
@@ -365,13 +366,14 @@ class Decoder(Module):
             return logits
 
         logits = logits.transpose(1, 2)
-        logits = logits.type(torch.float32)
         forward_logits, reversed_logits = logits.chunk(2, dim=0)
 
         # calculate forward and backward cross-entropy losses
-        forward_loss = F.cross_entropy(forward_logits, labels, ignore_index=0)
-        backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index=0)
-        loss = (forward_loss + backward_loss) * 0.5
+        # extra insurance that it is done in float32
+        with amp.autocast(enabled=False):
+            forward_loss = F.cross_entropy(forward_logits, labels, ignore_index=0)
+            backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index=0)
+            loss = (forward_loss + backward_loss) * 0.5
 
         # return loss, weighted
         return loss * self.loss_weight
