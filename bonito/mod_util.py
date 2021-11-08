@@ -1,10 +1,6 @@
 import array
-from threading import Thread
-from functools import partial
 
 import numpy as np
-
-from bonito.multiprocessing import ThreadMap
 
 try:
     from remora import RemoraError
@@ -29,8 +25,8 @@ def format_mm_ml_tags(seq, poss, log_probs, mod_bases, can_base):
     https://samtools.github.io/hts-specs/SAMtags.pdf for format details.
 
     Args:
-        seq (str): read-centric read sequence. For reference-anchored calls this
-            should be the reverse complement sequence.
+        seq (str): read-centric read sequence. For reference-anchored calls
+            this should be the reverse complement sequence.
         poss (list): positions relative to seq
         log_probs (np.array): log probabilties for modified bases
         mod_bases (str): modified base single letter codes
@@ -136,42 +132,15 @@ class ModsModel:
         log_probs = log_softmax_axis1(mod_calls)[:, 1:].astype(np.float64)
         return pos, log_probs, self.remora_metadata["mod_bases"], self.can_base
 
-    def call_mods_map(self, basecalls, stride, n_thread=1):
-        """
-        Call modified bases using Remora model using `n_thread` threads.
-        """
-        return ThreadMap(
-            partial(ModsWorker, self, stride), basecalls, n_thread
+    def call_mods_from_model(self, stride, read_item):
+        read, read_attrs = read_item
+        seq_to_sig_map = np.empty(
+            len(read_attrs['sequence']) + 1, dtype=np.int32
         )
-
-
-class ModsWorker(Thread):
-    """Process that reads items from an input_queue, applies a func to them and
-    puts them on an output_queue
-    """
-    def __init__(
-        self, mods_model, stride, input_queue=None, output_queue=None
-    ):
-        super().__init__()
-        self.mods_model = mods_model
-        self.stride = stride
-        self.input_queue = input_queue
-        self.output_queue = output_queue
-
-    def run(self):
-        while True:
-            item = self.input_queue.get()
-            if item is StopIteration:
-                self.output_queue.put(item)
-                break
-            read, read_attrs = item
-            seq_to_sig_map = np.empty(len(read_attrs['sequence']) + 1, dtype=np.int32)
-            seq_to_sig_map[-1] = read.signal.shape[0]
-            seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
-            mod_scores = self.mods_model.call_mods(
-                read.signal, read_attrs['sequence'], seq_to_sig_map
-            )
-            mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)
-            self.output_queue.put(
-                (read, {**read_attrs, 'mods': mod_tags})
-            )
+        seq_to_sig_map[-1] = read.signal.shape[0]
+        seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * self.stride
+        mod_scores = self.mods_model.call_mods(
+            read.signal, read_attrs['sequence'], seq_to_sig_map
+        )
+        mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)
+        return read, {**read_attrs, 'mods': mod_tags}

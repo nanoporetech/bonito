@@ -6,6 +6,7 @@ import sys
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
+from functools import partial
 from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -14,7 +15,7 @@ from bonito.mod_util import ModsModel
 from bonito.io import CTCWriter, Writer
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
-from bonito.multiprocessing import process_cancel
+from bonito.multiprocessing import process_cancel, thread_map
 from bonito.util import column_to_set, load_symbol, load_model
 
 
@@ -66,11 +67,20 @@ def main(args):
         batchsize=args.batchsize, chunksize=args.chunksize,
     )
 
+    if mods_model is not None:
+        results = thread_map(
+            partial(mods_model.call_mods_from_model, model.stride),
+            results,
+            n_thread=1,
+        )
     if aligner:
         results = align_map(aligner, results)
+    # TODO implement reference-anchored modified base calling
+    # (need to consider multiple output streams)
 
     writer = ResultsWriter(
-        tqdm(results, desc="> calling", unit=" reads", leave=False), aligner=aligner
+        tqdm(results, desc="> calling", unit=" reads", leave=False),
+        aligner=aligner
     )
 
     t0 = perf_counter()

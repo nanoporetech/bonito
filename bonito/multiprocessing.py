@@ -6,9 +6,8 @@ import queue
 from itertools import count
 from threading import Thread
 from functools import partial
-from collections import deque
 from signal import signal, SIGINT
-from multiprocessing import Process, Queue, Event, Lock, cpu_count
+from multiprocessing import Process, Queue, Event
 
 
 def process_iter(iterator, maxsize=1):
