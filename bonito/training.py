@@ -73,7 +73,7 @@ class Trainer:
     def __init__(
         self, model, device, train_loader, valid_loader, criterion=None,
         use_amp=True, lr_scheduler_fn=None, restore_optim=False,
-        save_optim_every=10
+        save_optim_every=10, accum_grad_batches=1
     ):
         self.model = model.to(device)
         self.device = device
@@ -84,25 +84,28 @@ class Trainer:
         self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
         self.restore_optim = restore_optim
         self.save_optim_every = save_optim_every
+        self.accum_grad_batches = accum_grad_batches
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
-    def train_one_step(self, batch):
+    def train_one_step(self, batch, accum_grads=False):
         data, targets, lengths = batch
 
-        self.optimizer.zero_grad()
         with amp.autocast(enabled=self.use_amp):
             scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device)) / self.accum_grad_batches
 
         if not isinstance(losses, dict):
             losses = {'loss': losses}
 
         self.scaler.scale(losses['loss']).backward()
-        self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+
+        if not accum_grads:
+            self.scaler.unscale_(self.optimizer)
+            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            self.optimizer.zero_grad()
 
         return losses, grad_norm
 
@@ -112,24 +115,31 @@ class Trainer:
         self.model.train()
 
         progress_bar = tqdm(
-            total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.sampler)),
+            total=len(self.train_loader),
+            desc='[0/{}]'.format(len(self.train_loader.sampler) / self.accum_grad_batches),
             ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
         )
         smoothed_loss = None
 
         with progress_bar:
 
-            for batch in self.train_loader:
+            for i, batch in enumerate(self.train_loader):
+
+                accum_grads = (i + 1) % self.accum_grad_batches != 0
 
                 chunks += batch[0].shape[0]
 
-                losses, grad_norm = self.train_one_step(batch)
+                losses, grad_norm = self.train_one_step(batch, accum_grads)
+
+                if accum_grads:
+                    continue
+
                 losses = {k: v.item() for k,v in losses.items()}
 
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
                 progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
-                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.sampler)))
+                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.sampler) / self.accum_grad_batches))
                 progress_bar.update()
 
                 if loss_log is not None:
