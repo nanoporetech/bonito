@@ -131,6 +131,12 @@ class LinearCRFEncoder(Module):
         return res
 
 
+def stable_softmax(x, dim=-1, alpha=128):
+    # stable softmax technique from https://arxiv.org/abs/2105.13290
+    x = x / alpha
+    x = x - torch.amax(x, dim=dim, keepdim=True).detach()
+    return (x * alpha).softmax(dim=dim)
+
 @register
 class SHA(Module):
 
@@ -150,8 +156,7 @@ class SHA(Module):
         q = q * self.scale
 
         sim = torch.matmul(q, kv.transpose(-1, -2))
-        sim = sim - torch.amax(sim, dim=-1, keepdim=True).detach()
-        attn = sim.softmax(dim=-1)
+        attn = stable_softmax(sim, dim=-1)
         attn = self.dropout(attn)
 
         out = torch.matmul(attn, kv)
@@ -208,7 +213,7 @@ class MHA(Module):
             mask_value = -torch.finfo(sim.dtype).max
             sim.masked_fill_(mask[None, None, :, :], mask_value)
 
-        attn = sim.softmax(dim=-1)
+        attn = stable_softmax(sim, dim=-1)
         attn = self.dropout(attn)
 
         out = torch.matmul(attn, v)
