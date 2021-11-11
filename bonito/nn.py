@@ -170,9 +170,6 @@ class MHA(Module):
         self.scale = dim_head ** -0.5
         self.causal = causal
 
-        # proposed https://openreview.net/forum?id=GMYWzWztDx5
-        self.head_scale = nn.Parameter(torch.ones(1, heads, 1, 1))
-
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_k = nn.Linear(dim, inner_dim, bias=False)
         self.to_v = nn.Linear(dim, inner_dim, bias=False)
@@ -214,7 +211,7 @@ class MHA(Module):
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
-        out = torch.matmul(attn, v) * self.head_scale
+        out = torch.matmul(attn, v)
 
         out = out.transpose(1, 2).reshape(b, n, -1)
         out = self.to_out(out)
