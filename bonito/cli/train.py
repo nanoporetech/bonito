@@ -8,6 +8,7 @@ import os
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 from pathlib import Path
+from importlib import import_module
 
 from bonito.data import load_numpy, load_script
 from bonito.util import __models__, default_config, default_data
@@ -72,16 +73,22 @@ def main(args):
     else:
         model = load_symbol(config, 'Model')(config)
 
-    last_epoch = load_state(workdir, args.device, model)
+    if config.get("lr_scheduler"):
+        sched_config = config["lr_scheduler"]
+        lr_scheduler_fn = getattr(
+            import_module(sched_config["package"]), sched_config["symbol"]
+        )(**sched_config)
+    else:
+        lr_scheduler_fn = None
 
-    if args.multi_gpu:
-        from torch.nn import DataParallel
-        model = DataParallel(model)
-        model.decode = model.module.decode
-        model.alphabet = model.module.alphabet
-
-    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
-    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
+    trainer = Trainer(
+        model, device, train_loader, valid_loader,
+        use_amp=half_supported() and not args.no_amp,
+        lr_scheduler_fn=lr_scheduler_fn,
+        restore_optim=args.restore_optim,
+        save_optim_every=args.save_optim_every
+    )
+    trainer.fit(workdir, args.epochs, args.lr)
 
 def argparser():
     parser = ArgumentParser(
@@ -101,6 +108,7 @@ def argparser():
     parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--valid-chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
-    parser.add_argument("--multi-gpu", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
+    parser.add_argument("--restore-optim", action="store_true", default=False)
+    parser.add_argument("--save-optim-every", default=10, type=int)
     return parser
