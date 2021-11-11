@@ -6,7 +6,6 @@ import sys
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
-from functools import partial
 from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
