@@ -92,7 +92,7 @@ def alphabet_str(mods_model):
     return f"loaded modified base model to call (alt to {can_base}): {mod_str}"
 
 
-def call_mods(self, mods_model, read, read_attrs):
+def call_mods(mods_model, read, read_attrs):
     if len(read_attrs['sequence']) == 0:
         return read_attrs
     remora_model, remora_metadata = mods_model
