@@ -104,10 +104,10 @@ class Trainer:
 
                 self.scaler.scale(losses_['loss']).backward()
 
-                if losses is None:
-                    losses = losses_
-                else:
-                    losses = {k: v + losses_[k].item() for k, v in losses.items()}
+                losses = {
+                    k: (v.item() if losses is None else v.item() + losses[k])
+                    for k, v in losses_.items()
+                }
 
         self.scaler.unscale_(self.optimizer)
         grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
@@ -134,8 +134,6 @@ class Trainer:
                 chunks += batch[0].shape[0]
 
                 losses, grad_norm = self.train_one_step(batch)
-
-                losses = {k: v.item() for k,v in losses.items()}
 
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
