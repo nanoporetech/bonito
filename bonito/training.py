@@ -73,7 +73,7 @@ class Trainer:
     def __init__(
         self, model, device, train_loader, valid_loader, criterion=None,
         use_amp=True, lr_scheduler_fn=None, restore_optim=False,
-        save_optim_every=10
+        save_optim_every=10, grad_accum_split=1
     ):
         self.model = model.to(device)
         self.device = device
@@ -84,21 +84,31 @@ class Trainer:
         self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
         self.restore_optim = restore_optim
         self.save_optim_every = save_optim_every
+        self.grad_accum_split = grad_accum_split
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
     def train_one_step(self, batch):
-        data, targets, lengths = batch
-
         self.optimizer.zero_grad()
+
+        losses = None
         with amp.autocast(enabled=self.use_amp):
-            scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+            for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
+                data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
+                scores_ = self.model(data_)
+                losses_ = self.criterion(scores_, targets_, lengths_)
 
-        if not isinstance(losses, dict):
-            losses = {'loss': losses}
+                if not isinstance(losses_, dict): losses_ = {'loss': losses_}
 
-        self.scaler.scale(losses['loss']).backward()
+                losses_['loss'] = losses_['loss'] / self.grad_accum_split
+
+                self.scaler.scale(losses_['loss']).backward()
+
+                losses = {
+                    k: (v.item() if losses is None else v.item() + losses[k])
+                    for k, v in losses_.items()
+                }
+
         self.scaler.unscale_(self.optimizer)
         grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
         self.scaler.step(self.optimizer)
@@ -124,7 +134,6 @@ class Trainer:
                 chunks += batch[0].shape[0]
 
                 losses, grad_norm = self.train_one_step(batch)
-                losses = {k: v.item() for k,v in losses.items()}
 
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 

@@ -13,7 +13,7 @@ def linear_warmup_cosine_decay(end_ratio=0.01, warmup_steps=500, **kwargs):
         func=cosine_decay_schedule(1.0, end_ratio),
         total_steps=epochs * len(train_loader),
         warmup_steps=warmup_steps,
-        start_step=last_epoch*len(train_loader)
+        start_step=last_epoch * len(train_loader),
     )
 
 
