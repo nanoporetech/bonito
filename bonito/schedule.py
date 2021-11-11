@@ -8,12 +8,12 @@ def linear_warmup_cosine_decay(end_ratio=0.01, warmup_steps=500, **kwargs):
     """
     Linear warmup, cosine decay scheduler
     """
-    return lambda optimizer, train_loader, epochs, last_epoch: func_scheduler(
+    return lambda optimizer, steps_per_epoch, epochs, last_epoch: func_scheduler(
         optimizer=optimizer,
         func=cosine_decay_schedule(1.0, end_ratio),
-        total_steps=epochs * len(train_loader),
+        total_steps=epochs * steps_per_epoch,
         warmup_steps=warmup_steps,
-        start_step=last_epoch*len(train_loader)
+        start_step=last_epoch * steps_per_epoch,
     )
 
 
@@ -28,8 +28,7 @@ def linear_warmup_const_inverse_sqrt_decay(
     """
     Linear warmup, hold const, inverse sqrt decay, optional cooldown scheduler
     """
-    def gen_sched(optimizer, train_loader, epochs, last_epoch):
-        steps_per_epoch = len(train_loader)
+    def gen_sched(optimizer, steps_per_epoch, epochs, last_epoch):
         start_step = steps_per_epoch*last_epoch
         total_steps = steps_per_epoch * epochs
 
@@ -59,10 +58,10 @@ def linear_cooldown(end_ratio=0.0, **kwargs):
     """
     Linear Cooldown Scheduler
     """
-    return lambda optimizer, train_loader, epochs, last_epoch: func_scheduler(
+    return lambda optimizer, steps_per_epoch, epochs, last_epoch: func_scheduler(
         optimizer=optimizer,
         func=linear_schedule(1.0, end_ratio),
-        total_steps=epochs * len(train_loader),
+        total_steps=epochs * steps_per_epoch,
         start_step=0,
     )
 

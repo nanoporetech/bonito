@@ -87,7 +87,7 @@ def main(args):
         lr_scheduler_fn=lr_scheduler_fn,
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
-        acum_grad_batches=args.accum_grad_batches
+        accum_grad_batches=args.accum_grad_batches
     )
     trainer.fit(workdir, args.epochs, args.lr)
 

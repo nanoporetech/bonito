@@ -88,19 +88,24 @@ class Trainer:
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
-    def train_one_step(self, batch, accum_grads=False):
+    def train_one_step(self, batch, accum_grads=False, accum_losses=None):
         data, targets, lengths = batch
 
         with amp.autocast(enabled=self.use_amp):
             scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device)) / self.accum_grad_batches
+            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
 
         if not isinstance(losses, dict):
-            losses = {'loss': losses}
+            losses = {'loss': losses / self.accum_grad_batches}
 
         self.scaler.scale(losses['loss']).backward()
 
-        if not accum_grads:
+        if accum_losses is not None:
+            losses = {k: v + accum_losses[k] for k, v in losses.items()}
+
+        if accum_grads:
+            grad_norm = None
+        else:
             self.scaler.unscale_(self.optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
             self.scaler.step(self.optimizer)
@@ -113,13 +118,15 @@ class Trainer:
         t0 = perf_counter()
         chunks = 0
         self.model.train()
+        self.optimizer.zero_grad()
 
         progress_bar = tqdm(
             total=len(self.train_loader),
-            desc='[0/{}]'.format(len(self.train_loader.sampler) / self.accum_grad_batches),
+            desc='[0/{}]'.format(len(self.train_loader.sampler)),
             ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
         )
         smoothed_loss = None
+        losses = None
 
         with progress_bar:
 
@@ -129,7 +136,7 @@ class Trainer:
 
                 chunks += batch[0].shape[0]
 
-                losses, grad_norm = self.train_one_step(batch, accum_grads)
+                losses, grad_norm = self.train_one_step(batch, accum_grads, losses)
 
                 if accum_grads:
                     continue
@@ -139,7 +146,7 @@ class Trainer:
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
                 progress_bar.set_postfix(loss='%.4f' % smoothed_loss)
-                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.sampler) / self.accum_grad_batches))
+                progress_bar.set_description("[{}/{}]".format(chunks, len(self.train_loader.sampler)))
                 progress_bar.update()
 
                 if loss_log is not None:
@@ -154,6 +161,7 @@ class Trainer:
                     })
 
                 if lr_scheduler is not None: lr_scheduler.step()
+                losses = None
 
         return smoothed_loss, perf_counter() - t0
 
@@ -185,7 +193,12 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
-        return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
+        return self.lr_scheduler_fn(
+                self.optimizer,
+                len(self.train_loader) / self.accum_grad_batches,
+                epochs,
+                last_epoch
+        )
 
     def fit(self, workdir, epochs=1, lr=2e-3):
         if self.optimizer is None:
