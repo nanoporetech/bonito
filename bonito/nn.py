@@ -150,7 +150,7 @@ class SHA(Module):
         q = q * self.scale
 
         sim = torch.matmul(q, kv.transpose(-1, -2))
-        sim = sim - torch.amax(sim, dim=-1, keepdim=True)
+        sim = sim - torch.amax(sim, dim=-1, keepdim=True).detach()
         attn = sim.softmax(dim=-1)
         attn = self.dropout(attn)
 
@@ -203,7 +203,7 @@ class MHA(Module):
             k = apply_rotary_pos_emb(rot_pos_emb, k)
 
         sim = torch.matmul(q, k.transpose(-1, -2))
-        sim = sim - torch.amax(sim, dim=-1, keepdim=True)
+        sim = sim - torch.amax(sim, dim=-1, keepdim=True).detach()
 
         if self.causal:
             i, j = sim.shape[-2:]
@@ -359,7 +359,7 @@ class Decoder(Module):
             x = ff(x) + x
 
         x = x.transpose(0, 1)
-        x = x / torch.amax(x, dim=-1, keepdim=True)
+        x = x / torch.amax(x, dim=-1, keepdim=True).detach()
         logits = self.to_logits(x)
 
         if not return_loss:
