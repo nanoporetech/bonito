@@ -90,7 +90,7 @@ def decode(model, scores, beam_size=40):
         beam_size=beam_size, q_shift=qshift, q_scale=qscale,
         temperature=127/5,
     )
-    return {'sequence': sequence, 'qstring': qstring, 'moves': moves}
+    return {'sequence': sequence, 'qstring': qstring, 'seq_to_sig_map': np.where(moves)[0] * model.stride}
 
 
 def split_read(read, split_read_length=400000):

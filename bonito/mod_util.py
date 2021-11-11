@@ -2,11 +2,9 @@ import array
 
 import numpy as np
 
-from remora import RemoraError
 from remora.util import seq_to_int
 from remora.data_chunks import RemoraRead
 from remora.inference import call_read_mods
-from remora.model_util import load_onnx_model
 
 
 def log_softmax_axis1(x):
@@ -81,59 +79,46 @@ def mods_tags_to_str(mods_tags):
     ]
 
 
-class ModsModel:
-    def __init__(self, remora_model_filename):
-        self.remora_model_filename = remora_model_filename
-        self.remora_model, self.remora_metadata = load_onnx_model(
-            self.remora_model_filename
+def alphabet_str(mods_model):
+    remora_model, remora_metadata = mods_model
+    can_base = remora_metadata["motif"][0][remora_metadata["motif"][1]]
+    mod_str = "; ".join(
+        f"{mod_b}={mln}"
+        for mod_b, mln in zip(
+            remora_metadata["mod_bases"],
+            remora_metadata["mod_long_names"]
         )
-        self.can_base = self.remora_metadata["motif"][0][
-            self.remora_metadata["motif"][1]
-        ]
+    )
+    return f"loaded modified base model to call (alt to {can_base}): {mod_str}"
 
-    @property
-    def alphabet_str(self):
-        mod_str = "; ".join(
-            f"{mod_b}={mln}"
-            for mod_b, mln in zip(
-                self.remora_metadata["mod_bases"],
-                self.remora_metadata["mod_long_names"]
-            )
-        )
-        return (
-            "loaded modified base model to call (alt to "
-            f"{self.can_base}): {mod_str}"
-        )
 
-    def call_mods(self, sig, seq, seq_to_sig_map):
-        int_seq = seq_to_int(seq.upper())
-        remora_read = RemoraRead(
-            sig,
-            int_seq,
-            seq_to_sig_map,
-        )
-        try:
-            remora_read.check()
-        except RemoraError as e:
-            raise RuntimeError(f"Remora read prep error: {e}")
-        if len(seq) == 0:
-            return []
-        mod_calls, _, pos = call_read_mods(
-            remora_read,
-            self.remora_model,
-            self.remora_metadata,
-        )
-        log_probs = log_softmax_axis1(mod_calls)[:, 1:].astype(np.float64)
-        return pos, log_probs, self.remora_metadata["mod_bases"], self.can_base
-
-    def call_mods_from_model(self, stride, read, read_attrs):
-        seq_to_sig_map = np.empty(
-            len(read_attrs['sequence']) + 1, dtype=np.int32
-        )
-        seq_to_sig_map[-1] = read.signal.shape[0]
-        seq_to_sig_map[:-1] = np.where(read_attrs['moves'])[0] * stride
-        mod_scores = self.call_mods(
-            read.signal, read_attrs['sequence'], seq_to_sig_map
-        )
-        mod_tags = format_mm_ml_tags(read_attrs['sequence'], *mod_scores)
-        return {**read_attrs, 'mods': mod_tags}
+def call_mods(self, mods_model, read, read_attrs):
+    if len(read_attrs['sequence']) == 0:
+        return read_attrs
+    remora_model, remora_metadata = mods_model
+    can_base = remora_metadata["motif"][0][remora_metadata["motif"][1]]
+    int_seq = seq_to_int(read_attrs['sequence'].upper())
+    seq_to_sig_map = np.empty(
+        len(read_attrs['sequence']) + 1, dtype=np.int32
+    )
+    seq_to_sig_map[-1] = read.signal.shape[0]
+    seq_to_sig_map[:-1] = read_attrs['seq_to_sig_map']
+    remora_read = RemoraRead(
+        read.signal,
+        int_seq,
+        seq_to_sig_map,
+    )
+    mod_calls, _, pos = call_read_mods(
+        remora_read,
+        remora_model,
+        remora_metadata,
+    )
+    log_probs = log_softmax_axis1(mod_calls)[:, 1:].astype(np.float64)
+    read_attrs['mods'] = format_mm_ml_tags(
+        read_attrs['sequence'],
+        pos,
+        log_probs,
+        remora_metadata["mod_bases"],
+        can_base
+    )
+    return read_attrs
