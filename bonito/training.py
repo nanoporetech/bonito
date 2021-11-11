@@ -73,7 +73,7 @@ class Trainer:
     def __init__(
         self, model, device, train_loader, valid_loader, criterion=None,
         use_amp=True, lr_scheduler_fn=None, restore_optim=False,
-        save_optim_every=10, accum_grad_batches=1
+        save_optim_every=10, grad_accum_split=1
     ):
         self.model = model.to(device)
         self.device = device
@@ -84,33 +84,36 @@ class Trainer:
         self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
         self.restore_optim = restore_optim
         self.save_optim_every = save_optim_every
-        self.accum_grad_batches = accum_grad_batches
+        self.grad_accum_split = grad_accum_split
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
 
-    def train_one_step(self, batch, accum_grads=False, accum_losses=None):
-        data, targets, lengths = batch
+    def train_one_step(self, batch):
+        self.optimizer.zero_grad()
 
+        losses = None
         with amp.autocast(enabled=self.use_amp):
-            scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+            for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
+                data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
+                scores_ = self.model(data_)
+                losses_ = self.criterion(scores_, targets_, lengths_)
 
-        if not isinstance(losses, dict):
-            losses = {'loss': losses / self.accum_grad_batches}
+                if losses is None:
+                    losses = losses_
+                elif isinstance(losses, dict):
+                    losses = {k: v + losses_[k] for k, v in losses.items()}
+                else:
+                    losses += losses_
+
+        if not isinstance(losses, dict): losses = {'loss': losses}
+
+        losses['loss'] = losses['loss'] / self.grad_accum_split
 
         self.scaler.scale(losses['loss']).backward()
-
-        if accum_losses is not None:
-            losses = {k: v + accum_losses[k] for k, v in losses.items()}
-
-        if accum_grads:
-            grad_norm = None
-        else:
-            self.scaler.unscale_(self.optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.optimizer.zero_grad()
+        self.scaler.unscale_(self.optimizer)
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         return losses, grad_norm
 
@@ -132,14 +135,9 @@ class Trainer:
 
             for i, batch in enumerate(self.train_loader):
 
-                accum_grads = (i + 1) % self.accum_grad_batches != 0
-
                 chunks += batch[0].shape[0]
 
-                losses, grad_norm = self.train_one_step(batch, accum_grads, losses)
-
-                if accum_grads:
-                    continue
+                losses, grad_norm = self.train_one_step(batch)
 
                 losses = {k: v.item() for k,v in losses.items()}
 
@@ -193,12 +191,7 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
-        return self.lr_scheduler_fn(
-                self.optimizer,
-                len(self.train_loader) / self.accum_grad_batches,
-                epochs,
-                last_epoch
-        )
+        return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
 
     def fit(self, workdir, epochs=1, lr=2e-3):
         if self.optimizer is None:
