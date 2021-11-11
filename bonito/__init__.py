@@ -10,7 +10,7 @@ __version__ = '0.4.0'
 
 def main():
     parser = ArgumentParser(
-        'bonito', 
+        'bonito',
         formatter_class=ArgumentDefaultsHelpFormatter
     )
 
