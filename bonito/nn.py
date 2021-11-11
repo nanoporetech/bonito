@@ -140,13 +140,16 @@ def stable_softmax(x, dim=-1, alpha=128):
 @register
 class SHA(Module):
 
-    def __init__(self, dim, dropout=0., sha_sandwich_norm=False):
+    def __init__(self, dim, dropout=0.):
         super().__init__()
         self.scale = dim ** -0.5
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
-        self.bottom_sandwich_norm = nn.LayerNorm(dim) if sha_sandwich_norm else nn.Identity()
-        self.layerscale = LayerScale(dim)
+        self.bottom_sandwich_norm = nn.LayerNorm(dim)
+
+        last_layer = self.bottom_sandwich_norm
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
 
     def forward(self, x, kv):
         x = x.transpose(0, 1)
@@ -162,7 +165,7 @@ class SHA(Module):
         out = torch.matmul(attn, kv)
         out = out.transpose(0, 1)
         out = self.bottom_sandwich_norm(out)
-        return self.layerscale(out)
+        return out
 
 @register
 class MHA(Module):
@@ -180,9 +183,12 @@ class MHA(Module):
         self.to_v = nn.Linear(dim, inner_dim, bias=False)
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
-        self.layerscale = LayerScale(dim)
 
         self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
+
+        last_layer = self.to_out[-1]
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
 
     def forward(self, x, kv=None, rot_pos_emb=None):
         n, b, d, h, device = *x.shape, self.heads, x.device
@@ -222,7 +228,7 @@ class MHA(Module):
         out = self.to_out(out)
 
         out = out.transpose(0, 1)
-        return self.layerscale(out)
+        return out
 
 # rotary positional embedding
 
@@ -264,14 +270,15 @@ class CausalDepthwiseConv(Module):
         self.kernel_size = kernel_size
         self.norm = nn.LayerNorm(dim)
         self.conv = nn.Conv1d(dim, dim, kernel_size, groups=dim)
+        self.norm_out = nn.LayerNorm(dim)
 
     def forward(self, x):
         x = self.norm(x)
         x = x.permute(1, 2, 0)
-        x = F.pad(x, (self.kernel_size - 1, 0), value = 0.)
+        x = F.pad(x, (self.kernel_size - 1, 0), value=0.)
         x = self.conv(x)
         x = x.permute(2, 0, 1)
-        return x
+        return self.norm_out(x)
 
 # transformer decoder
 class Decoder(Module):
@@ -381,18 +388,6 @@ class Decoder(Module):
         return loss * self.loss_weight
 
 @register
-class LayerScale(Module):
-    """ https://arxiv.org/abs/2103.17239 """
-
-    def __init__(self, features, eps=1e-5):
-        super().__init__()
-        scale = torch.zeros(1, 1, features).fill_(eps)
-        self.scale = nn.Parameter(scale)
-
-    def forward(self, x):
-        return self.scale * x
-
-@register
 class ReluSquared(Module):
     """ https://arxiv.org/abs/2109.08668 """
 
@@ -410,9 +405,12 @@ class FeedForward(Module):
             ReluSquared(),
             nn.Dropout(dropout),
             nn.Linear(dim * mult, dim),
-            nn.LayerNorm(dim),
-            LayerScale(dim)
+            nn.LayerNorm(dim)
         )
+
+        last_layer = self.net[-1]
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
 
     def forward(self, x):
         return self.net(x)
@@ -421,7 +419,7 @@ class FeedForward(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, sha_sandwich_norm=False, ff_mult=4):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
@@ -431,7 +429,7 @@ class SHABlock(Module):
         if is_multiheaded:
             self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads)
         else:
-            self.attn = SHA(dim=dim, dropout=attn_dropout, sha_sandwich_norm=sha_sandwich_norm)
+            self.attn = SHA(dim=dim, dropout=attn_dropout)
 
         self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 

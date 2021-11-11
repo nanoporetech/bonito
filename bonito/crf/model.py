@@ -156,7 +156,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         backbone.append(rnn)
 
         if layer_num in single_head_layers_count:
-            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, sha_sandwich_norm=sha_sandwich_norm) for _ in range(single_head_layers_count[layer_num])])
+            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer_num])])
 
     encoder = Serial([
         conv(insize, 4, ks=5, bias=True, activation=activation),
