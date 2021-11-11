@@ -24,15 +24,15 @@ def main(args):
         sys.stderr.write("> a reference is needed to output ctc training data\n")
         exit(1)
 
+    sys.stderr.write("> loading model\n")
+    model = load_model(args.model_directory, args.device, weights=int(args.weights))
+    basecall = load_symbol(args.model_directory, "basecall")
+
     mods_model = None
     if args.modified_base_model is not None:
         sys.stderr.write("> loading modified base model\n")
         mods_model = ModsModel(args.modified_base_model)
         sys.stderr.write(f"> {mods_model.alphabet_str}\n")
-
-    sys.stderr.write("> loading model\n")
-    model = load_model(args.model_directory, args.device, weights=int(args.weights))
-    basecall = load_symbol(args.model_directory, "basecall")
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -76,8 +76,6 @@ def main(args):
         )
     if aligner:
         results = align_map(aligner, results)
-    # TODO implement reference-anchored modified base calling
-    # (need to consider multiple output streams)
 
     writer = ResultsWriter(
         tqdm(results, desc="> calling", unit=" reads", leave=False),

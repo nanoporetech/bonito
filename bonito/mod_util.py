@@ -2,15 +2,11 @@ import array
 
 import numpy as np
 
-try:
-    from remora import RemoraError
-    from remora.util import seq_to_int
-    from remora.data_chunks import RemoraRead
-    from remora.inference import call_read_mods
-    from remora.model_util import load_onnx_model
-    REMORA_INSTALLED = True
-except ImportError:
-    REMORA_INSTALLED = False
+from remora import RemoraError
+from remora.util import seq_to_int
+from remora.data_chunks import RemoraRead
+from remora.inference import call_read_mods
+from remora.model_util import load_onnx_model
 
 
 def log_softmax_axis1(x):
@@ -87,8 +83,6 @@ def mods_tags_to_str(mods_tags):
 
 class ModsModel:
     def __init__(self, remora_model_filename):
-        if not REMORA_INSTALLED:
-            raise RuntimeError("Remora must be installed.")
         self.remora_model_filename = remora_model_filename
         self.remora_model, self.remora_metadata = load_onnx_model(
             self.remora_model_filename
