@@ -121,19 +121,16 @@ class Trainer:
         t0 = perf_counter()
         chunks = 0
         self.model.train()
-        self.optimizer.zero_grad()
 
         progress_bar = tqdm(
-            total=len(self.train_loader),
-            desc='[0/{}]'.format(len(self.train_loader.sampler)),
+            total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.sampler)),
             ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
         )
         smoothed_loss = None
-        losses = None
 
         with progress_bar:
 
-            for i, batch in enumerate(self.train_loader):
+            for batch in self.train_loader:
 
                 chunks += batch[0].shape[0]
 
@@ -159,7 +156,6 @@ class Trainer:
                     })
 
                 if lr_scheduler is not None: lr_scheduler.step()
-                losses = None
 
         return smoothed_loss, perf_counter() - t0
 
