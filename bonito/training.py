@@ -98,18 +98,17 @@ class Trainer:
                 scores_ = self.model(data_)
                 losses_ = self.criterion(scores_, targets_, lengths_)
 
+                if not isinstance(losses_, dict): losses_ = {'loss': losses_}
+
+                losses_['loss'] = losses_['loss'] / self.grad_accum_split
+
+                self.scaler.scale(losses_['loss']).backward()
+
                 if losses is None:
                     losses = losses_
-                elif isinstance(losses, dict):
-                    losses = {k: v + losses_[k] for k, v in losses.items()}
                 else:
-                    losses += losses_
+                    losses = {k: v + losses_[k].item() for k, v in losses.items()}
 
-        if not isinstance(losses, dict): losses = {'loss': losses}
-
-        losses['loss'] = losses['loss'] / self.grad_accum_split
-
-        self.scaler.scale(losses['loss']).backward()
         self.scaler.unscale_(self.optimizer)
         grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
         self.scaler.step(self.optimizer)
