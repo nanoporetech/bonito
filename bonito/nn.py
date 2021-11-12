@@ -391,11 +391,12 @@ class Decoder(Module):
         return loss * self.loss_weight
 
 @register
-class ReluSquared(Module):
-    """ https://arxiv.org/abs/2109.08668 """
+class GEGLU(Module):
+    """ https://arxiv.org/abs/2002.05202 """
 
     def forward(self, x):
-        return F.relu(x) ** 2
+        x, gate = x.chunk(2, dim=-1)
+        return F.gelu(gate) * x
 
 @register
 class FeedForward(Module):
@@ -404,8 +405,9 @@ class FeedForward(Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.LayerNorm(dim),
-            nn.Linear(dim, dim * mult),
-            ReluSquared(),
+            nn.Linear(dim, dim * mult * 2),
+            GEGLU(),
+            nn.LayerNorm(dim * mult),
             nn.Dropout(dropout),
             nn.Linear(dim * mult, dim),
             nn.LayerNorm(dim)
