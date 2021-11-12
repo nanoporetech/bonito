@@ -20,6 +20,13 @@ def register(layer):
     return layer
 
 
+def stable_softmax(x, dim=-1, alpha=128):
+    # stable softmax technique from https://arxiv.org/abs/2105.13290
+    x = x / alpha
+    x = x - torch.amax(x, dim=dim, keepdim=True).detach()
+    return (x * alpha).softmax(dim=dim)
+
+
 register(torch.nn.ReLU)
 register(torch.nn.Tanh)
 
@@ -27,6 +34,17 @@ register(torch.nn.Tanh)
 @register
 class Swish(torch.nn.SiLU):
     pass
+
+
+@register
+class StableLayerNorm(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+
+    def forward(self, x):
+        x = x / torch.amax(x, dim=-1, keepdim=True).detach()
+        return self.norm(x)
 
 
 @register
@@ -130,12 +148,6 @@ class LinearCRFEncoder(Module):
             }
         return res
 
-
-def stable_softmax(x, dim=-1, alpha=128):
-    # stable softmax technique from https://arxiv.org/abs/2105.13290
-    x = x / alpha
-    x = x - torch.amax(x, dim=dim, keepdim=True).detach()
-    return (x * alpha).softmax(dim=dim)
 
 @register
 class SHA(Module):
@@ -291,7 +303,7 @@ class Decoder(Module):
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
         nn.init.kaiming_normal_(self.token_emb.weight)
 
-        self.norm_context = nn.LayerNorm(dim)
+        self.norm_context = StableLayerNorm(dim)
 
         self.layers = nn.ModuleList([])
         self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32))
@@ -305,7 +317,7 @@ class Decoder(Module):
             ]))
 
         self.to_logits = nn.Sequential(
-            nn.LayerNorm(dim),
+            StableLayerNorm(dim),
             nn.Linear(dim, num_tokens + 2)
         )
 
@@ -371,7 +383,6 @@ class Decoder(Module):
             x = ff(x) + x
 
         x = x.transpose(0, 1)
-        x = x / torch.amax(x, dim=-1, keepdim=True).detach()
         logits = self.to_logits(x)
 
         if not return_loss:
