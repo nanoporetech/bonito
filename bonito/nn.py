@@ -283,7 +283,7 @@ class CausalDepthwiseConv(Module):
 # transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True):
         super().__init__()
         self.loss_weight = loss_weight
 
@@ -299,7 +299,7 @@ class Decoder(Module):
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
                 CausalDepthwiseConv(dim, kernel_size=conv_kernel_size),
-                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout),
+                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout) if use_self_attn else None,
                 MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
                 FeedForward(dim, dropout=ff_dropout)
             ]))
@@ -363,7 +363,10 @@ class Decoder(Module):
 
         for conv, self_attn, cross_attn, ff in self.layers:
             x = conv(x) + x
-            x = self_attn(x, rot_pos_emb=rot_pos_emb) + x
+
+            if self_attn is not None:
+                x = self_attn(x, rot_pos_emb=rot_pos_emb) + x
+
             x = cross_attn(x, encoded) + x
             x = ff(x) + x
 

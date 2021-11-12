@@ -81,7 +81,7 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, attn_grad_clip_max_norm=args.attn_clip, grad_accum_steps = args.accum, use_amp=half_supported() and not args.no_amp)
+    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, attn_grad_clip_max_norm=args.attn_clip, grad_accum_steps = args.accum, use_amp=half_supported() and not args.no_amp, max_epoch_ar_aux_loss=args.max_epoch_ar_aux_loss, no_ar_aux_loss=args.no_ar_aux_loss)
     trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, attn_lr=args.attn_lr)
 
 def argparser():
@@ -98,6 +98,8 @@ def argparser():
     parser.add_argument("--lr", default=2e-3, type=float)
     parser.add_argument("--attn-lr", default=1e-4, type=float)
     parser.add_argument("--attn-clip", default=1., type=float)
+    parser.add_argument("--max-epoch-ar-aux-loss", default=float('inf'), type=float)
+    parser.add_argument("--no-ar-aux-loss", action="store_true", default=False)
     parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)

@@ -179,7 +179,7 @@ class SeqdistModel(Module):
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
 
-    def forward(self, x, targets = None):
+    def forward(self, x, targets=None, no_aux_loss=False):
         encoded = self.encoder(x)
         scores = self.linear_crf(encoded)
         scores = scores.to(torch.float32)
@@ -187,7 +187,7 @@ class SeqdistModel(Module):
         if targets is None:
             return scores
 
-        if self.decoder is None:
+        if self.decoder is None or no_aux_loss:
             return scores, torch.tensor([0], device=x.device)
 
         aux_loss = self.decoder(targets, encoded, return_loss=True)

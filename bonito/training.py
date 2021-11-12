@@ -114,7 +114,7 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., attn_grad_clip_max_norm=1., grad_accum_steps=1, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., attn_grad_clip_max_norm=1., grad_accum_steps=1, use_amp=True, max_epoch_ar_aux_loss=float('inf'), no_ar_aux_loss=False):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -126,15 +126,18 @@ class Trainer:
         self.grad_clip_max_norm = grad_clip_max_norm
         self.attn_grad_clip_max_norm = attn_grad_clip_max_norm
         self.grad_accum_steps = grad_accum_steps
+        self.max_epoch_ar_aux_loss = max_epoch_ar_aux_loss
+        self.no_ar_aux_loss = no_ar_aux_loss
 
-    def train_one_step(self, batch):
+    def train_one_step(self, batch, epoch):
         device = self.device
         self.optimizer.zero_grad()
+        no_aux_loss = epoch > self.max_epoch_ar_aux_loss or self.no_ar_aux_loss
 
         for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_steps, dim=0), batch)):
             with amp.autocast(enabled=self.use_amp):
                 data_, targets_, lengths_ = data_.to(device), targets_.to(device), lengths_.to(device)
-                scores, aux_loss = self.model(data_, targets_)
+                scores, aux_loss = self.model(data_, targets_, no_aux_loss=no_aux_loss)
                 losses = self.criterion(scores, targets_, lengths_)
 
             if not isinstance(losses, dict):
@@ -158,7 +161,7 @@ class Trainer:
 
         return losses, grad_norm
 
-    def train_one_epoch(self, loss_log, lr_scheduler):
+    def train_one_epoch(self, loss_log, lr_scheduler, epoch):
         t0 = perf_counter()
         chunks = 0
         self.model.train()
@@ -175,7 +178,7 @@ class Trainer:
 
                 chunks += batch[0].shape[0]
 
-                losses, grad_norm = self.train_one_step(batch)
+                losses, grad_norm = self.train_one_step(batch, epoch)
                 losses = {k: v.item() for k,v in losses.items()}
 
                 if lr_scheduler is not None: lr_scheduler.step()
@@ -257,7 +260,7 @@ class Trainer:
         for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
             try:
                 with bonito.io.CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
-                    train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler)
+                    train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler, epoch)
 
                 model_state = self.model.module.state_dict() if hasattr(self.model, 'module') else self.model.state_dict()
                 torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))
