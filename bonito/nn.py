@@ -223,7 +223,6 @@ class MHA(Module):
             k = apply_rotary_pos_emb(rot_pos_emb, k)
 
         sim = torch.matmul(q, k.transpose(-1, -2))
-        sim = sim - torch.amax(sim, dim=-1, keepdim=True).detach()
 
         if self.causal:
             i, j = sim.shape[-2:]
