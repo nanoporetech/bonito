@@ -4,12 +4,12 @@ Bonito CTC-CRF Model.
 
 import torch
 import numpy as np
-from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
+from bonito.nn import Module, Convolution, SHABlock, LinearCRFEncoder, Serial, Permute, layers, Decoder, from_dict
 
 import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
-
+from collections import Counter
 
 def get_stride(m):
     if hasattr(m, 'stride'):
@@ -139,30 +139,59 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, single_head_layers=[], num_attn_heads=1, attn_dropout=0., ff_dropout=0., sha_sandwich_norm=False):
     rnn = layers[rnn_type]
-    return Serial([
-            conv(insize, 4, ks=5, bias=True, activation=activation),
-            conv(4, 16, ks=5, bias=True, activation=activation),
-            conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
-            Permute([2, 0, 1]),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True), rnn(features, features),
-            rnn(features, features, reverse=True),
-            LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+
+    rnns = [
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True), rnn(features, features),
+        rnn(features, features, reverse=True)
+    ]
+
+    backbone = []
+    single_head_layers_count = Counter(single_head_layers) # allows for multiple SHA blocks per layer
+
+    for layer, rnn in enumerate(rnns):
+        layer_num = layer + 1
+        backbone.append(rnn)
+
+        if layer_num in single_head_layers_count:
+            backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer_num])])
+
+    encoder = Serial([
+        conv(insize, 4, ks=5, bias=True, activation=activation),
+        conv(4, 16, ks=5, bias=True, activation=activation),
+        conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
+        Permute([2, 0, 1]),
+        *backbone
     ])
 
+    linear_crf = LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+    return encoder, linear_crf
 
 class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist):
+    def __init__(self, encoder, linear_crf, decoder, seqdist):
         super().__init__()
         self.seqdist = seqdist
         self.encoder = encoder
+        self.decoder = decoder
+        self.linear_crf = linear_crf
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
 
-    def forward(self, x):
-        return self.encoder(x).to(torch.float32)
+    def forward(self, x, targets=None, no_aux_loss=False):
+        encoded = self.encoder(x)
+        scores = self.linear_crf(encoded)
+        scores = scores.to(torch.float32)
+
+        if targets is None:
+            return scores
+
+        if self.decoder is None or no_aux_loss:
+            return scores, torch.tensor([0], device=x.device)
+
+        aux_loss = self.decoder(targets, encoded, return_loss=True)
+        return scores, aux_loss
 
     def decode_batch(self, x):
         scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
@@ -183,6 +212,7 @@ class Model(SeqdistModel):
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])
         else: #old-style
-            encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
-        super().__init__(encoder, seqdist)
+            encoder, linear_crf = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
+            decoder = Decoder(config['encoder']['features'], **config['aux_decoder']) if config['aux_decoder']['loss_weight'] > 0 else None
+        super().__init__(encoder, linear_crf, decoder, seqdist)
         self.config = config

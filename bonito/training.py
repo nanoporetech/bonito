@@ -6,12 +6,14 @@ import os
 import re
 from glob import glob
 from functools import partial
+from itertools import chain
 from time import perf_counter
 from collections import OrderedDict
 from datetime import datetime
 
 from bonito.util import accuracy, decode_ref, permute, concat, match_names
 import bonito
+from bonito.nn import SHABlock, Decoder
 
 import torch
 import numpy as np
@@ -66,6 +68,19 @@ def func_scheduler(optimizer, func, total_steps, warmup_steps=None, warmup_ratio
         )
     return LambdaLR(optimizer, (lambda step: func((step + start_step) / total_steps)))
 
+def separate_weight_decayable_params(params):
+    """
+    Separate weight decayable parameters from non-weight decayable
+    """
+    no_wd_params = set([param for param in params if param.ndim < 2])
+    wd_params = set(params) - no_wd_params
+    return wd_params, no_wd_params
+
+def get_params_from_optim(optimizer, *param_group_indices):
+    """
+    Get flattened parameters from param group indices of an optimizer
+    """
+    return list(chain(*map(lambda indice: optimizer.param_groups[indice]['params'], param_group_indices)))
 
 def load_state(dirname, device, model):
     """
@@ -99,7 +114,7 @@ def load_state(dirname, device, model):
 
 
 class Trainer:
-    def __init__(self, model, device, train_loader, valid_loader, criterion=None, use_amp=True):
+    def __init__(self, model, device, train_loader, valid_loader, criterion=None, grad_clip_max_norm=2., attn_grad_clip_max_norm=1., grad_accum_steps=1, use_amp=True, max_epoch_ar_aux_loss=float('inf'), no_ar_aux_loss=False):
         self.model = model.to(device)
         self.device = device
         self.train_loader = train_loader
@@ -108,27 +123,45 @@ class Trainer:
         self.use_amp = use_amp
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
+        self.grad_clip_max_norm = grad_clip_max_norm
+        self.attn_grad_clip_max_norm = attn_grad_clip_max_norm
+        self.grad_accum_steps = grad_accum_steps
+        self.max_epoch_ar_aux_loss = max_epoch_ar_aux_loss
+        self.no_ar_aux_loss = no_ar_aux_loss
 
-    def train_one_step(self, batch):
-        data, targets, lengths = batch
-
+    def train_one_step(self, batch, epoch):
+        device = self.device
         self.optimizer.zero_grad()
-        with amp.autocast(enabled=self.use_amp):
-            scores = self.model(data.to(self.device))
-            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+        no_aux_loss = epoch > self.max_epoch_ar_aux_loss or self.no_ar_aux_loss
 
-        if not isinstance(losses, dict):
-            losses = {'loss': losses}
+        for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_steps, dim=0), batch)):
+            with amp.autocast(enabled=self.use_amp):
+                data_, targets_, lengths_ = data_.to(device), targets_.to(device), lengths_.to(device)
+                scores, aux_loss = self.model(data_, targets_, no_aux_loss=no_aux_loss)
+                losses = self.criterion(scores, targets_, lengths_)
 
-        self.scaler.scale(losses['loss']).backward()
+            if not isinstance(losses, dict):
+                losses = {'loss': losses, 'aux_loss': aux_loss}
+            else:
+                losses['aux_loss'] = aux_loss
+
+            total_loss = losses['loss'] + losses['aux_loss']
+            self.scaler.scale(total_loss / self.grad_accum_steps).backward()
+
         self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+
+        attn_params = get_params_from_optim(self.optimizer, 0, 1)
+        non_attn_params = get_params_from_optim(self.optimizer, 2, 3)
+
+        torch.nn.utils.clip_grad_norm_(attn_params, max_norm=self.attn_grad_clip_max_norm)
+        grad_norm = torch.nn.utils.clip_grad_norm_(non_attn_params, max_norm=self.grad_clip_max_norm).item()
+
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
         return losses, grad_norm
 
-    def train_one_epoch(self, loss_log, lr_scheduler):
+    def train_one_epoch(self, loss_log, lr_scheduler, epoch):
         t0 = perf_counter()
         chunks = 0
         self.model.train()
@@ -145,7 +178,7 @@ class Trainer:
 
                 chunks += batch[0].shape[0]
 
-                losses, grad_norm = self.train_one_step(batch)
+                losses, grad_norm = self.train_one_step(batch, epoch)
                 losses = {k: v.item() for k,v in losses.items()}
 
                 if lr_scheduler is not None: lr_scheduler.step()
@@ -185,8 +218,31 @@ class Trainer:
         loss = np.mean([(x['ctc_loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, **kwargs):
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
+    def init_optimizer(self, lr, attn_lr = None, **kwargs):
+        # exclude norm scales and biases from weight decay
+
+        params = set(self.model.parameters())
+
+        attn_params = set()
+        for m in self.model.modules():
+            if isinstance(m, (SHABlock, Decoder)):
+                attn_params.update(m.parameters())
+
+        non_attn_params = params - attn_params
+
+        wd_params, no_wd_params = separate_weight_decayable_params(non_attn_params)
+        attn_wd_params, attn_no_wd_params = separate_weight_decayable_params(attn_params)
+
+        attn_lr = attn_lr if attn_lr is not None else lr
+
+        param_groups = [
+            {'params': list(attn_wd_params), 'lr': attn_lr},
+            {'params': list(attn_no_wd_params), 'weight_decay': 0, 'lr': attn_lr},
+            {'params': list(wd_params)},
+            {'params': list(no_wd_params), 'weight_decay': 0},
+        ]
+
+        self.optimizer = torch.optim.AdamW(param_groups, lr=lr, **kwargs)
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return func_scheduler(
@@ -195,16 +251,16 @@ class Trainer:
             start_step=last_epoch*len(self.train_loader)
         )
 
-    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0):
+    def fit(self, workdir, epochs=1, lr=2e-3, last_epoch=0, attn_lr=None):
         if self.optimizer is None:
-            self.init_optimizer(lr)
+            self.init_optimizer(lr, attn_lr=attn_lr)
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
         for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
             try:
                 with bonito.io.CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
-                    train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler)
+                    train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler, epoch)
 
                 model_state = self.model.module.state_dict() if hasattr(self.model, 'module') else self.model.state_dict()
                 torch.save(model_state, os.path.join(workdir, "weights_%s.tar" % epoch))

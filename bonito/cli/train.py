@@ -32,6 +32,7 @@ def main(args):
     device = torch.device(args.device)
 
     print("[loading data]")
+
     try:
         train_loader_kwargs, valid_loader_kwargs = load_numpy(
             args.chunks, args.directory
@@ -80,8 +81,8 @@ def main(args):
         model.decode = model.module.decode
         model.alphabet = model.module.alphabet
 
-    trainer = Trainer(model, device, train_loader, valid_loader, use_amp=half_supported() and not args.no_amp)
-    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch)
+    trainer = Trainer(model, device, train_loader, valid_loader, grad_clip_max_norm=args.clip, attn_grad_clip_max_norm=args.attn_clip, grad_accum_steps = args.accum, use_amp=half_supported() and not args.no_amp, max_epoch_ar_aux_loss=args.max_epoch_ar_aux_loss, no_ar_aux_loss=args.no_ar_aux_loss)
+    trainer.fit(workdir, args.epochs, args.lr, last_epoch=last_epoch, attn_lr=args.attn_lr)
 
 def argparser():
     parser = ArgumentParser(
@@ -95,9 +96,15 @@ def argparser():
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lr", default=2e-3, type=float)
+    parser.add_argument("--attn-lr", default=1e-4, type=float)
+    parser.add_argument("--attn-clip", default=1., type=float)
+    parser.add_argument("--max-epoch-ar-aux-loss", default=float('inf'), type=float)
+    parser.add_argument("--no-ar-aux-loss", action="store_true", default=False)
+    parser.add_argument("--clip", default=2., type=float)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
+    parser.add_argument("--accum", default=1, type=int)
     parser.add_argument("--chunks", default=0, type=int)
     parser.add_argument("--valid-chunks", default=0, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)

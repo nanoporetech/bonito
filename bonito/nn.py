@@ -2,10 +2,14 @@
 Bonito nn modules.
 """
 
+import math
 import torch
+from torch import nn
 from torch.nn import Module
 from torch.nn.init import orthogonal_
-
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+import torch.cuda.amp as amp
 
 layers = {}
 
@@ -16,6 +20,13 @@ def register(layer):
     return layer
 
 
+def stable_softmax(x, dim=-1, alpha=128):
+    # stable softmax technique from https://arxiv.org/abs/2105.13290
+    x = x / alpha
+    x = x - torch.amax(x, dim=dim, keepdim=True).detach()
+    return (x * alpha).softmax(dim=dim)
+
+
 register(torch.nn.ReLU)
 register(torch.nn.Tanh)
 
@@ -23,6 +34,17 @@ register(torch.nn.Tanh)
 @register
 class Swish(torch.nn.SiLU):
     pass
+
+
+@register
+class StableLayerNorm(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+
+    def forward(self, x):
+        x = x / torch.amax(x, dim=-1, keepdim=True).detach()
+        return self.norm(x)
 
 
 @register
@@ -126,6 +148,313 @@ class LinearCRFEncoder(Module):
             }
         return res
 
+
+@register
+class SHA(Module):
+
+    def __init__(self, dim, dropout=0.):
+        super().__init__()
+        self.scale = dim ** -0.5
+        self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
+        self.dropout = nn.Dropout(dropout)
+        self.bottom_sandwich_norm = nn.LayerNorm(dim)
+
+        last_layer = self.bottom_sandwich_norm
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
+
+    def forward(self, x, kv):
+        x = x.transpose(0, 1)
+        kv = kv.transpose(0, 1)
+
+        q = self.to_q(x)
+        q = q * self.scale
+
+        sim = torch.matmul(q, kv.transpose(-1, -2))
+        attn = stable_softmax(sim, dim=-1)
+        attn = self.dropout(attn)
+
+        out = torch.matmul(attn, kv)
+        out = out.transpose(0, 1)
+        out = self.bottom_sandwich_norm(out)
+        return out
+
+@register
+class MHA(Module):
+
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal = False, norm_inputs=False):
+        super().__init__()
+        inner_dim = heads * dim_head
+        self.heads = heads
+        self.dim_head = dim_head
+        self.scale = dim_head ** -0.5
+        self.causal = causal
+
+        self.to_q = nn.Linear(dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(dim, inner_dim, bias=False)
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
+        self.dropout = nn.Dropout(dropout)
+
+        self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
+
+        last_layer = self.to_out[-1]
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
+
+    def forward(self, x, kv=None, rot_pos_emb=None):
+        n, b, d, h, device = *x.shape, self.heads, x.device
+
+        x = self.norm(x)
+        kv = x if kv is None else kv
+
+        x = x.transpose(0, 1)
+        kv = kv.transpose(0, 1)
+
+        q, k, v = self.to_q(x), self.to_k(kv), self.to_v(kv)
+
+        q, k, v = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, k, v))
+
+        q = q * self.scale
+
+        if rot_pos_emb is not None:
+            rot_pos_emb = rot_pos_emb[:, None]
+            q = apply_rotary_pos_emb(rot_pos_emb, q)
+            k = apply_rotary_pos_emb(rot_pos_emb, k)
+
+        sim = torch.matmul(q, k.transpose(-1, -2))
+
+        if self.causal:
+            i, j = sim.shape[-2:]
+            mask = torch.ones(i, j, device=device).triu(j - i + 1).bool()
+            mask_value = -torch.finfo(sim.dtype).max
+            sim.masked_fill_(mask[None, None, :, :], mask_value)
+
+        attn = stable_softmax(sim, dim=-1)
+        attn = self.dropout(attn)
+
+        out = torch.matmul(attn, v)
+
+        out = out.transpose(1, 2).reshape(b, n, -1)
+        out = self.to_out(out)
+
+        out = out.transpose(0, 1)
+        return out
+
+# rotary positional embedding
+
+class RotaryEmbedding(nn.Module):
+    def __init__(self, dim, theta = 10000):
+        super().__init__()
+        inv_freq = 1. / (theta ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer('inv_freq', inv_freq)
+
+    def forward(self, x):
+        seq_len = x.shape[-2]
+        t = torch.arange(seq_len, device = x.device).type_as(self.inv_freq)
+        freqs = t[:, None] * self.inv_freq[None, :]
+        freqs = torch.stack((freqs, freqs), dim=-1)
+        return freqs.reshape(1, seq_len, -1)
+
+def rotate_half(x):
+    preceding_dims = x.shape[:-1]
+    x = x.reshape(*preceding_dims, -1, 2)
+    x1, x2 = x.unbind(dim=-1)
+    out = torch.stack((-x2, x1), dim=-1)
+    return out.reshape(*preceding_dims, -1)
+
+def apply_rotary_pos_emb(freqs, t):
+    """
+    Rotary embedding - parameter-less relative positional encoding in the context of attention
+    https://arxiv.org/abs/2104.09864
+    """
+    rot_dim = freqs.shape[-1]
+    t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
+    t =  (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
+    return torch.cat((t, t_pass), dim = -1)
+
+# convolutional layer for absolute positional embedding
+
+class CausalDepthwiseConv(Module):
+    def __init__(self, dim, kernel_size):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.norm = nn.LayerNorm(dim)
+        self.conv = nn.Conv1d(dim, dim, kernel_size, groups=dim)
+        self.norm_out = nn.LayerNorm(dim)
+
+    def forward(self, x):
+        x = self.norm(x)
+        x = x.permute(1, 2, 0)
+        x = F.pad(x, (self.kernel_size - 1, 0), value=0.)
+        x = self.conv(x)
+        x = x.permute(2, 0, 1)
+        return self.norm_out(x)
+
+# transformer decoder
+class Decoder(Module):
+
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True):
+        super().__init__()
+        self.loss_weight = loss_weight
+
+        self.token_emb_grad_frac = token_emb_grad_frac
+        self.token_emb = nn.Embedding(num_tokens + 2, dim)
+        nn.init.kaiming_normal_(self.token_emb.weight)
+
+        self.norm_context = StableLayerNorm(dim)
+
+        self.layers = nn.ModuleList([])
+        self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32))
+
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                CausalDepthwiseConv(dim, kernel_size=conv_kernel_size),
+                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout) if use_self_attn else None,
+                MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
+                FeedForward(dim, dropout=ff_dropout)
+            ]))
+
+        self.to_logits = nn.Sequential(
+            StableLayerNorm(dim),
+            nn.Linear(dim, num_tokens + 2)
+        )
+
+    def forward(self, x, encoded, return_loss=False):
+        device = x.device
+        encoded = self.norm_context(encoded)
+
+        if return_loss:
+            is_padding = (x == 0)
+
+            # reserve 2 special tokens for SOS and EOS. 0 is reused as SOS for non-reversed seq
+            x = x + 2
+            x = x.masked_fill(is_padding, 0)
+
+            # unbind and reverse the nucleotide sequences and pad with batch first
+            reversed_x_list = list(map(lambda t: t[t.nonzero()], torch.flip(x, (1,)).unbind(dim=0)))
+            reversed_x = pad_sequence(reversed_x_list, batch_first=True).squeeze(-1)
+
+            # add SOS token for reversed nucleotide sequence as 1
+            reversed_x = F.pad(reversed_x, (1, 0), value=1)
+
+            # add SOS token for nucleotide sequence as 0 (it is fine, even though it is padding)
+            x = F.pad(x, (1, 0), value=0)
+
+            # make room for EOS token for both original and reversed sequence
+            x = F.pad(x, (0, 1), value=0)
+            reversed_x = F.pad(reversed_x, (0, 1), value=0)
+
+            # make sure original sequence and reverse sequence batches are concatenatable
+            x = x[:, :reversed_x.shape[-1]]
+
+            # set EOS as 2
+            eos_indices = (x != 0).sum(dim=-1) + 1
+            eos_mask = eos_indices[:, None] == torch.arange(reversed_x.shape[-1], device=device)[None, :]
+            x = x.masked_fill(eos_mask, 2)
+            reversed_x = reversed_x.masked_fill(eos_mask, 2)
+
+            x, labels = x[:, :-1], x[:, 1:]
+            reversed_x, reversed_labels = reversed_x[:, :-1], reversed_x[:, 1:]
+
+            # concatenate original sequence and reversed sequence, and duplicate encoded memories for cross attention
+            x = torch.cat((x, reversed_x), dim=0)
+            encoded = torch.cat((encoded, encoded), dim=1)
+
+        # embed tokens and add absolute positions
+        x = self.token_emb(x)
+
+        # stability measure from https://arxiv.org/abs/2105.13290
+        x = x * self.token_emb_grad_frac + x.detach() * (1 - self.token_emb_grad_frac)
+
+        rot_pos_emb = self.rot_pos_emb(x)
+
+        # transformer layers
+        x = x.transpose(0, 1)
+
+        for conv, self_attn, cross_attn, ff in self.layers:
+            x = conv(x) + x
+
+            if self_attn is not None:
+                x = self_attn(x, rot_pos_emb=rot_pos_emb) + x
+
+            x = cross_attn(x, encoded) + x
+            x = ff(x) + x
+
+        x = x.transpose(0, 1)
+        logits = self.to_logits(x)
+
+        if not return_loss:
+            return logits
+
+        logits = logits.transpose(1, 2)
+        forward_logits, reversed_logits = logits.chunk(2, dim=0)
+
+        # calculate forward and backward cross-entropy losses
+        # extra insurance that it is done in float32
+        with amp.autocast(enabled=False):
+            forward_loss = F.cross_entropy(forward_logits, labels, ignore_index=0)
+            backward_loss = F.cross_entropy(reversed_logits, reversed_labels, ignore_index=0)
+            loss = (forward_loss + backward_loss) * 0.5
+
+        # return loss, weighted
+        return loss * self.loss_weight
+
+@register
+class GEGLU(Module):
+    """ https://arxiv.org/abs/2002.05202 """
+
+    def forward(self, x):
+        x, gate = x.chunk(2, dim=-1)
+        return F.gelu(gate) * x
+
+@register
+class FeedForward(Module):
+
+    def __init__(self, dim, mult=4, dropout=0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim * mult * 2),
+            GEGLU(),
+            nn.LayerNorm(dim * mult),
+            nn.Dropout(dropout),
+            nn.Linear(dim * mult, dim),
+            nn.LayerNorm(dim)
+        )
+
+        last_layer = self.net[-1]
+        nn.init.constant_(last_layer.weight, 0.)
+        nn.init.constant_(last_layer.bias, 0.)
+
+    def forward(self, x):
+        return self.net(x)
+
+@register
+class SHABlock(Module):
+    """ https://arxiv.org/abs/1911.11423 """
+
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
+        super().__init__()
+        self.attn_query_norm = nn.LayerNorm(dim)
+        self.attn_kv_norm = nn.LayerNorm(dim)
+
+        is_multiheaded = num_attn_heads > 1
+
+        if is_multiheaded:
+            self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads)
+        else:
+            self.attn = SHA(dim=dim, dropout=attn_dropout)
+
+        self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
+
+    def forward(self, x):
+        kv = self.attn_kv_norm(x)
+        q = self.attn_query_norm(x)
+
+        x = self.attn(q, kv) + x
+        x = self.ff(x) + x
+        return x
 
 @register
 class Permute(Module):
