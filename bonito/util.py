@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 
 import toml
 import torch
+import koi.lstm
 import parasail
 import numpy as np
 from torch.cuda import get_device_capability
@@ -250,7 +251,8 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=0):
+
+def load_model(dirname, device, weights=None, half=None, chunksize=0, quantize=False, use_koi=False):
     """
     Load a model from disk
     """
@@ -269,6 +271,11 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0):
 
     Model = load_symbol(config, "Model")
     model = Model(config)
+
+    if use_koi:
+        model.encoder = koi.lstm.update_graph(
+            model.encoder, batchsize=640, chunksize=3600 // model.stride, quantize=quantize
+        )
 
     state_dict = torch.load(weights, map_location=device)
     state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
