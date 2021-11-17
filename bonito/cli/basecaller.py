@@ -31,7 +31,7 @@ def main(args):
         weights=int(args.weights),
         chunksize=args.chunksize,
         batchsize=args.batchsize,
-        quantize=True,
+        quantize=False,
         use_koi=True,
     )
 
