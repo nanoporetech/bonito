@@ -320,6 +320,26 @@ def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
     return dict(zip(duplex_summary_field_names, fields))
 
 
+class NullWriter(Thread):
+
+    def __init__(self, iterator, duplex=False, **kwargs):
+        super().__init__()
+        self.log = []
+        self.duplex = duplex
+        self.iterator = iterator
+
+    def run(self):
+
+        for read, res in self.iterator:
+            if self.duplex:
+                samples = len(read[0].signal) + len(read[1].signal)
+                read_id = '%s;%s' % (read[0].read_id, read[1].read_id)
+            else:
+                samples = len(read.signal)
+                read_id = read.read_id
+            self.log.append((read_id, samples))
+
+
 class Writer(Thread):
 
     def __init__(self, iterator, aligner, fd=sys.stdout, duplex=False):
