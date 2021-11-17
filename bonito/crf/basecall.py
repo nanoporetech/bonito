@@ -75,7 +75,7 @@ def transfer(x):
         }
 
 
-def decode(model, scores, beam_size=40):
+def decode(model, scores, beam_size=5):
     """
     Decode sequence and qstring from model scores.
     """

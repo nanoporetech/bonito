@@ -252,7 +252,7 @@ def match_names(state_dict, model):
 
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=0, quantize=False, use_koi=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=0, quantize=False, use_koi=False):
     """
     Load a model from disk
     """
@@ -274,7 +274,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, quantize=F
 
     if use_koi:
         model.encoder = koi.lstm.update_graph(
-            model.encoder, batchsize=640, chunksize=3600 // model.stride, quantize=quantize
+            model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
 
     state_dict = torch.load(weights, map_location=device)

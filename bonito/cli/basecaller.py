@@ -24,7 +24,17 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
-    model = load_model(args.model_directory, args.device, weights=int(args.weights))
+
+    model = load_model(
+        args.model_directory,
+        args.device,
+        weights=int(args.weights),
+        chunksize=args.chunksize,
+        batchsize=args.batchsize,
+        quantize=True,
+        use_koi=True,
+    )
+
     basecall = load_symbol(args.model_directory, "basecall")
 
     if args.reference:
