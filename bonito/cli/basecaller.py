@@ -31,7 +31,7 @@ def main(args):
         weights=int(args.weights),
         chunksize=args.chunksize,
         batchsize=args.batchsize,
-        quantize=False,
+        quantize=args.quantize,
         use_koi=True,
     )
 
@@ -102,6 +102,7 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
+    parser.add_argument("--quantize", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--batchsize", default=32, type=int)
     parser.add_argument("--chunksize", default=4000, type=int)
