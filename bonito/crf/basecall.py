@@ -112,17 +112,17 @@ def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=Fa
         ((read, start, end), chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
         for (read, start, end) in reads
     )
-    batches = (
-        (k, quantise_int8(compute_scores(model, batch, reverse=reverse)))
-        for k, batch in thread_iter(batchify(chunks, batchsize=batchsize))
+    scores = (
+        (read, quantise_int8(compute_scores(model, batch, reverse=reverse)))
+        for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
     )
+    transferred = thread_map(transfer, scores)
     stitched = (
         (read, stitch(x, chunksize, overlap, end - start, model.stride, reverse=reverse))
-        for ((read, start, end), x) in unbatchify(batches)
+        for ((read, start, end), x) in thread_iter(unbatchify(transferred))
     )
 
-    transferred = thread_map(transfer, stitched, n_thread=1)
-    basecalls = thread_map(partial(decode, model), transferred, n_thread=8)
+    basecalls = thread_map(partial(decode, model), stitched, n_thread=8)
 
     basecalls = (
         (read, concat([v for k, v in parts])) for read, parts in
