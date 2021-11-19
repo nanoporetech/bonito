@@ -182,17 +182,19 @@ class SHA(Module):
 @register
 class MHA(Module):
 
-    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal = False, norm_inputs=False):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None):
         super().__init__()
         inner_dim = heads * dim_head
+        kv_input_dim = dim if kv_input_dim is None else kv_input_dim
+
         self.heads = heads
         self.dim_head = dim_head
         self.scale = dim_head ** -0.5
         self.causal = causal
 
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.to_k = nn.Linear(dim, inner_dim, bias=False)
-        self.to_v = nn.Linear(dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(kv_input_dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(kv_input_dim, inner_dim, bias=False)
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
 
@@ -294,7 +296,7 @@ class CausalDepthwiseConv(Module):
 # transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True, num_encoder_layers_attend=1):
         super().__init__()
         self.loss_weight = loss_weight
 
@@ -302,7 +304,8 @@ class Decoder(Module):
         self.token_emb = nn.Embedding(num_tokens + 2, dim)
         nn.init.kaiming_normal_(self.token_emb.weight)
 
-        self.norm_context = StableLayerNorm(dim)
+        self.num_encoder_layers_attend = num_encoder_layers_attend
+        self.norm_encoder_layers = StableLayerNorm(dim)
 
         self.layers = nn.ModuleList([])
         self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32))
@@ -311,7 +314,7 @@ class Decoder(Module):
             self.layers.append(nn.ModuleList([
                 CausalDepthwiseConv(dim, kernel_size=conv_kernel_size),
                 MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout) if use_self_attn else None,
-                MHA(dim, heads=heads, norm_inputs=True, dropout=attn_dropout),
+                MHA(dim, kv_input_dim=dim * num_encoder_layers_attend, heads=heads, norm_inputs=True, dropout=attn_dropout),
                 FeedForward(dim, dropout=ff_dropout)
             ]))
 
@@ -320,9 +323,16 @@ class Decoder(Module):
             nn.Linear(dim, num_tokens + 2)
         )
 
-    def forward(self, x, encoded, return_loss=False):
+    def forward(self, x, encoder_layers, return_loss=False):
         device = x.device
-        encoded = self.norm_context(encoded)
+
+        # prepare the encoder layers for attending
+        assert len(encoder_layers) >= self.num_encoder_layers_attend, f'designated number of encoder layers to attend to (num_encoder_layers_attend) must be less than or equal to the actual number of layers'
+
+        encoder_layers = encoder_layers[-self.num_encoder_layers_attend:]
+        encoder_layers = torch.stack(encoder_layers, dim=-2)
+        encoded = self.norm_encoder_layers(encoder_layers)
+        encoded = encoded.flatten(2)
 
         if return_loss:
             is_padding = (x == 0)

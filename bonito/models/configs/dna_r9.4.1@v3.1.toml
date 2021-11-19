@@ -34,6 +34,7 @@ heads = 6
 attn_dropout = 0.1
 ff_dropout = 0.1
 use_self_attn = false
+num_encoder_layers_attend = 6
 
 [global_norm]
 state_len = 5

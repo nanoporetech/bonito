@@ -135,6 +135,23 @@ class CTC_CRF(SequenceDist):
         return viterbi_alignments(stay_scores, move_scores, target_lengths + 1 - self.state_len)
 
 
+class Encoder(nn.Module):
+
+    def __init__(self, conv_encoder, backbone):
+        super().__init__()
+        self.conv_encoder = conv_encoder
+        self.backbone = backbone
+
+    def forward(self, x):
+        x = self.conv_encoder(x)
+
+        fmaps = [x]
+        for layer in self.backbone:
+            x = layer(x)
+            fmaps.append(x)
+
+        return x, fmaps
+
 def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
@@ -148,7 +165,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         rnn(features, features, reverse=True)
     ]
 
-    backbone = []
+    backbone = nn.ModuleList([])
     single_head_layers_count = Counter(single_head_layers) # allows for multiple SHA blocks per layer
 
     for layer, rnn in enumerate(rnns):
@@ -158,15 +175,16 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         if layer_num in single_head_layers_count:
             backbone.extend([SHABlock(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(single_head_layers_count[layer_num])])
 
-    encoder = Serial([
+    conv_encoder = Serial([
         conv(insize, 4, ks=5, bias=True, activation=activation),
         conv(4, 16, ks=5, bias=True, activation=activation),
         conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
-        Permute([2, 0, 1]),
-        *backbone
+        Permute([2, 0, 1])
     ])
 
+    encoder = Encoder(conv_encoder, backbone)
     linear_crf = LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+
     return encoder, linear_crf
 
 class SeqdistModel(Module):
@@ -180,7 +198,7 @@ class SeqdistModel(Module):
         self.alphabet = seqdist.alphabet
 
     def forward(self, x, targets=None, no_aux_loss=False):
-        encoded = self.encoder(x)
+        encoded, layer_fmaps = self.encoder(x)
         scores = self.linear_crf(encoded)
         scores = scores.to(torch.float32)
 
@@ -190,7 +208,7 @@ class SeqdistModel(Module):
         if self.decoder is None or no_aux_loss:
             return scores, torch.tensor([0], device=x.device)
 
-        aux_loss = self.decoder(targets, encoded, return_loss=True)
+        aux_loss = self.decoder(targets, layer_fmaps, return_loss=True)
         return scores, aux_loss
 
     def decode_batch(self, x):
