@@ -33,7 +33,9 @@ depth = 3
 heads = 6
 attn_dropout = 0.1
 ff_dropout = 0.1
+
 use_self_attn = false
+use_scaled_cosine_sim_attn = false
 num_encoder_layers_attend = 6
 
 [global_norm]

@@ -182,15 +182,20 @@ class SHA(Module):
 @register
 class MHA(Module):
 
-    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None, use_scaled_cosine_sim_attn=False):
         super().__init__()
         inner_dim = heads * dim_head
         kv_input_dim = dim if kv_input_dim is None else kv_input_dim
 
         self.heads = heads
         self.dim_head = dim_head
-        self.scale = dim_head ** -0.5
         self.causal = causal
+
+        self.use_scaled_cosine_sim_attn = use_scaled_cosine_sim_attn
+        if use_scaled_cosine_sim_attn:
+            self.learned_scale = nn.Parameter(torch.zeros(1, heads, 1, 1))
+        else:
+            self.scale = dim_head ** -0.5
 
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_k = nn.Linear(kv_input_dim, inner_dim, bias=False)
@@ -217,7 +222,16 @@ class MHA(Module):
 
         q, k, v = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, k, v))
 
-        q = q * self.scale
+        if self.use_scaled_cosine_sim_attn:
+            # proposed by https://arxiv.org/abs/2010.04245
+            # validated at scale by https://arxiv.org/abs/2111.09883v1
+            q = F.normalize(q, p=2, dim=-1)
+            k = F.normalize(k, p=2, dim=-1)
+            scale = 1 / (self.learned_scale.exp() + 1e-2)
+        else:
+            scale = self.scale
+
+        q = q * scale
 
         if rot_pos_emb is not None:
             rot_pos_emb = rot_pos_emb[:, None]
@@ -296,7 +310,7 @@ class CausalDepthwiseConv(Module):
 # transformer decoder
 class Decoder(Module):
 
-    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True, num_encoder_layers_attend=1):
+    def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True, use_scaled_cosine_sim_attn=False, num_encoder_layers_attend=1):
         super().__init__()
         self.loss_weight = loss_weight
 
@@ -313,8 +327,8 @@ class Decoder(Module):
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
                 CausalDepthwiseConv(dim, kernel_size=conv_kernel_size),
-                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout) if use_self_attn else None,
-                MHA(dim, kv_input_dim=dim * num_encoder_layers_attend, heads=heads, norm_inputs=True, dropout=attn_dropout),
+                MHA(dim, heads=heads, causal=True, norm_inputs=True, dropout=attn_dropout, use_scaled_cosine_sim_attn=use_scaled_cosine_sim_attn) if use_self_attn else None,
+                MHA(dim, kv_input_dim=dim * num_encoder_layers_attend, heads=heads, norm_inputs=True, dropout=attn_dropout, use_scaled_cosine_sim_attn=use_scaled_cosine_sim_attn),
                 FeedForward(dim, dropout=ff_dropout)
             ]))
 
