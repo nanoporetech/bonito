@@ -75,7 +75,7 @@ def transfer(x):
         }
 
 
-def decode(model, scores, beam_size=5):
+def decode(model, scores, beam_size=40):
     """
     Decode sequence and qstring from model scores.
     """
@@ -110,6 +110,9 @@ def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=Fa
     """
     Basecalls a set of reads.
     """
+    beam_size = 5 if model.seqdist.state_len < 5 else 40
+    stitch_on_gpu = model.config['encoder']['features'] >= 768
+
     reads = (
         read_chunk for read in reads for read_chunk
         in split_read(read)[::-1 if reverse else 1]
@@ -120,30 +123,30 @@ def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=Fa
         for (read, start, end) in reads
     )
 
-    scores = (
-        (read, quantise_int8(compute_scores(model, batch, reverse=reverse)))
-        for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
-    )
+    with torch.cuda.stream(torch.cuda.Stream()):
 
-    stitch_on_gpu = model.seqdist.state_len > 3
-
-    if stitch_on_gpu:
-        unbatched = thread_iter(
-            (read, (scores, end - start, chunksize, overlap, model.stride, reverse))
-            for ((read, start, end), scores) in unbatchify(scores)
+        scores = (
+            (read, quantise_int8(compute_scores(model, batch, reverse=reverse)))
+            for read, batch in thread_iter(batchify(chunks, batchsize=batchsize))
         )
-        scores = thread_starmap(stitch_scores, unbatched, n_thread=1)
 
-    scores = thread_map(transfer, scores, n_thread=1)
+        if stitch_on_gpu:
+            unbatched = thread_iter(
+                (read, (scores, end - start, chunksize, overlap, model.stride, reverse))
+                for ((read, start, end), scores) in unbatchify(scores)
+            )
+            scores = thread_starmap(stitch_scores, unbatched, n_thread=1)
 
-    if not stitch_on_gpu:
-        unbatched = thread_iter(
-            (read, (scores, end - start, chunksize, overlap, model.stride, reverse))
-            for ((read, start, end), scores) in thread_iter(unbatchify(scores))
-        )
-        scores = thread_starmap(stitch_scores, unbatched, n_thread=1)
+        scores = thread_map(transfer, scores, n_thread=1)
 
-    basecalls = thread_map(partial(decode, model), scores, n_thread=12)
+        if not stitch_on_gpu:
+            unbatched = thread_iter(
+                (read, (scores, end - start, chunksize, overlap, model.stride, reverse))
+                for ((read, start, end), scores) in thread_iter(unbatchify(scores))
+            )
+            scores = thread_starmap(stitch_scores, unbatched, n_thread=1)
+
+    basecalls = thread_map(partial(decode, model, beam_size=beam_size), scores, n_thread=12)
 
     return (
         (read, concat([v for k, v in parts])) for read, parts in
