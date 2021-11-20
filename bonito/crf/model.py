@@ -135,7 +135,7 @@ class CTC_CRF(SequenceDist):
         return viterbi_alignments(stay_scores, move_scores, target_lengths + 1 - self.state_len)
 
 
-class Encoder(nn.Module):
+class Encoder(Module):
 
     def __init__(self, conv_encoder, backbone):
         super().__init__()
