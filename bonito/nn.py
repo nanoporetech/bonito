@@ -193,7 +193,7 @@ class MHA(Module):
 
         self.use_scaled_cosine_sim_attn = use_scaled_cosine_sim_attn
         if use_scaled_cosine_sim_attn:
-            self.learned_scale = nn.Parameter(torch.zeros(1, heads, 1, 1))
+            self.learned_scale = nn.Parameter(torch.zeros(1, heads, 1, 1) - 5)
         else:
             self.scale = dim_head ** -0.5
 
