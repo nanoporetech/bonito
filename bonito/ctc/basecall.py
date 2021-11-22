@@ -57,4 +57,6 @@ def decode(scores, decode, beamsize=5, qscores=False, stride=1):
             qstring = '*'
         except:
             pass
-    return {'sequence': seq, 'qstring': qstring, 'mean_qscore': mean_qscore, 'path': path, 'seq_to_sig_map': np.where(path)[0] * stride}
+    sig_move = np.full(path.size * stride, False)
+    sig_move[np.where(path)[0] * stride] = True
+    return {'sequence': seq, 'qstring': qstring, 'mean_qscore': mean_qscore, 'path': path, 'sig_move': sig_move}

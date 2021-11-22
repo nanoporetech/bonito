@@ -15,11 +15,12 @@ def call_mods(mods_model, read, read_attrs):
     if len(read_attrs['sequence']) == 0:
         return read_attrs
     remora_model, remora_metadata = mods_model
+    # convert signal move table to remora read format
     seq_to_sig_map = np.empty(
         len(read_attrs['sequence']) + 1, dtype=np.int32
     )
     seq_to_sig_map[-1] = read.signal.shape[0]
-    seq_to_sig_map[:-1] = read_attrs['seq_to_sig_map']
+    seq_to_sig_map[:-1] = np.where(read_attrs['sig_move'])[0]
     remora_read = RemoraRead(
         read.signal,
         seq_to_sig_map,
