@@ -99,7 +99,7 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout):
 
 def sam_header(sep='\t'):
     """
-    Wroite the SQ & PG sam headers to a file descriptor.
+    Format a string sam header.
     """
     return '%s\n' % sep.join([
         '@PG',
@@ -112,7 +112,7 @@ def sam_header(sep='\t'):
 
 def sam_record(read_id, sequence, qstring, mapping, sep='\t'):
     """
-    Write a sam record to a file descriptor.
+    Format a string sam record.
     """
     if mapping:
         softclip = [
@@ -403,11 +403,15 @@ class CTCWriter(Thread):
         self.iterator = iterator
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
-        self.write_headers()
-
-    def write_headers(self):
-        if self.aligner:
-            write_sam_header(self.aligner, fd=self.fd)
+        self.mode = format_from_extension(default='w')
+        self.output = AlignmentFile(
+            fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            header=AlignmentHeader.from_references(
+                reference_names=aligner.seq_names,
+                reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names],
+                text=sam_header(),
+            )
+        )
 
     def run(self):
 
@@ -435,7 +439,12 @@ class CTCWriter(Thread):
                 if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
                     continue
 
-                write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                self.output.write(
+                    AlignedSegment.fromstring(
+                        sam_record(read.read_id, seq, qstring, mapping),
+                        self.output.header
+                    )
+                )
                 summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
 
                 if mapping.strand == -1:

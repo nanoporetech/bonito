@@ -15,4 +15,3 @@ ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 cupy-cuda102==9.6.0
 genomeworks-cuda-10-2==2021.2.2
-
