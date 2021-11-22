@@ -126,8 +126,8 @@ def mean_qscore_from_qstring(qstring):
     Convert qstring into a mean qscore
     """
     if len(qstring) == 0: return 0.0
-    err_probs = 10 ** (np.array(qstring, 'c').view(np.uint8) - 33 / -10)
-    mean_err = np.mean(err_probs)
+    err_probs = (np.array(qstring, 'c').view(np.uint8) - 33) / -10
+    mean_err = np.mean(10 ** err_probs)
     return -10 * np.log10(max(mean_err, 1e-4))
 
 
