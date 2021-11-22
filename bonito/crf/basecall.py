@@ -90,6 +90,7 @@ def decode(model, scores, beam_size=40):
         beam_size=beam_size, q_shift=qshift, q_scale=qscale,
         temperature=127/5,
     )
+    moves = np.array(moves, dtype=bool)
     sig_move = np.full(moves.size * model.stride, False)
     sig_move[np.where(moves)[0] * model.stride] = True
     return {'sequence': sequence, 'qstring': qstring, 'sig_move': sig_move}
