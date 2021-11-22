@@ -8,13 +8,13 @@ from tqdm import tqdm
 from time import perf_counter
 from datetime import timedelta
 from itertools import islice as take
-from remora.model_util import load_onnx_model as load_mods_model
+from remora.model_util import load_model as load_mods_model
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.io import CTCWriter, Writer
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
-from bonito.mod_util import call_mods, alphabet_str
+from bonito.mod_util import call_mods
 from bonito.multiprocessing import process_cancel, thread_iter
 from bonito.util import column_to_set, load_symbol, load_model
 
@@ -33,7 +33,7 @@ def main(args):
     if args.modified_base_model is not None:
         sys.stderr.write("> loading modified base model\n")
         mods_model = load_mods_model(args.modified_base_model)
-        sys.stderr.write(f"> {alphabet_str(mods_model)}\n")
+        sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
