@@ -13,6 +13,7 @@ from os.path import realpath, splitext, dirname
 
 import numpy as np
 from mappy import revcomp
+from pysam import AlignmentFile, AlignmentHeader, AlignedSegment
 
 import bonito
 from bonito.cli.convert import typical_indices
@@ -96,41 +97,30 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout):
     fd.flush()
 
 
-def write_sam_header(aligner, fd=sys.stdout, sep='\t'):
+def sam_header(sep='\t'):
     """
-    Write the SQ & PG sam headers to a file descriptor.
+    Wroite the SQ & PG sam headers to a file descriptor.
     """
-    fd.write('%s\n' % os.linesep.join([
-        sep.join([
-            '@SQ', 'SN:%s' % name, 'LN:%s' % len(aligner.seq(name))
-        ]) for name in aligner.seq_names
-     ]))
-
-    fd.write('%s\n' % sep.join([
+    return '%s\n' % sep.join([
         '@PG',
         'ID:bonito',
         'PN:bonito',
         'VN:%s' % bonito.__version__,
         'CL:%s' % ' '.join(sys.argv),
-    ]))
-    fd.flush()
+    ])
 
 
-def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=False, sep='\t'):
+def sam_record(read_id, sequence, qstring, mapping, sep='\t'):
     """
     Write a sam record to a file descriptor.
     """
-    if unaligned:
-        fd.write("%s\n" % sep.join(map(str, [
-            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
-        ])))
-    else:
+    if mapping:
         softclip = [
             '%sS' % mapping.q_st if mapping.q_st else '',
             mapping.cigar_str,
             '%sS' % (len(sequence) - mapping.q_en) if len(sequence) - mapping.q_en else ''
         ]
-        fd.write("%s\n" % sep.join(map(str, [
+        record = [
             read_id,
             0 if mapping.strand == +1 else 16,
             mapping.ctg,
@@ -142,8 +132,31 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
             qstring,
             'NM:i:%s' % mapping.NM,
             'MD:Z:%s' % mapping.MD,
-        ])))
-    fd.flush()
+        ]
+    else:
+        record = [
+            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
+        ]
+    return sep.join(map(str, record))
+
+
+def format_from_extension(default='wfq'):
+    """
+    Return the filename to use for the summary tsv.
+    """
+    stdout = realpath('/dev/fd/1')
+    if sys.stdout.isatty() or stdout.startswith('/proc'):
+        return default
+    ext = stdout.split(os.extsep)[-1]
+    if ext in ['fq', 'fastq']:
+        return 'wfq'
+    if ext == "bam":
+        return "wb"
+    elif ext == "cram":
+        return "wc"
+    elif ext == "sam":
+        return "w"
+    return default
 
 
 def summary_file():
@@ -329,11 +342,16 @@ class Writer(Thread):
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
-        self.write_headers()
+        self.mode = format_from_extension(default='w' if self.aligner else 'wfq')
+        self.output = AlignmentFile(
+            fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            header=AlignmentHeader.from_references(
+                reference_names=aligner.seq_names if aligner else [],
+                reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names] if aligner else [],
+                text=sam_header(),
+            )
+        )
 
-    def write_headers(self):
-        if self.aligner:
-            write_sam_header(self.aligner, fd=self.fd)
 
     def run(self):
 
@@ -353,11 +371,15 @@ class Writer(Thread):
                     read_id = read.read_id
 
                 if len(seq):
-                    if self.aligner:
-                        write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
-                    else:
+                    if self.mode == 'wfq':
                         write_fastq(read_id, seq, qstring, fd=self.fd)
-
+                    else:
+                        self.output.write(
+                            AlignedSegment.fromstring(
+                                sam_record(read_id, seq, qstring, mapping),
+                                self.output.header
+                            )
+                        )
                     if self.duplex:
                         summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
                     else:

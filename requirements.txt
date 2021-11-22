@@ -4,6 +4,7 @@ tqdm==4.31.1
 scipy==1.4.1
 torch~=1.10.0
 numpy~=1.17.5
+pysam==0.18.0
 pyspoa==0.0.8
 parasail==1.2
 seqdist==0.0.3
@@ -14,3 +15,4 @@ ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 cupy-cuda102==9.6.0
 genomeworks-cuda-10-2==2021.2.2
+
