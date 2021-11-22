@@ -4,13 +4,13 @@ tqdm==4.31.1
 scipy==1.4.1
 torch~=1.10.0
 numpy~=1.17.5
-remora==0.1.0
 pyspoa==0.0.8
 parasail==1.2
 seqdist==0.0.3
 pandas==1.1.5
 requests==2.25.1
 crf-beam==0.1.7
+ont-remora==0.1.0
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 cupy-cuda102==9.6.0

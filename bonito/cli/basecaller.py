@@ -76,8 +76,7 @@ def main(args):
         results = align_map(aligner, results)
 
     writer = ResultsWriter(
-        tqdm(results, desc="> calling", unit=" reads", leave=False),
-        aligner=aligner
+        tqdm(results, desc="> calling", unit=" reads", leave=False), aligner=aligner
     )
 
     t0 = perf_counter()
