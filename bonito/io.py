@@ -77,7 +77,7 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep=" "):
     """
     if tags is not None:
         tags = sep.join(f"{k}={v}" for k, v in tags.items())
-        fd.write(f"@%{header} {tags}\n")
+        fd.write(f"@{header} {tags}\n")
     else:
         fd.write(f"@{header}\n")
     fd.write(f"{sequence}\n+\n{qstring}\n")
