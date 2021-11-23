@@ -75,9 +75,9 @@ def main(args):
         results = align_map(aligner, results)
 
     tags = {
-        "basecall_model": args.model_directory,
-        "basecaller": "bonito@v%s" % bonito.__version__,
-        "aligner": "minimap2@v%s" % mappy.__version__,
+        "np:Z:basecall_model": args.model_directory,
+        "np:Z:basecaller": "bonito@v%s" % bonito.__version__,
+        "np:Z:aligner": "minimap2@v%s" % mappy.__version__,
     }
 
     writer = ResultsWriter(

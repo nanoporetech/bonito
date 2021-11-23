@@ -78,14 +78,14 @@ class Read:
 
     @property
     def tagdata(self):
-        return dict(
-            run_id=self.run_id,
-            channel=self.channel,
-            read=self.read_number,
-            sample_id=self.sample_id,
-            start_time=self.start_time,
-            flow_cell_id=self.flow_cell_id,
-        )
+        return {
+            "np:Z:run_id": self.run_id,
+            "np:i:channel": self.channel,
+            "np:Z:sample_id": self.sample_id,
+            "np:Z:start_time": self.start_time,
+            "np:i:read_number": self.read_number,
+            "np:Z:flow_cell_id": self.flow_cell_id,
+        }
 
 
 class ReadChunk:
