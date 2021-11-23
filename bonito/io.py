@@ -67,7 +67,7 @@ def write_fasta(header, sequence, fd=sys.stdout):
     """
     Write a fasta record to a file descriptor.
     """
-    fd.write(">{header}\n{sequence}")
+    fd.write(f">{header}\n{sequence}")
     fd.flush()
 
 
