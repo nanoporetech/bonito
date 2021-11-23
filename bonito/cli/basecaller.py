@@ -3,6 +3,7 @@ Bonito Basecaller
 """
 
 import sys
+import mappy
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
@@ -10,6 +11,7 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+import bonito
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
 from bonito.io import CTCWriter, Writer, biofmt
@@ -72,9 +74,15 @@ def main(args):
     if aligner:
         results = align_map(aligner, results)
 
+    tags = {
+        "basecall_model": args.model_directory,
+        "basecaller": "bonito:v%s" % bonito.__version__,
+        "aligner": "minimap2:v%s" % mappy.__version__,
+    }
+
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
-        aligner=aligner, ref_fn=args.reference
+        aligner=aligner, ref_fn=args.reference, tags=tags
     )
 
     t0 = perf_counter()

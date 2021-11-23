@@ -67,19 +67,20 @@ def write_fasta(header, sequence, fd=sys.stdout):
     """
     Write a fasta record to a file descriptor.
     """
-    fd.write(">%s\n" % header)
-    fd.write("%s\n" % sequence)
+    fd.write(">{header}\n{sequence}")
     fd.flush()
 
 
-def write_fastq(header, sequence, qstring, fd=sys.stdout):
+def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep=" "):
     """
     Write a fastq record to a file descriptor.
     """
-    fd.write("@%s\n" % header)
-    fd.write("%s\n" % sequence)
-    fd.write("+\n")
-    fd.write("%s\n" % qstring)
+    if tags is not None:
+        tags = sep.join(f"{k}={v}" for k, v in tags.items())
+        fd.write(f"@%{header} {tags}\n")
+    else:
+        fd.write(f"@{header}\n")
+    fd.write(f"{sequence}\n+\n{qstring}\n")
     fd.flush()
 
 
@@ -340,7 +341,7 @@ class CSVLogger:
 
 class Writer(Thread):
 
-    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None):
+    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, tags=None):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -348,6 +349,7 @@ class Writer(Thread):
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
+        self.tags = tags if tags else {}
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
             reference_filename=ref_fn,
@@ -378,7 +380,7 @@ class Writer(Thread):
 
                 if len(seq):
                     if self.mode == 'wfq':
-                        write_fastq(read_id, seq, qstring, fd=self.fd)
+                        write_fastq(read_id, seq, qstring, fd=self.fd, tags={**self.tags, **read.tagdata})
                     else:
                         self.output.write(
                             AlignedSegment.fromstring(
@@ -401,7 +403,7 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, mode, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout, ref_fn=None):
+    def __init__(self, mode, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout, ref_fn=None, tags=None):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -410,6 +412,7 @@ class CTCWriter(Thread):
         self.iterator = iterator
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
+        self.tags = tags if tags else {}
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
             reference_filename=ref_fn,

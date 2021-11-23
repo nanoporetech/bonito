@@ -33,6 +33,7 @@ class Read:
         self.scaling = channel_info['range'] / channel_info['digitisation']
 
         self.mux = read_attrs['start_mux']
+        self.read_number = read_attrs['read_number']
         self.channel = channel_info['channel_number']
         if type(self.channel) in (bytes, np.bytes_):
             self.channel = self.channel.decode()
@@ -56,6 +57,14 @@ class Read:
 
     def __repr__(self):
         return "Read('%s')" % self.read_id
+
+    @property
+    def tagdata(self):
+        return dict(
+            ch=self.channel,
+            runid=self.run_id,
+            read=self.read_number,
+        )
 
 
 class ReadChunk:
