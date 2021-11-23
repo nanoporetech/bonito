@@ -5,6 +5,8 @@ Bonito Fast5 Utils
 import sys
 from glob import glob
 from pathlib import Path
+from datetime import timedelta
+from datetime import datetime
 from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
@@ -27,6 +29,7 @@ class Read:
 
         read_attrs = read.handle[read.raw_dataset_group_name].attrs
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
+        tracking_id = read.handle[read.global_key + 'tracking_id'].attrs
 
         self.offset = int(channel_info['offset'])
         self.sampling_rate = channel_info['sampling_rate']
@@ -40,6 +43,18 @@ class Read:
 
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
+
+        self.sample_id = tracking_id['sample_id']
+        if type(self.sample_id) in (bytes, np.bytes_):
+            self.sample_id = self.sample_id.decode()
+
+        exp_start_time = tracking_id['exp_start_time']
+        if type(exp_start_time) in (bytes, np.bytes_):
+            exp_start_time = exp_start_time.decode()
+
+        exp_start_dt = datetime.fromisoformat(exp_start_time.replace('Z', ''))
+        start_time = exp_start_dt + timedelta(seconds=self.start)
+        self.start_time = start_time.replace(microsecond=0).isoformat() + 'Z'
 
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
@@ -64,6 +79,8 @@ class Read:
             ch=self.channel,
             runid=self.run_id,
             read=self.read_number,
+            sample_id=self.sample_id,
+            start_time=self.start_time,
         )
 
 
