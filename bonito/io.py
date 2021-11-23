@@ -380,7 +380,11 @@ class Writer(Thread):
 
                 if len(seq):
                     if self.mode == 'wfq':
-                        write_fastq(read_id, seq, qstring, fd=self.fd, tags={**self.tags, **read.tagdata})
+                        write_fastq(read_id, seq, qstring, fd=self.fd, tags={
+                            **self.tags,
+                            **read.tagdata,
+                            'mean_qscore': mean_qscore,
+                        })
                     else:
                         self.output.write(
                             AlignedSegment.fromstring(
