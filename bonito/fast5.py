@@ -5,11 +5,10 @@ Bonito Fast5 Utils
 import sys
 from glob import glob
 from pathlib import Path
-from datetime import timedelta
-from datetime import datetime
 from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
+from datetime import datetime, timedelta
 
 import torch
 import numpy as np
