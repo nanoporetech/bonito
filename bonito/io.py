@@ -8,11 +8,13 @@ import csv
 import pandas as pd
 from threading import Thread
 from logging import getLogger
+from collections import namedtuple
 from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
 
 import numpy as np
 from mappy import revcomp
+from pysam import AlignmentFile, AlignmentHeader, AlignedSegment
 
 import bonito
 from bonito.mod_util import mods_tags_to_str
@@ -21,43 +23,29 @@ from bonito.util import mean_qscore_from_qstring
 
 
 logger = getLogger('bonito')
+Format = namedtuple("Format", "aligned name mode")
 
 
-class CSVLogger:
-    def __init__(self, filename, sep=','):
-        self.filename = str(filename)
-        if os.path.exists(self.filename):
-            with open(self.filename) as f:
-                self.columns = csv.DictReader(f).fieldnames
-        else:
-            self.columns = None
-        self.fh = open(self.filename, 'a', newline='')
-        self.csvwriter = csv.writer(self.fh, delimiter=sep)
-        self.count = 0
-
-    def set_columns(self, columns):
-        if self.columns:
-            raise Exception('Columns already set')
-        self.columns = list(columns)
-        self.csvwriter.writerow(self.columns)
-
-    def append(self, row):
-        if self.columns is None:
-            self.set_columns(row.keys())
-        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
-        self.count += 1
-        if self.count > 100:
-            self.count = 0
-            self.fh.flush()
-
-    def close(self):
-        self.fh.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
+def biofmt(aligned=False):
+    """
+    Select the output format.
+    """
+    mode, name = ('w', 'sam') if aligned else ('wfq', 'fastq')
+    aligned = "aligned" if aligned else "unaligned"
+    stdout = realpath('/dev/fd/1')
+    if sys.stdout.isatty() or stdout.startswith('/proc'):
+        return Format(aligned, name, mode)
+    ext = stdout.split(os.extsep)[-1]
+    if ext in ['fq', 'fastq']:
+        return Format(aligned, 'fastq', 'wfq')
+    elif ext == "bam":
+        return Format(aligned, 'bam', 'wb')
+    elif ext == "cram":
+        return Format(aligned, 'cram', 'wc')
+    elif ext == "sam":
+        return Format(aligned, 'sam', 'w')
+    else:
+        return Format(aligned, name, mode)
 
 
 @contextmanager
@@ -85,54 +73,47 @@ def write_fasta(header, sequence, fd=sys.stdout):
     fd.flush()
 
 
-def write_fastq(header, sequence, qstring, fd=sys.stdout, mods_tags=None):
+def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, mods_tags=None, sep="\t"):
     """
     Write a fastq record to a file descriptor.
     """
-    if mods_tags is not None:
-        mm_tag, ml_tag = mods_tags_to_str(mods_tags)
-        fd.write(f"@{header} {mm_tag};\t{ml_tag}\n")
+    if tags is not None:
+        tags_str = ""
+        if mods_tags is not None:
+            mm_tag, ml_tag = mods_tags_to_str(mods_tags)
+            tags_str = {mm_tag}\t{ml_tag}
+        tags_str += sep.join(f"{k}={v}" for k, v in tags.items())
+        fd.write(f"@{header} {tags_str}\n")
     else:
         fd.write(f"@{header}\n")
     fd.write(f"{sequence}\n+\n{qstring}\n")
     fd.flush()
 
 
-def write_sam_header(aligner, fd=sys.stdout, sep='\t'):
+def sam_header(sep='\t'):
     """
-    Write the SQ & PG sam headers to a file descriptor.
+    Format a string sam header.
     """
-    fd.write('%s\n' % os.linesep.join([
-        sep.join([
-            '@SQ', 'SN:%s' % name, 'LN:%s' % len(aligner.seq(name))
-        ]) for name in aligner.seq_names
-     ]))
-
-    fd.write('%s\n' % sep.join([
+    return '%s\n' % sep.join([
         '@PG',
         'ID:bonito',
         'PN:bonito',
         'VN:%s' % bonito.__version__,
         'CL:%s' % ' '.join(sys.argv),
-    ]))
-    fd.flush()
+    ])
 
 
-def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=False, sep='\t', mods_tags=None):
+def sam_record(read_id, sequence, qstring, mapping, tags=None, mods_tags=None, sep='\t'):
     """
-    Write a sam record to a file descriptor.
+    Format a string sam record.
     """
-    if unaligned:
-        fields = [
-            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
-        ]
-    else:
+    if mapping:
         softclip = [
             '%sS' % mapping.q_st if mapping.q_st else '',
             mapping.cigar_str,
             '%sS' % (len(sequence) - mapping.q_en) if len(sequence) - mapping.q_en else ''
         ]
-        fields = [
+        record = [
             read_id,
             0 if mapping.strand == +1 else 16,
             mapping.ctg,
@@ -145,10 +126,17 @@ def write_sam(read_id, sequence, qstring, mapping, fd=sys.stdout, unaligned=Fals
             'NM:i:%s' % mapping.NM,
             'MD:Z:%s' % mapping.MD,
         ]
-    if mods_tags is not None:
-        fields.extend(mods_tags_to_str(mods_tags))
-    fd.write("%s\n" % sep.join(map(str, fields)))
-    fd.flush()
+        if mods_tags is not None:
+            record.extend(mods_tags_to_str(mods_tags))
+    else:
+        record = [
+            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
+        ]
+
+    if tags is not None:
+        record.extend(f"{k}={v}" for k, v in tags.items())
+
+    return sep.join(map(str, record))
 
 
 def summary_file():
@@ -325,23 +313,67 @@ def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
     return dict(zip(duplex_summary_field_names, fields))
 
 
+class CSVLogger:
+    def __init__(self, filename, sep=','):
+        self.filename = str(filename)
+        if os.path.exists(self.filename):
+            with open(self.filename) as f:
+                self.columns = csv.DictReader(f).fieldnames
+        else:
+            self.columns = None
+        self.fh = open(self.filename, 'a', newline='')
+        self.csvwriter = csv.writer(self.fh, delimiter=sep)
+        self.count = 0
+
+    def set_columns(self, columns):
+        if self.columns:
+            raise Exception('Columns already set')
+        self.columns = list(columns)
+        self.csvwriter.writerow(self.columns)
+
+    def append(self, row):
+        if self.columns is None:
+            self.set_columns(row.keys())
+        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
+        self.count += 1
+        if self.count > 100:
+            self.count = 0
+            self.fh.flush()
+
+    def close(self):
+        self.fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
 class Writer(Thread):
 
-    def __init__(self, iterator, aligner, fd=sys.stdout, duplex=False):
+    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, tags=None):
         super().__init__()
         self.fd = fd
         self.log = []
+        self.mode = mode
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
-        self.write_headers()
-
-    def write_headers(self):
-        if self.aligner:
-            write_sam_header(self.aligner, fd=self.fd)
+        self.tags = tags if tags else {}
+        self.output = AlignmentFile(
+            fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            reference_filename=ref_fn,
+            header=AlignmentHeader.from_references(
+                reference_names=aligner.seq_names if aligner else [],
+                reference_lengths=[
+                    len(aligner.seq(name)) for name in aligner.seq_names
+                ] if aligner else [],
+                text=sam_header(),
+            )
+        )
 
     def run(self):
-
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, res in self.iterator:
 
@@ -358,12 +390,22 @@ class Writer(Thread):
                     samples = len(read.signal)
                     read_id = read.read_id
 
-                if len(seq):
-                    if self.aligner:
-                        write_sam(read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None, mods_tags=mods_tags)
-                    else:
-                        write_fastq(read_id, seq, qstring, fd=self.fd, mods_tags=mods_tags)
+                tags = {
+                    **self.tags,
+                    **read.tagdata,
+                    'np:f:mean_qscore': mean_qscore,
+                }
 
+                if len(seq):
+                    if self.mode == 'wfq':
+                        write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags, mods_tags=mods_tags)
+                    else:
+                        self.output.write(
+                            AlignedSegment.fromstring(
+                                sam_record(read_id, seq, qstring, mapping, tags=tags, mods_tags=mods_tags),
+                                self.output.header
+                            )
+                        )
                     if self.duplex:
                         summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
                     else:
@@ -379,19 +421,25 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout):
+    def __init__(self, mode, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout, ref_fn=None, tags=None):
         super().__init__()
         self.fd = fd
         self.log = []
+        self.mode = mode
         self.aligner = aligner
         self.iterator = iterator
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
-        self.write_headers()
-
-    def write_headers(self):
-        if self.aligner:
-            write_sam_header(self.aligner, fd=self.fd)
+        self.tags = tags if tags else {}
+        self.output = AlignmentFile(
+            fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            reference_filename=ref_fn,
+            header=AlignmentHeader.from_references(
+                reference_names=aligner.seq_names,
+                reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names],
+                text=sam_header(),
+            )
+        )
 
     def run(self):
 
@@ -419,7 +467,12 @@ class CTCWriter(Thread):
                 if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
                     continue
 
-                write_sam(read.read_id, seq, qstring, mapping, fd=self.fd, unaligned=mapping is None)
+                self.output.write(
+                    AlignedSegment.fromstring(
+                        sam_record(read.read_id, seq, qstring, mapping),
+                        self.output.header
+                    )
+                )
                 summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
 
                 if mapping.strand == -1:
