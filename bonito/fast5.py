@@ -79,8 +79,8 @@ class Read:
     @property
     def tagdata(self):
         return dict(
-            ch=self.channel,
-            runid=self.run_id,
+            run_id=self.run_id,
+            channel=self.channel,
             read=self.read_number,
             sample_id=self.sample_id,
             start_time=self.start_time,

@@ -37,13 +37,14 @@ def biofmt(aligned=False):
     ext = stdout.split(os.extsep)[-1]
     if ext in ['fq', 'fastq']:
         return Format(aligned, 'fastq', 'wfq')
-    if ext == "bam":
+    elif ext == "bam":
         return Format(aligned, 'bam', 'wb')
     elif ext == "cram":
         return Format(aligned, 'cram', 'wc')
     elif ext == "sam":
         return Format(aligned, 'sam', 'w')
-    return Format(aligned, name, mode)
+    else:
+        return Format(aligned, name, mode)
 
 
 @contextmanager
@@ -71,12 +72,12 @@ def write_fasta(header, sequence, fd=sys.stdout):
     fd.flush()
 
 
-def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep=" "):
+def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     """
     Write a fastq record to a file descriptor.
     """
     if tags is not None:
-        tags = sep.join(f"{k}={v}" for k, v in tags.items())
+        tags = sep.join(f"np:Z:{k}={v}" for k, v in tags.items())
         fd.write(f"@{header} {tags}\n")
     else:
         fd.write(f"@{header}\n")
