@@ -97,7 +97,7 @@ def sam_header(sep='\t'):
     ])
 
 
-def sam_record(read_id, sequence, qstring, mapping, sep='\t'):
+def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
     """
     Format a string sam record.
     """
@@ -124,6 +124,10 @@ def sam_record(read_id, sequence, qstring, mapping, sep='\t'):
         record = [
             read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
         ]
+
+    if tags is not None:
+        record.extend(f"np:Z:{k}={v}" for k, v in tags.items())
+
     return sep.join(map(str, record))
 
 
@@ -378,17 +382,19 @@ class Writer(Thread):
                     samples = len(read.signal)
                     read_id = read.read_id
 
+                tags = {
+                    **self.tags,
+                    **read.tagdata,
+                    'mean_qscore': mean_qscore,
+                }
+
                 if len(seq):
                     if self.mode == 'wfq':
-                        write_fastq(read_id, seq, qstring, fd=self.fd, tags={
-                            **self.tags,
-                            **read.tagdata,
-                            'mean_qscore': mean_qscore,
-                        })
+                        write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags)
                     else:
                         self.output.write(
                             AlignedSegment.fromstring(
-                                sam_record(read_id, seq, qstring, mapping),
+                                sam_record(read_id, seq, qstring, mapping, tags=tags),
                                 self.output.header
                             )
                         )
