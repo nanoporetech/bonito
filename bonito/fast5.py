@@ -55,6 +55,10 @@ class Read:
         start_time = exp_start_dt + timedelta(seconds=self.start)
         self.start_time = start_time.replace(microsecond=0).isoformat() + 'Z'
 
+        self.flow_cell_id = tracking_id['flow_cell_id']
+        if type(self.flow_cell_id) in (bytes, np.bytes_):
+            self.flow_cell_id = self.flow_cell_id.decode()
+
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
 
@@ -80,6 +84,7 @@ class Read:
             read=self.read_number,
             sample_id=self.sample_id,
             start_time=self.start_time,
+            flow_cell_id=self.flow_cell_id,
         )
 
 
