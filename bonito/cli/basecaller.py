@@ -76,8 +76,8 @@ def main(args):
 
     tags = {
         "basecall_model": args.model_directory,
-        "basecaller": "bonito:v%s" % bonito.__version__,
-        "aligner": "minimap2:v%s" % mappy.__version__,
+        "basecaller": "bonito@v%s" % bonito.__version__,
+        "aligner": "minimap2@v%s" % mappy.__version__,
     }
 
     writer = ResultsWriter(
