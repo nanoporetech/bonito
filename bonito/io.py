@@ -8,6 +8,7 @@ import csv
 import pandas as pd
 from threading import Thread
 from logging import getLogger
+from collections import namedtuple
 from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
 
@@ -21,43 +22,28 @@ from bonito.util import mean_qscore_from_qstring
 
 
 logger = getLogger('bonito')
+Format = namedtuple("Format", "aligned name mode")
 
 
-class CSVLogger:
-    def __init__(self, filename, sep=','):
-        self.filename = str(filename)
-        if os.path.exists(self.filename):
-            with open(self.filename) as f:
-                self.columns = csv.DictReader(f).fieldnames
-        else:
-            self.columns = None
-        self.fh = open(self.filename, 'a', newline='')
-        self.csvwriter = csv.writer(self.fh, delimiter=sep)
-        self.count = 0
-
-    def set_columns(self, columns):
-        if self.columns:
-            raise Exception('Columns already set')
-        self.columns = list(columns)
-        self.csvwriter.writerow(self.columns)
-
-    def append(self, row):
-        if self.columns is None:
-            self.set_columns(row.keys())
-        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
-        self.count += 1
-        if self.count > 100:
-            self.count = 0
-            self.fh.flush()
-
-    def close(self):
-        self.fh.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
+def biofmt(aligned=False):
+    """
+    Select the output format.
+    """
+    mode, name = ('w', 'sam') if aligned else ('wfq', 'fastq')
+    aligned = "aligned" if aligned else "unaligned"
+    stdout = realpath('/dev/fd/1')
+    if sys.stdout.isatty() or stdout.startswith('/proc'):
+        return Format(aligned, name, mode)
+    ext = stdout.split(os.extsep)[-1]
+    if ext in ['fq', 'fastq']:
+        return Format(aligned, 'fastq', 'wfq')
+    if ext == "bam":
+        return Format(aligned, 'bam', 'wb')
+    elif ext == "cram":
+        return Format(aligned, 'cram', 'wc')
+    elif ext == "sam":
+        return Format(aligned, 'sam', 'w')
+    return Format(aligned, name, mode)
 
 
 @contextmanager
@@ -139,24 +125,6 @@ def sam_record(read_id, sequence, qstring, mapping, sep='\t'):
         ]
     return sep.join(map(str, record))
 
-
-def format_from_extension(default='wfq'):
-    """
-    Return the filename to use for the summary tsv.
-    """
-    stdout = realpath('/dev/fd/1')
-    if sys.stdout.isatty() or stdout.startswith('/proc'):
-        return default
-    ext = stdout.split(os.extsep)[-1]
-    if ext in ['fq', 'fastq']:
-        return 'wfq'
-    if ext == "bam":
-        return "wb"
-    elif ext == "cram":
-        return "wc"
-    elif ext == "sam":
-        return "w"
-    return default
 
 
 def summary_file():
@@ -333,28 +301,66 @@ def duplex_summary_row(read_temp, comp_read, seqlen, qscore, alignment=False):
     return dict(zip(duplex_summary_field_names, fields))
 
 
+class CSVLogger:
+    def __init__(self, filename, sep=','):
+        self.filename = str(filename)
+        if os.path.exists(self.filename):
+            with open(self.filename) as f:
+                self.columns = csv.DictReader(f).fieldnames
+        else:
+            self.columns = None
+        self.fh = open(self.filename, 'a', newline='')
+        self.csvwriter = csv.writer(self.fh, delimiter=sep)
+        self.count = 0
+
+    def set_columns(self, columns):
+        if self.columns:
+            raise Exception('Columns already set')
+        self.columns = list(columns)
+        self.csvwriter.writerow(self.columns)
+
+    def append(self, row):
+        if self.columns is None:
+            self.set_columns(row.keys())
+        self.csvwriter.writerow([row.get(k, '-') for k in self.columns])
+        self.count += 1
+        if self.count > 100:
+            self.count = 0
+            self.fh.flush()
+
+    def close(self):
+        self.fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
 class Writer(Thread):
 
-    def __init__(self, iterator, aligner, fd=sys.stdout, duplex=False):
+    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None):
         super().__init__()
         self.fd = fd
         self.log = []
+        self.mode = mode
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
-        self.mode = format_from_extension(default='w' if self.aligner else 'wfq')
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            reference_filename=ref_fn,
             header=AlignmentHeader.from_references(
                 reference_names=aligner.seq_names if aligner else [],
-                reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names] if aligner else [],
+                reference_lengths=[
+                    len(aligner.seq(name)) for name in aligner.seq_names
+                ] if aligner else [],
                 text=sam_header(),
             )
         )
 
-
     def run(self):
-
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, res in self.iterator:
 
@@ -395,17 +401,18 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout):
+    def __init__(self, mode, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout, ref_fn=None):
         super().__init__()
         self.fd = fd
         self.log = []
+        self.mode = mode
         self.aligner = aligner
         self.iterator = iterator
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
-        self.mode = format_from_extension(default='w')
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            reference_filename=ref_fn,
             header=AlignmentHeader.from_references(
                 reference_names=aligner.seq_names,
                 reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names],
