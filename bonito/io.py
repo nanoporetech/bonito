@@ -81,7 +81,7 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, mods_tags=N
         tags_str = ""
         if mods_tags is not None:
             mm_tag, ml_tag = mods_tags_to_str(mods_tags)
-            tags_str = {mm_tag}\t{ml_tag}
+            tags_str += f"{mm_tag}\t{ml_tag}"
         tags_str += sep.join(f"{k}={v}" for k, v in tags.items())
         fd.write(f"@{header} {tags_str}\n")
     else:
@@ -126,13 +126,13 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, mods_tags=None, s
             'NM:i:%s' % mapping.NM,
             'MD:Z:%s' % mapping.MD,
         ]
-        if mods_tags is not None:
-            record.extend(mods_tags_to_str(mods_tags))
     else:
         record = [
             read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
         ]
 
+    if mods_tags is not None:
+        record.extend(mods_tags_to_str(mods_tags))
     if tags is not None:
         record.extend(f"{k}={v}" for k, v in tags.items())
 
