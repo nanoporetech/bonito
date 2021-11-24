@@ -94,10 +94,10 @@ class Read:
     @property
     def tagdata(self):
         return [
-            f"np:Z:mux={self.mux}",
-            f"np:Z:channel={self.channel}",
-            f"np:Z:start_time={self.start_time}",
-            f"np:Z:read_number={self.read_number}",
+            f"mx:i:{self.mux}",
+            f"ch:i:{self.channel}",
+            f"st:Z:{self.start_time}",
+            f"rn:i:{self.read_number}",
         ]
 
 

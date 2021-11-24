@@ -393,7 +393,7 @@ class Writer(Thread):
 
                 tags = [
                     f'RG:Z:{read.run_id}',
-                    f'np:Z:mean_qscore={mean_qscore}',
+                    f'qs:i:{round(mean_qscore)}',
                     *read.tagdata,
                 ]
 
