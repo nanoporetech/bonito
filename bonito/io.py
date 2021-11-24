@@ -386,7 +386,7 @@ class Writer(Thread):
                 tags = {
                     **self.tags,
                     **read.tagdata,
-                    'np:f:mean_qscore': mean_qscore,
+                    'np:Z:mean_qscore': mean_qscore,
                 }
 
                 if len(seq):

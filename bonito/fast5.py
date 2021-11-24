@@ -80,10 +80,10 @@ class Read:
     def tagdata(self):
         return {
             "np:Z:run_id": self.run_id,
-            "np:i:channel": self.channel,
+            "np:Z:channel": self.channel,
             "np:Z:sample_id": self.sample_id,
             "np:Z:start_time": self.start_time,
-            "np:i:read_number": self.read_number,
+            "np:Z:read_number": self.read_number,
             "np:Z:flow_cell_id": self.flow_cell_id,
         }
 
