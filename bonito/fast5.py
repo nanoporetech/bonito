@@ -8,6 +8,7 @@ from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
 from itertools import chain, starmap
+from datetime import datetime, timedelta
 
 import torch
 import numpy as np
@@ -27,18 +28,36 @@ class Read:
 
         read_attrs = read.handle[read.raw_dataset_group_name].attrs
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
+        tracking_id = read.handle[read.global_key + 'tracking_id'].attrs
 
         self.offset = int(channel_info['offset'])
         self.sampling_rate = channel_info['sampling_rate']
         self.scaling = channel_info['range'] / channel_info['digitisation']
 
         self.mux = read_attrs['start_mux']
+        self.read_number = read_attrs['read_number']
         self.channel = channel_info['channel_number']
         if type(self.channel) in (bytes, np.bytes_):
             self.channel = self.channel.decode()
 
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
+
+        self.sample_id = tracking_id['sample_id']
+        if type(self.sample_id) in (bytes, np.bytes_):
+            self.sample_id = self.sample_id.decode()
+
+        exp_start_time = tracking_id['exp_start_time']
+        if type(exp_start_time) in (bytes, np.bytes_):
+            exp_start_time = exp_start_time.decode()
+
+        exp_start_dt = datetime.fromisoformat(exp_start_time.replace('Z', ''))
+        start_time = exp_start_dt + timedelta(seconds=self.start)
+        self.start_time = start_time.replace(microsecond=0).isoformat() + 'Z'
+
+        self.flow_cell_id = tracking_id['flow_cell_id']
+        if type(self.flow_cell_id) in (bytes, np.bytes_):
+            self.flow_cell_id = self.flow_cell_id.decode()
 
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
@@ -56,6 +75,17 @@ class Read:
 
     def __repr__(self):
         return "Read('%s')" % self.read_id
+
+    @property
+    def tagdata(self):
+        return [
+            f"np:Z:run_id={self.run_id}",
+            f"np:Z:channel={self.channel}",
+            f"np:Z:sample_id={self.sample_id}",
+            f"np:Z:start_time={self.start_time}",
+            f"np:Z:read_number={self.read_number}",
+            f"np:Z:flow_cell_id={self.flow_cell_id}",
+        ]
 
 
 class ReadChunk:

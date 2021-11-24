@@ -3,6 +3,7 @@ Bonito Basecaller
 """
 
 import sys
+import mappy
 import numpy as np
 from tqdm import tqdm
 from time import perf_counter
@@ -10,14 +11,25 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.io import CTCWriter, Writer
+import bonito
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
+from bonito.io import CTCWriter, Writer, biofmt
 from bonito.multiprocessing import process_cancel
 from bonito.util import column_to_set, load_symbol, load_model
 
 
 def main(args):
+
+    fmt = biofmt(aligned=args.reference is not None)
+
+    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
+        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
+        exit(1)
+    elif args.reference and fmt.name == "fastq":
+        sys.stderr.write("> warning: did you really want %s %s?\n" % (fmt.aligned, fmt.name))
+    else:
+        sys.stderr.write("> output fmt: %s %s\n" % (fmt.aligned, fmt.name))
 
     if args.save_ctc and not args.reference:
         sys.stderr.write("> a reference is needed to output ctc training data\n")
@@ -72,8 +84,15 @@ def main(args):
     if aligner:
         results = align_map(aligner, results)
 
+    tags = [
+        f"np:Z:basecall_model={args.model_directory}",
+        f"np:Z:basecaller=bonito@v{bonito.__version__}",
+        f"np:Z:aligner=minimap2@v{mappy.__version__}",
+    ]
+
     writer = ResultsWriter(
-        tqdm(results, desc="> calling", unit=" reads", leave=False), aligner=aligner
+        fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
+        aligner=aligner, ref_fn=args.reference, tags=tags
     )
 
     t0 = perf_counter()
