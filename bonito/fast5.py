@@ -78,14 +78,14 @@ class Read:
 
     @property
     def tagdata(self):
-        return {
-            "np:Z:run_id": self.run_id,
-            "np:Z:channel": self.channel,
-            "np:Z:sample_id": self.sample_id,
-            "np:Z:start_time": self.start_time,
-            "np:Z:read_number": self.read_number,
-            "np:Z:flow_cell_id": self.flow_cell_id,
-        }
+        return [
+            f"np:Z:run_id={self.run_id}",
+            f"np:Z:channel={self.channel}",
+            f"np:Z:sample_id={self.sample_id}",
+            f"np:Z:start_time={self.start_time}",
+            f"np:Z:read_number={self.read_number}",
+            f"np:Z:flow_cell_id={self.flow_cell_id}",
+        ]
 
 
 class ReadChunk:

@@ -77,8 +77,7 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     Write a fastq record to a file descriptor.
     """
     if tags is not None:
-        tags = sep.join(f"{k}={v}" for k, v in tags.items())
-        fd.write(f"@{header} {tags}\n")
+        fd.write(f"@{header} {sep.join(tags)}\n")
     else:
         fd.write(f"@{header}\n")
     fd.write(f"{sequence}\n+\n{qstring}\n")
@@ -127,7 +126,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
         ]
 
     if tags is not None:
-        record.extend(f"{k}={v}" for k, v in tags.items())
+        record.extend(tags)
 
     return sep.join(map(str, record))
 
@@ -383,11 +382,11 @@ class Writer(Thread):
                     samples = len(read.signal)
                     read_id = read.read_id
 
-                tags = {
-                    **self.tags,
-                    **read.tagdata,
-                    'np:Z:mean_qscore': mean_qscore,
-                }
+                tags = [
+                    *self.tags,
+                    *read.tagdata,
+                    f'np:Z:mean_qscore={mean_qscore}',
+                ]
 
                 if len(seq):
                     if self.mode == 'wfq':
