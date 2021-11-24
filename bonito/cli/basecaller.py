@@ -48,6 +48,12 @@ def main(args):
     else:
         aligner = None
 
+    groups = {read.groupdata for read in get_reads(
+        args.reads_directory, n_proc=8, recursive=args.recursive,
+        read_ids=column_to_set(args.read_ids), skip=args.skip,
+        meta=True, cancel=process_cancel()
+    )}
+
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
@@ -74,15 +80,9 @@ def main(args):
     if aligner:
         results = align_map(aligner, results)
 
-    tags = [
-        f"np:Z:basecall_model={args.model_directory}",
-        f"np:Z:basecaller=bonito@v{bonito.__version__}",
-        f"np:Z:aligner=minimap2@v{mappy.__version__}",
-    ]
-
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
-        aligner=aligner, ref_fn=args.reference, tags=tags
+        aligner=aligner, ref_fn=args.reference, groups=groups,
     )
 
     t0 = perf_counter()
