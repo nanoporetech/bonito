@@ -99,8 +99,8 @@ def sam_header(groups, sep='\t'):
         '@PG',
         'ID:aligner',
         'PN:minimap2',
-        'DS:mappy',
         'VN:%s' % mappy.__version__,
+        'DS:mappy',
     ])
     return '%s\n' % os.linesep.join([PG1, PG2, *groups])
 
