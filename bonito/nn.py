@@ -182,7 +182,7 @@ class SHA(Module):
 @register
 class MHA(Module):
 
-    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None, use_scaled_cosine_sim_attn=False):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None, use_scaled_cosine_sim_attn=False, init_learned_scale=-5.):
         super().__init__()
         inner_dim = heads * dim_head
         kv_input_dim = dim if kv_input_dim is None else kv_input_dim
@@ -193,7 +193,7 @@ class MHA(Module):
 
         self.use_scaled_cosine_sim_attn = use_scaled_cosine_sim_attn
         if use_scaled_cosine_sim_attn:
-            self.learned_scale = nn.Parameter(torch.zeros(1, heads, 1, 1) - 5)
+            self.learned_scale = nn.Parameter(torch.ones(1, heads, 1, 1) * init_learned_scale)
         else:
             self.scale = dim_head ** -0.5
 
