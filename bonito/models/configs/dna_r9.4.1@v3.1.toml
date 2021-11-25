@@ -27,6 +27,9 @@ attn_dropout = 0.1
 ff_dropout = 0.1
 num_attn_heads = 1
 
+use_isab_attn = true
+isab_num_latents = 6
+
 [aux_decoder]
 loss_weight = 0.25
 depth = 3

@@ -257,6 +257,42 @@ class MHA(Module):
         out = out.transpose(0, 1)
         return out
 
+# ISAB
+
+@register
+class ISAB(Module):
+    """ https://arxiv.org/abs/1810.00825 """
+
+    def __init__(self, *, dim, num_latents, heads=8, dim_head=32, dropout=0.):
+        super().__init__()
+        self.latents = nn.Parameter(torch.randn(num_latents, 1, dim))
+        self.norm = nn.LayerNorm(dim)
+
+        self.attn1 = MHA(dim, heads=heads, dim_head=dim_head, dropout=dropout)
+        self.attn2 = MHA(dim, heads=heads, dim_head=dim_head, dropout=dropout)
+
+    def forward(self, x):
+        batch = x.shape[1]
+        x = self.norm(x)
+
+        latents = self.latents.expand(-1, batch, -1)
+        induced = self.attn1(latents, x)
+        return self.attn2(x, induced)
+
+@register
+class ISABBlock(Module):
+    """ https://arxiv.org/abs/1810.00825 """
+
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=4, ff_mult=4, num_latents=6):
+        super().__init__()
+        self.attn = ISAB(dim=dim, heads=num_attn_heads, num_latents=num_latents, dropout=attn_dropout)
+        self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
+
+    def forward(self, x):
+        x = self.attn(x) + x
+        x = self.ff(x) + x
+        return x
+
 # rotary positional embedding
 
 class RotaryEmbedding(nn.Module):
