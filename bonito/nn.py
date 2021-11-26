@@ -332,6 +332,8 @@ class ISAB(Module):
         """
 
         super().__init__()
+        assert heads >= 4, 'ISAB should have at least 4 attention heads'
+
         self.latents = nn.Parameter(torch.randn(num_latents, 1, dim))
         self.norm = nn.LayerNorm(dim)
 

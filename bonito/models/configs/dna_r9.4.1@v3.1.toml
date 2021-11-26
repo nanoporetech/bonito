@@ -28,7 +28,7 @@ ff_dropout = 0.1          # feedforward dropout, keep at 0.1
 num_attn_heads = 1        # number of attention heads, which should be kept at 1 for single-head attention, but can be increased to > 1 to turn on multi-head attention
 dim_attn_head = 64        # dimension per attention head, should just keep at 64, but can be lowered to 32 for further efficiency / perf tradeoff
 
-use_isab_attn = true      # whether to use ISAB attention (induced-set attention block from the Set Transformers paper)
+use_isab_attn = false     # whether to use ISAB attention (induced-set attention block from the Set Transformers paper)
 isab_num_latents = 6      # number of latents to use in ISAB attention, which should be at most 32
 
 weight_tie_attn_blocks = false  # weight tie the attention block parameters across all layers, for parameter efficiency
