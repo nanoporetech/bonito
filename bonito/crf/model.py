@@ -234,12 +234,15 @@ class SeqdistModel(Module):
         scores = self.linear_crf(encoded)
         scores = scores.to(torch.float32)
 
+        # if the targets are not given (only during training for calculating the autoregressive auxiliary loss), just return the scores
         if targets is None:
             return scores
 
+        # if the decoder was never initialized, or if told not to return auxiliary loss, just return 0 for auxiliary loss
         if self.decoder is None or no_aux_loss:
             return scores, torch.tensor([0], device=x.device)
 
+        # otherwise calculate auxiliary loss and return as second element of the tuple
         aux_loss = self.decoder(targets, layer_fmaps, return_loss=True)
         return scores, aux_loss
 

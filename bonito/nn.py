@@ -156,12 +156,19 @@ class SHA(Module):
     """ single-head attention from https://arxiv.org/abs/1911.11423 """
 
     def __init__(self, dim, dropout=0.):
+        """
+        Parameters:
+            dim (int): feature dimension
+            dropout (float): attention dropout
+        """
+
         super().__init__()
         self.scale = dim ** -0.5
         self.to_q = nn.Sequential(nn.Linear(dim, dim), nn.LayerNorm(dim))
         self.dropout = nn.Dropout(dropout)
         self.bottom_sandwich_norm = nn.LayerNorm(dim)
 
+        # zero init final layer, which is the gamma and beta of the post-layernorm
         last_layer = self.bottom_sandwich_norm
         nn.init.constant_(last_layer.weight, 0.)
         nn.init.constant_(last_layer.bias, 0.)
@@ -202,6 +209,19 @@ class MHA(Module):
     """ classic multi-head attention """
 
     def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None, use_scaled_cosine_sim_attn=False, init_learned_scale=-5.):
+        """
+        Parameters:
+            dim (int): feature dimension
+            heads (int): number of attention heads
+            dim_head (int): dimension per attention head
+            dropout (float): attention dropout
+            causal (bool): autoregressive or not, will add causal masking if true
+            norm_inputs (bool): whether to layernorm the inputs, as in the pre-layernorm architecture
+            kv_input_dim (int): separate dimension for the input of the key / values, in the case of cross attending to encoder feature maps that have a greater dimension than the query embedding dimension
+            use_scaled_cosine_sim_attn (bool): whether to use scaled cosine similarity attention
+            init_learned_scale (float): initial learned temperature for cosine similarity attention, in logspace
+        """
+
         super().__init__()
         inner_dim = heads * dim_head
         kv_input_dim = dim if kv_input_dim is None else kv_input_dim
@@ -225,6 +245,7 @@ class MHA(Module):
 
         self.norm = nn.LayerNorm(dim) if norm_inputs else nn.Identity()
 
+        # zero init final layer, which is the gamma and beta of the post-layernorm
         last_layer = self.to_out[-1]
         nn.init.constant_(last_layer.weight, 0.)
         nn.init.constant_(last_layer.bias, 0.)
