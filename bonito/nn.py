@@ -263,7 +263,7 @@ class MHA(Module):
 class ISAB(Module):
     """ https://arxiv.org/abs/1810.00825 """
 
-    def __init__(self, *, dim, num_latents, heads=8, dim_head=32, dropout=0.):
+    def __init__(self, *, dim, num_latents, heads=8, dim_head=64, dropout=0.):
         super().__init__()
         self.latents = nn.Parameter(torch.randn(num_latents, 1, dim))
         self.norm = nn.LayerNorm(dim)

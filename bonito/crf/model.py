@@ -10,8 +10,20 @@ import seqdist.sparse
 from seqdist.ctc_simple import logZ_cupy, viterbi_alignments
 from seqdist.core import SequenceDist, Max, Log, semiring
 
-from functools import partial
+from functools import partial, wraps
 from collections import Counter
+
+def cache_on_first_run(fn):
+    cached = None
+    @wraps(fn)
+    def inner(*args, **kwargs):
+        nonlocal cached
+        if cached is not None:
+            return cached
+        output = fn(*args, **kwargs)
+        cached = output
+        return output
+    return inner
 
 def get_stride(m):
     if hasattr(m, 'stride'):
@@ -163,7 +175,7 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, attn_layers=[], num_attn_heads=1, attn_dropout=0., ff_dropout=0., use_isab_attn=False, isab_num_latents=6):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, attn_layers=[], num_attn_heads=1, attn_dropout=0., ff_dropout=0., use_isab_attn=False, isab_num_latents=6, weight_tie_attn_blocks=False):
     rnn = layers[rnn_type]
 
     rnns = [
@@ -176,6 +188,9 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
     attn_layers_count = Counter(attn_layers) # allows for multiple attention blocks per layer
 
     attn_klass = SHABlock if not use_isab_attn else partial(ISABBlock, num_latents=isab_num_latents)
+
+    if weight_tie_attn_blocks:
+        attn_klass = cache_on_first_run(attn_klass)
 
     for layer, rnn in enumerate(rnns):
         layer_num = layer + 1
