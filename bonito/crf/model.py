@@ -175,7 +175,7 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, attn_layers=[], num_attn_heads=1, attn_dropout=0., ff_dropout=0., use_isab_attn=False, isab_num_latents=6, weight_tie_attn_blocks=False):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, attn_layers=[], num_attn_heads=1, dim_attn_head=64, attn_dropout=0., ff_dropout=0., use_isab_attn=False, isab_num_latents=6, weight_tie_attn_blocks=False):
     rnn = layers[rnn_type]
 
     rnns = [
@@ -197,7 +197,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         backbone.append(rnn)
 
         if layer_num in attn_layers_count:
-            backbone.extend([attn_klass(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads) for _ in range(attn_layers_count[layer_num])])
+            backbone.extend([attn_klass(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, dim_head=dim_attn_head) for _ in range(attn_layers_count[layer_num])])
 
     conv_encoder = Serial([
         conv(insize, 4, ks=5, bias=True, activation=activation),

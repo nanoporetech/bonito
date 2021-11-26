@@ -283,9 +283,9 @@ class ISAB(Module):
 class ISABBlock(Module):
     """ https://arxiv.org/abs/1810.00825 """
 
-    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=4, ff_mult=4, num_latents=6):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=4, dim_head=64, ff_mult=4, num_latents=6):
         super().__init__()
-        self.attn = ISAB(dim=dim, heads=num_attn_heads, num_latents=num_latents, dropout=attn_dropout)
+        self.attn = ISAB(dim=dim, heads=num_attn_heads, dim_head=dim_head, num_latents=num_latents, dropout=attn_dropout)
         self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 
     def forward(self, x):
@@ -494,7 +494,7 @@ class FeedForward(Module):
 class SHABlock(Module):
     """ https://arxiv.org/abs/1911.11423 """
 
-    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4):
+    def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4, dim_head=64):
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
@@ -502,7 +502,7 @@ class SHABlock(Module):
         is_multiheaded = num_attn_heads > 1
 
         if is_multiheaded:
-            self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads)
+            self.attn = MHA(dim=dim, dropout=attn_dropout, heads=num_attn_heads, dim_head=dim_head)
         else:
             self.attn = SHA(dim=dim, dropout=attn_dropout)
 
