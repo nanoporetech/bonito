@@ -14,6 +14,8 @@ from functools import partial, wraps
 from collections import Counter
 
 def cache_on_first_run(fn):
+    """ decorator for a function, whereby the function will only compute once on first execute, and the return value is cached for all subsequent executions """
+
     cached = None
     @wraps(fn)
     def inner(*args, **kwargs):
@@ -150,6 +152,10 @@ class CTC_CRF(SequenceDist):
 
 
 class Encoder(Module):
+    """
+    An encoder wrapper class that accepts the convolutional encoder as well as the list of modules to execute sequentially (backbone)
+    It will pipe the tensor through the convolutional encoder and backbone, and return the final output as well as the intermediate feature maps
+    """
 
     def __init__(self, conv_encoder, backbone):
         super().__init__()
@@ -163,10 +169,10 @@ class Encoder(Module):
         for layer in self.backbone:
             x = layer(x)
 
+            # only save feature maps for outputs from LSTMs
             if isinstance(x, (SHABlock, ISABBlock)):
                 continue
 
-            # only save feature maps for outputs from LSTMs
             fmaps.append(x)
 
         return x, fmaps
@@ -189,6 +195,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
 
     attn_klass = SHABlock if not use_isab_attn else partial(ISABBlock, num_latents=isab_num_latents)
 
+    # weight tie attention block parameters across all layers
     if weight_tie_attn_blocks:
         attn_klass = cache_on_first_run(attn_klass)
 
@@ -196,6 +203,7 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         layer_num = layer + 1
         backbone.append(rnn)
 
+        # add attention block(s) if the layer number is in attn_layers
         if layer_num in attn_layers_count:
             backbone.extend([attn_klass(features, attn_dropout=attn_dropout, ff_dropout=ff_dropout, num_attn_heads=num_attn_heads, dim_head=dim_attn_head) for _ in range(attn_layers_count[layer_num])])
 

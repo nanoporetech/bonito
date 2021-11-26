@@ -22,27 +22,27 @@ rnn_type = "lstm"
 activation = "swish"
 blank_score = 2.0
 
-attn_layers = [ 3, 4 ]
-attn_dropout = 0.1
-ff_dropout = 0.1
-num_attn_heads = 1
-dim_attn_head = 64
+attn_layers = [ 3, 4 ]    # the list of layers (1 - 5) after which to play an attention block, right after the LSTM layer
+attn_dropout = 0.1        # attention dropout, keep at 0.1
+ff_dropout = 0.1          # feedforward dropout, keep at 0.1
+num_attn_heads = 1        # number of attention heads, which should be kept at 1 for single-head attention, but can be increased to > 1 to turn on multi-head attention
+dim_attn_head = 64        # dimension per attention head, should just keep at 64, but can be lowered to 32 for further efficiency / perf tradeoff
 
-use_isab_attn = true
-isab_num_latents = 6
+use_isab_attn = true      # whether to use ISAB attention (induced-set attention block from the Set Transformers paper)
+isab_num_latents = 6      # number of latents to use in ISAB attention, which should be at most 32
 
-weight_tie_attn_blocks = false
+weight_tie_attn_blocks = false  # weight tie the attention block parameters across all layers, for parameter efficiency
 
 [aux_decoder]
-loss_weight = 0.25
-depth = 3
-heads = 6
-attn_dropout = 0.1
-ff_dropout = 0.1
+loss_weight = 0.25    # the weight of the auxiliary decoder loss - should range from 0.2 to 0.8. 0.5 has shown good results
+depth = 3             # depth of decoder - should be minimum of 2
+heads = 6             # number of attention heads in decoder multi-head attention - should be a minimum of 4
+attn_dropout = 0.1    # attention dropout, keep at 0.1
+ff_dropout = 0.1      # feedforward dropout, keep at 0.1
 
-use_self_attn = false
-use_scaled_cosine_sim_attn = false
-num_encoder_layers_attend = 6
+use_self_attn = false                 # whether to use self-attention. discovered that cross attention attention alone can yield good results
+use_scaled_cosine_sim_attn = false    # use scaled cosine similarity attention, which should make the attention operation more stable
+num_encoder_layers_attend = 6         # how many penultimate layers of the encoder feature map should be included in the cross attention. recommend either 1 or 6 (5 layers plus the very first feature map right after the convolutional encoder)
 
 [global_norm]
 state_len = 5

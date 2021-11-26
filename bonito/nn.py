@@ -38,6 +38,8 @@ class Swish(torch.nn.SiLU):
 
 @register
 class StableLayerNorm(nn.Module):
+    """ stable layernorm technique from https://arxiv.org/abs/2105.13290 """
+
     def __init__(self, dim):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
@@ -151,6 +153,7 @@ class LinearCRFEncoder(Module):
 
 @register
 class SHA(Module):
+    """ single-head attention from https://arxiv.org/abs/1911.11423 """
 
     def __init__(self, dim, dropout=0.):
         super().__init__()
@@ -164,23 +167,39 @@ class SHA(Module):
         nn.init.constant_(last_layer.bias, 0.)
 
     def forward(self, x, kv):
+        """
+        Parameters:
+            x (tensor): <seq, batch, dimension> input tensor
+            kv (tensor): <seq, batch, dimension> contextual tensor - pass in the input tensor here for it to be self attention, otherwise it is cross attention
+        Returns:
+            out (tensor): <seq, batch, dimension>
+        """
+
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
 
+        # derive queries
         q = self.to_q(x)
         q = q * self.scale
 
+        # measure similarity of queries to keys
         sim = torch.matmul(q, kv.transpose(-1, -2))
+
+        # attention
         attn = stable_softmax(sim, dim=-1)
         attn = self.dropout(attn)
 
+        # aggregate values
         out = torch.matmul(attn, kv)
         out = out.transpose(0, 1)
+
+        # final post-layernorm, from sandwich norm
         out = self.bottom_sandwich_norm(out)
         return out
 
 @register
 class MHA(Module):
+    """ classic multi-head attention """
 
     def __init__(self, dim, heads=4, dim_head=64, dropout=0., causal=False, norm_inputs=False, kv_input_dim=None, use_scaled_cosine_sim_attn=False, init_learned_scale=-5.):
         super().__init__()
@@ -191,6 +210,7 @@ class MHA(Module):
         self.dim_head = dim_head
         self.causal = causal
 
+        # whether to use scaled cosine similarity attention
         self.use_scaled_cosine_sim_attn = use_scaled_cosine_sim_attn
         if use_scaled_cosine_sim_attn:
             self.learned_scale = nn.Parameter(torch.ones(1, heads, 1, 1) * init_learned_scale)
@@ -210,6 +230,15 @@ class MHA(Module):
         nn.init.constant_(last_layer.bias, 0.)
 
     def forward(self, x, kv=None, rot_pos_emb=None):
+        """
+        Parameters:
+            x (tensor): <seq, batch, dimension> input tensor
+            kv (tensor, optional): <seq, batch, dimension> contextual tensor - if not passed in, will be self-attention
+            rot_pos_emb (tensor, optional): <batch, seq, freq_dimension> rotary positional embedding for self attention - only applied if passed in
+        Returns:
+            out (tensor): <seq, batch, dimension>
+        """
+
         n, b, d, h, device = *x.shape, self.heads, x.device
 
         x = self.norm(x)
@@ -218,8 +247,10 @@ class MHA(Module):
         x = x.transpose(0, 1)
         kv = kv.transpose(0, 1)
 
+        # derive queries, keys, values
         q, k, v = self.to_q(x), self.to_k(kv), self.to_v(kv)
 
+        # split heads
         q, k, v = map(lambda t: t.reshape(b, -1, h, self.dim_head).transpose(1, 2), (q, k, v))
 
         if self.use_scaled_cosine_sim_attn:
@@ -233,24 +264,30 @@ class MHA(Module):
 
         q = q * scale
 
+        # apply rotary embeddings, if the rotary positional frequencies are passed in
         if rot_pos_emb is not None:
             rot_pos_emb = rot_pos_emb[:, None]
             q = apply_rotary_pos_emb(rot_pos_emb, q)
             k = apply_rotary_pos_emb(rot_pos_emb, k)
 
+        # derive similarity of queries to keys
         sim = torch.matmul(q, k.transpose(-1, -2))
 
+        # apply causal masking, if designated on module init
         if self.causal:
             i, j = sim.shape[-2:]
             mask = torch.ones(i, j, device=device).triu(j - i + 1).bool()
             mask_value = -torch.finfo(sim.dtype).max
             sim.masked_fill_(mask[None, None, :, :], mask_value)
 
+        # attention
         attn = stable_softmax(sim, dim=-1)
         attn = self.dropout(attn)
 
+        # aggregate values
         out = torch.matmul(attn, v)
 
+        # merge heads and combine heads to output
         out = out.transpose(1, 2).reshape(b, n, -1)
         out = self.to_out(out)
 
@@ -261,9 +298,18 @@ class MHA(Module):
 
 @register
 class ISAB(Module):
-    """ https://arxiv.org/abs/1810.00825 """
+    """ induced-set attention block, from https://arxiv.org/abs/1810.00825 """
 
     def __init__(self, *, dim, num_latents, heads=8, dim_head=64, dropout=0.):
+        """
+        Parameters:
+            dim (int): feature dimension
+            num_latents (int): number of latents
+            heads (int): number of attention heads
+            dim_head (int): dimension per attention head
+            dropout (float): attention dropout
+        """
+
         super().__init__()
         self.latents = nn.Parameter(torch.randn(num_latents, 1, dim))
         self.norm = nn.LayerNorm(dim)
@@ -281,9 +327,21 @@ class ISAB(Module):
 
 @register
 class ISABBlock(Module):
-    """ https://arxiv.org/abs/1810.00825 """
+    """ induced-set attention transformer block, from https://arxiv.org/abs/1810.00825 """
 
     def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=4, dim_head=64, ff_mult=4, num_latents=6):
+        """
+        Parameters:
+            dim (int): feature dimension
+            num_latents (int): number of latents
+            attn_dropout (float): attention dropout
+            ff_dropout (float): feedforward dropout
+            num_attn_heads (int): number of attention heads
+            dim_head (int): dimension per attention head
+            ff_mult (int): expansion ratio for inner dimension of feedforward, typically kept at 4
+            num_latents (int): number of latents for ISAB
+        """
+
         super().__init__()
         self.attn = ISAB(dim=dim, heads=num_attn_heads, dim_head=dim_head, num_latents=num_latents, dropout=attn_dropout)
         self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
@@ -296,12 +354,30 @@ class ISABBlock(Module):
 # rotary positional embedding
 
 class RotaryEmbedding(nn.Module):
+    """
+    Rotary embedding - parameter-less relative positional encoding in the context of attention
+    https://arxiv.org/abs/2104.09864
+    """
+
     def __init__(self, dim, theta = 10000):
+        """
+        Parameters:
+            dim (int): feature dimension (should be smaller than dimension of attention head)
+            theta (int): determines the frequencies of the positional embeddings, and also determines the max timestep in the position
+        """
+
         super().__init__()
         inv_freq = 1. / (theta ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer('inv_freq', inv_freq)
 
     def forward(self, x):
+        """
+        Parameters:
+            x (tensor): <batch, seq, dimension> input tensor
+        Returns:
+            out (tensor): <batch, seq, freq_dimension> frequencies for all positions in the sequence
+        """
+
         seq_len = x.shape[-2]
         t = torch.arange(seq_len, device = x.device).type_as(self.inv_freq)
         freqs = t[:, None] * self.inv_freq[None, :]
@@ -316,10 +392,6 @@ def rotate_half(x):
     return out.reshape(*preceding_dims, -1)
 
 def apply_rotary_pos_emb(freqs, t):
-    """
-    Rotary embedding - parameter-less relative positional encoding in the context of attention
-    https://arxiv.org/abs/2104.09864
-    """
     rot_dim = freqs.shape[-1]
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
     t =  (t * freqs.cos()) + (rotate_half(t) * freqs.sin())
@@ -328,7 +400,15 @@ def apply_rotary_pos_emb(freqs, t):
 # convolutional layer for absolute positional embedding
 
 class CausalDepthwiseConv(Module):
+    """ depthwise convolution with causality and sandwich normalization """
+
     def __init__(self, dim, kernel_size):
+        """
+        Parameters:
+            dim (int): feature dimension
+            kernel_size (int): kernel size of the convolution
+        """
+
         super().__init__()
         self.kernel_size = kernel_size
         self.norm = nn.LayerNorm(dim)
@@ -338,27 +418,53 @@ class CausalDepthwiseConv(Module):
     def forward(self, x):
         x = self.norm(x)
         x = x.permute(1, 2, 0)
+
+        # causal padding, which is kernel size minus 1
         x = F.pad(x, (self.kernel_size - 1, 0), value=0.)
+
         x = self.conv(x)
         x = x.permute(2, 0, 1)
         return self.norm_out(x)
 
 # transformer decoder
+
 class Decoder(Module):
 
     def __init__(self, dim, num_tokens=5, depth=2, heads=4, dim_head=64, loss_weight=0.25, attn_dropout=0., ff_dropout=0., conv_kernel_size=5, token_emb_grad_frac=0.2, use_self_attn=True, use_scaled_cosine_sim_attn=False, num_encoder_layers_attend=1):
+                """
+        Parameters:
+            dim (int): feature dimension
+            num_tokens (int): number of tokens
+            depth (int): transformer depth
+            heads (int): number of attention heads
+            dim_head (int): dimension per attention head
+            loss_weight (float): weight on the auxiliary forward and backward autoregressive loss
+            attn_dropout (float): attention dropout
+            ff_dropout (float): feedforward dropout
+            conv_kernel_size (int): kernel size of the position generating causal convolution
+            token_emb_grad_frac (float): what fraction (0 - 1) of the gradients to pass back to the token embeddings. Cogview paper found that transformers are more stable if the token embeddings have a fraction of the gradient of the overall transformer
+            use_self_attn (bool): whether to include self attention
+            use_scaled_cosine_sim_attn (bool): whether to use scaled cosine similarity attention
+            num_encoder_layers_attend (int): number of penultimate encoder feature maps to include in the cross attention
+        """
+
         super().__init__()
         self.loss_weight = loss_weight
 
+        # 2 reserved special tokens, for <sos> and <eos>
+        num_reserved_tokens = 2
+
+        # token embedding
         self.token_emb_grad_frac = token_emb_grad_frac
-        self.token_emb = nn.Embedding(num_tokens + 2, dim)
+        self.token_emb = nn.Embedding(num_tokens + num_reserved_tokens, dim)
         nn.init.kaiming_normal_(self.token_emb.weight)
 
+        # number of encoder layers, as well as the layer norm
         self.num_encoder_layers_attend = num_encoder_layers_attend
         self.norm_encoder_layers = StableLayerNorm(dim)
 
         self.layers = nn.ModuleList([])
-        self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32))
+        self.rot_pos_emb = RotaryEmbedding(max(dim_head // 2, 32)) # partial rotary embedding needs a minimum of dimension 32 to work well
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
@@ -370,10 +476,23 @@ class Decoder(Module):
 
         self.to_logits = nn.Sequential(
             StableLayerNorm(dim),
-            nn.Linear(dim, num_tokens + 2)
+            nn.Linear(dim, num_tokens + num_reserved_tokens)
         )
 
     def forward(self, x, encoder_layers, return_loss=False):
+        """
+        Parameters:
+            x (tensor): <seq, batch, dimension> input tensor
+            encoder_layers (list[tensor]): <seq, batch, dimension> list of encoder feature maps to cross attend to for autoregressive auxiliary loss
+            return_loss (bool): whether to return the forwards and backwards auxiliary loss, or simply return the forward logits
+
+        Returns: (return_loss = true)
+            loss (tensor): <scalar> weighted forwards and backwards autoregressive auxiliary loss
+
+        Returns: (return_loss = false)
+            logits (tensor): <batch, seq, num_tokens> decoder forward logits
+        """
+
         device = x.device
 
         # prepare the encoder layers for attending
@@ -462,7 +581,7 @@ class Decoder(Module):
 
 @register
 class GEGLU(Module):
-    """ https://arxiv.org/abs/2002.05202 """
+    """ gating with GELU nonlinearity, proposed in https://arxiv.org/abs/2002.05202 """
 
     def forward(self, x):
         x, gate = x.chunk(2, dim=-1)
@@ -470,8 +589,16 @@ class GEGLU(Module):
 
 @register
 class FeedForward(Module):
+    """ feedforward with sandwich normalization, gated GELU, as well as post-activation layernorm https://openreview.net/forum?id=GMYWzWztDx5 """
 
     def __init__(self, dim, mult=4, dropout=0.):
+        """
+        Parameters:
+            dim (int): feature dimension
+            mult (int): expansion ratio of the inner dimension of the feedforward, as a multiplier on the input dimension (dim)
+            dropout (float): feedforward dropout
+        """
+
         super().__init__()
         self.net = nn.Sequential(
             nn.LayerNorm(dim),
@@ -492,9 +619,18 @@ class FeedForward(Module):
 
 @register
 class SHABlock(Module):
-    """ https://arxiv.org/abs/1911.11423 """
+    """ single head attention transformer block, from https://arxiv.org/abs/1911.11423 """
 
     def __init__(self, dim, attn_dropout=0., ff_dropout=0., num_attn_heads=1, ff_mult=4, dim_head=64):
+        """
+        Parameters:
+            dim (int): feature dimension
+            attn_dropout (float): attention dropout
+            ff_dropout (float): feedforward dropout
+            num_attn_heads (int): number of attention heads
+            ff_mult (int): feedforward expansion ratio of inner dimension
+        """
+
         super().__init__()
         self.attn_query_norm = nn.LayerNorm(dim)
         self.attn_kv_norm = nn.LayerNorm(dim)
@@ -509,7 +645,7 @@ class SHABlock(Module):
         self.ff = FeedForward(dim=dim, dropout=ff_dropout, mult=ff_mult)
 
     def forward(self, x):
-        kv = self.attn_kv_norm(x)
+        kv = self.attn_kv_norm(x)    # single head attention uses separate layernorms for queries than they do key / values
         q = self.attn_query_norm(x)
 
         x = self.attn(q, kv) + x

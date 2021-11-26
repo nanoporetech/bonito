@@ -223,17 +223,25 @@ class Trainer:
 
         params = set(self.model.parameters())
 
+        # aggregate all the attention parameters
+
         attn_params = set()
         for m in self.model.modules():
             if isinstance(m, (SHABlock, ISABBlock, Decoder)):
                 attn_params.update(m.parameters())
 
+        # use set subtraction to derive non-attention parameters
+
         non_attn_params = params - attn_params
+
+        # for both the attention and non-attention parameters, separate out the weight decayable parameters
 
         wd_params, no_wd_params = separate_weight_decayable_params(non_attn_params)
         attn_wd_params, attn_no_wd_params = separate_weight_decayable_params(attn_params)
 
         attn_lr = attn_lr if attn_lr is not None else lr
+
+        # setup the parameter groups
 
         param_groups = [
             {'params': list(attn_wd_params), 'lr': attn_lr},
