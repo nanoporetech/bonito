@@ -2,6 +2,7 @@
 Bonito Basecaller
 """
 
+import os
 import sys
 import mappy
 import numpy as np
@@ -14,12 +15,14 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import bonito
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
-from bonito.io import CTCWriter, Writer, biofmt
+from bonito.io import CTCWriter, Writer, biofmt, NullWriter
 from bonito.multiprocessing import process_cancel
-from bonito.util import column_to_set, load_symbol, load_model
+from bonito.util import column_to_set, load_symbol, load_model, init
 
 
 def main(args):
+
+    init(args.seed, args.device)
 
     fmt = biofmt(aligned=args.reference is not None)
 
@@ -82,7 +85,7 @@ def main(args):
     )
 
     if aligner:
-        results = align_map(aligner, results)
+        results = align_map(aligner, results, n_thread=os.cpu_count())
 
     tags = [
         f"np:Z:basecall_model={args.model_directory}",
@@ -117,6 +120,7 @@ def argparser():
     parser.add_argument("--reference")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)

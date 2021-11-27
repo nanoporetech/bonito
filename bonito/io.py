@@ -69,7 +69,6 @@ def write_fasta(header, sequence, fd=sys.stdout):
     Write a fasta record to a file descriptor.
     """
     fd.write(f">{header}\n{sequence}")
-    fd.flush()
 
 
 def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
@@ -81,7 +80,6 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     else:
         fd.write(f"@{header}\n")
     fd.write(f"{sequence}\n+\n{qstring}\n")
-    fd.flush()
 
 
 def sam_header(sep='\t'):
