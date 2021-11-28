@@ -24,6 +24,8 @@ from bonito.util import mean_qscore_from_qstring
 logger = getLogger('bonito')
 Format = namedtuple("Format", "aligned name mode")
 
+__ont_bam_spec__ = "0.0.1"
+
 
 def biofmt(aligned=False):
     """
@@ -88,6 +90,12 @@ def sam_header(groups, sep='\t'):
     """
     Format a string sam header.
     """
+    HD = sep.join([
+        '@HD',
+        'VN:1.5',
+        'SO:unknown',
+        'ob:%s' % __ont_bam_spec__,
+    ])
     PG1 = sep.join([
         '@PG',
         'ID:basecaller',
@@ -102,7 +110,7 @@ def sam_header(groups, sep='\t'):
         'VN:%s' % mappy.__version__,
         'DS:mappy',
     ])
-    return '%s\n' % os.linesep.join([PG1, PG2, *groups])
+    return '%s\n' % os.linesep.join([HD, PG1, PG2, *groups])
 
 
 def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
@@ -353,7 +361,7 @@ class CSVLogger:
 
 class Writer(Thread):
 
-    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, groups=None):
+    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, groups=None, group_key=None):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -362,6 +370,7 @@ class Writer(Thread):
         self.aligner = aligner
         self.iterator = iterator
         self.fastq = mode == 'wfq'
+        self.group_key = group_key
         self.output = AlignmentFile(
             fd, 'w' if self.fastq else self.mode, add_sam_header=not self.fastq,
             reference_filename=ref_fn,
@@ -392,9 +401,9 @@ class Writer(Thread):
                     read_id = read.read_id
 
                 tags = [
-                    f'RG:Z:{read.run_id}',
+                    f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
-                    *read.tagdata,
+                    *read.tagdata(),
                 ]
 
                 if len(seq):

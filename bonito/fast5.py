@@ -7,6 +7,7 @@ from glob import glob
 from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
+from collections import OrderedDict
 from itertools import chain, starmap
 from datetime import datetime, timedelta
 
@@ -61,6 +62,10 @@ class Read:
         if type(self.flow_cell_id) in (bytes, np.bytes_):
             self.flow_cell_id = self.flow_cell_id.decode()
 
+        self.device_id = tracking_id['device_id']
+        if type(self.device_id) in (bytes, np.bytes_):
+            self.device_id = self.device_id.decode()
+
         if self.meta:
             return
 
@@ -81,23 +86,28 @@ class Read:
     def __repr__(self):
         return "Read('%s')" % self.read_id
 
-    @property
-    def groupdata(self):
-        RG =  f"@RG\tID:{self.run_id}\tPL:ONT"
-        DT = f"DT:{self.exp_start_time}"
-        DS = "DS:%s" % ' '.join([
-            f"sample_id={self.sample_id}",
-            f"flow_cell_id={self.flow_cell_id}",
+    def readgroup(self, model, model_hash):
+        self._groupdict = OrderedDict([
+            ('ID', f"{self.run_id}_{model_hash}"),
+            ('PL', f"ONT"),
+            ('DT', f"{self.exp_start_time}"),
+            ('PU', f"{self.flow_cell_id}"),
+            ('PM', f"{self.device_id}"),
+            ('LB', f"{self.sample_id}"),
+            ('DS', f"%s" % ' '.join([
+                f"run_id={self.run_id}",
+                f"basecall_model={model}",
+            ]))
         ])
-        return '\t'.join([RG, DT, DS])
+        return '\t'.join(["@RG", *[f"{k}:{v}" for k, v in self._groupdict.items()]])
 
-    @property
     def tagdata(self):
         return [
             f"mx:i:{self.mux}",
             f"ch:i:{self.channel}",
             f"st:Z:{self.start_time}",
             f"rn:i:{self.read_number}",
+            f"f5:Z:{self.filename}",
         ]
 
 
