@@ -15,7 +15,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import bonito
 from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
-from bonito.io import CTCWriter, Writer, biofmt, NullWriter
+from bonito.io import CTCWriter, Writer, biofmt
 from bonito.multiprocessing import process_cancel
 from bonito.util import column_to_set, load_symbol, load_model, init
 

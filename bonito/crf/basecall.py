@@ -5,23 +5,24 @@ Bonito CRF basecalling
 import torch
 from koi.decode import beam_search, to_str
 
-from bonito.multiprocessing import thread_map, thread_iter
-from bonito.util import chunk, batchify, unbatchify, half_supported, stitch
+from bonito.multiprocessing import thread_iter
+from bonito.util import chunk, stitch, batchify, unbatchify, half_supported
 
 
-def stitch_scores(scores, length, size, overlap, stride, reverse=False):
+
+def stitch_results(results, length, size, overlap, stride, reverse=False):
     """
-    Stitch scores together with a given overlap.
+    Stitch results together with a given overlap.
     """
-    if isinstance(scores, dict):
+    if isinstance(results, dict):
         return {
-            k: stitch_scores(v, length, size, overlap, stride, reverse=reverse)
-            for k, v in scores.items()
+            k: stitch_results(v, length, size, overlap, stride, reverse=reverse)
+            for k, v in results.items()
         }
-    return stitch(scores, size, overlap, length, stride, reverse=reverse)
+    return stitch(results, size, overlap, length, stride, reverse=reverse)
 
 
-def compute_scores(model, batch, reverse=False):
+def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offset=0.0, blank_score=2.0, reverse=False):
     """
     Compute scores for model.
     """
@@ -30,7 +31,10 @@ def compute_scores(model, batch, reverse=False):
         dtype = torch.float16 if half_supported() else torch.float32
         scores = model(batch.to(dtype).to(device))
         if reverse: scores = model.seqdist.reverse_complement(scores)
-        sequence, qstring, moves = beam_search(scores, beam_width=32)
+        sequence, qstring, moves = beam_search(
+            scores, beam_width=beam_width, beam_cut=beam_cut,
+            scale=scale, offset=offset, blank_score=blank_score
+        )
         return {
             'qstring': qstring,
             'sequence': sequence,
@@ -52,13 +56,13 @@ def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=Fa
         (read, compute_scores(model, batch, reverse=reverse)) for read, batch in batches
     )
 
-    stitched = thread_iter(
-        (read, stitch_scores(scores, end - start, chunksize, overlap, model.stride, reverse))
+    results = thread_iter(
+        (read, stitch_results(scores, end - start, chunksize, overlap, model.stride, reverse))
         for ((read, start, end), scores) in unbatchify(scores)
     )
 
     basecalls = thread_iter(
-        (read, {k: to_str(v) for k, v in attrs.items()}) for read, attrs in stitched
+        (read, {k: to_str(v) for k, v in attrs.items()}) for read, attrs in results
     )
 
     return basecalls
