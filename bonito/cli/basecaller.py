@@ -46,6 +46,7 @@ def main(args):
         args.device,
         weights=int(args.weights),
         chunksize=args.chunksize,
+        overlap=args.overlap,
         batchsize=args.batchsize,
         quantize=args.quantize,
         use_koi=True,
@@ -82,7 +83,11 @@ def main(args):
     if args.save_ctc:
         reads = (
             chunk for read in reads
-            for chunk in read_chunks(read, chunksize=args.chunksize)
+            for chunk in read_chunks(
+                read,
+                chunksize=model.config["basecaller"]["chunksize"],
+                overlap=model.config["basecaller"]["overlap"]
+            )
         )
         ResultsWriter = CTCWriter
     else:
@@ -90,7 +95,9 @@ def main(args):
 
     results = basecall(
         model, reads, reverse=args.revcomp,
-        batchsize=args.batchsize, chunksize=args.chunksize,
+        batchsize=model.config["basecaller"]["batchsize"],
+        chunksize=model.config["basecaller"]["chunksize"],
+        overlap=model.config["basecaller"]["overlap"]
     )
 
     if aligner:
@@ -128,9 +135,10 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
-    parser.add_argument("--quantize", action="store_true", default=False)
+    parser.add_argument("--quantize", action="store_true", default=None)
     parser.add_argument("--recursive", action="store_true", default=False)
-    parser.add_argument("--batchsize", default=32, type=int)
-    parser.add_argument("--chunksize", default=4000, type=int)
+    parser.add_argument("--chunksize", default=None, type=int)
+    parser.add_argument("--overlap", default=None, type=int)
+    parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
     return parser

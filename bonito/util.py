@@ -251,8 +251,7 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-
-def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=0, quantize=False, use_koi=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=0, overlap=0, quantize=False, use_koi=False):
     """
     Load a model from disk
     """
@@ -269,12 +268,24 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=
     config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
 
+    basecall_params = config.get("basecaller", {})
+    chunksize = basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize")
+    overlap = basecall_params["overlap"] = overlap or basecall_params.get("overlap")
+    batchsize = basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize")
+    quantize = basecall_params["quantize"] = quantize or basecall_params.get("quantize")
+    if any([v is None or v == 0 for v in basecall_params.values()]):
+        # TODO: improve error reporting
+        sys.stderr.write("> basecall params not fully specified\n")
+        exit(1)
+    config["basecaller"] = basecall_params
+
     Model = load_symbol(config, "Model")
     model = Model(config)
 
     if use_koi:
         model.encoder = koi.lstm.update_graph(
-            model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
+            model.encoder,
+            batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
 
     state_dict = torch.load(weights, map_location=device)
