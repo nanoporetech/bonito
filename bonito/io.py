@@ -17,7 +17,6 @@ import numpy as np
 from pysam import AlignmentFile, AlignmentHeader, AlignedSegment
 
 import bonito
-from bonito.mod_util import mods_tags_to_str
 from bonito.cli.convert import typical_indices
 from bonito.util import mean_qscore_from_qstring
 
@@ -383,7 +382,6 @@ class Writer(Thread):
             )
         )
 
-
     def run(self):
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, res in self.iterator:
@@ -392,7 +390,7 @@ class Writer(Thread):
                 qstring = res.get('qstring', '*')
                 mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = res.get('mapping', False)
-                mods_tags = res.get('mods', None)
+                mods_tags = res.get('mods', [])
 
                 if self.duplex:
                     samples = len(read[0].signal) + len(read[1].signal)
@@ -405,7 +403,7 @@ class Writer(Thread):
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
                     *read.tagdata(),
-                    *mods_tags_to_str(mods_tags),
+                    *mods_tags,
                 ]
 
                 if len(seq):

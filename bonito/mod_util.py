@@ -26,10 +26,12 @@ def call_mods(mods_model, read, read_attrs):
         seq_to_sig_map,
         str_seq=read_attrs['sequence'].upper(),
     )
-    read_attrs['mods'] = call_read_mods(
-        remora_read,
-        remora_model,
-        remora_metadata,
-        return_mm_ml_tags=True,
+    read_attrs['mods'] = mods_tags_to_str(
+        call_read_mods(
+            remora_read,
+            remora_model,
+            remora_metadata,
+            return_mm_ml_tags=True,
+        )
     )
     return read_attrs
