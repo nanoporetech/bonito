@@ -78,11 +78,6 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     Write a fastq record to a file descriptor.
     """
     if tags is not None:
-        tags_str = ""
-        if mods_tags is not None:
-            mm_tag, ml_tag = mods_tags_to_str(mods_tags)
-            tags_str += f"{mm_tag}\t{ml_tag}"
-        tags_str += sep.join(f"{k}={v}" for k, v in tags.items())
         fd.write(f"@{header} {sep.join(tags)}\n")
     else:
         fd.write(f"@{header}\n")
@@ -103,7 +98,7 @@ def sam_header(sep='\t'):
     ])
 
 
-def sam_record(read_id, sequence, qstring, mapping, tags=None, mods_tags=None, sep='\t'):
+def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
     """
     Format a string sam record.
     """
@@ -131,8 +126,6 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, mods_tags=None, s
             read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
         ]
 
-    if mods_tags is not None:
-        record.extend(mods_tags_to_str(mods_tags))
     if tags is not None:
         record.extend(tags)
 
@@ -393,16 +386,17 @@ class Writer(Thread):
                 tags = [
                     *self.tags,
                     *read.tagdata,
+                    *mods_tags_to_str(mods_tags),
                     f'np:Z:mean_qscore={mean_qscore}',
                 ]
 
                 if len(seq):
                     if self.mode == 'wfq':
-                        write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags, mods_tags=mods_tags)
+                        write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags)
                     else:
                         self.output.write(
                             AlignedSegment.fromstring(
-                                sam_record(read_id, seq, qstring, mapping, tags=tags, mods_tags=mods_tags),
+                                sam_record(read_id, seq, qstring, mapping, tags=tags),
                                 self.output.header
                             )
                         )
