@@ -139,7 +139,7 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
     return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, expand_blanks=True):
     rnn = layers[rnn_type]
     return Serial([
             conv(insize, 4, ks=5, bias=True, activation=activation),
@@ -149,7 +149,10 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
             rnn(features, features, reverse=True), rnn(features, features),
             rnn(features, features, reverse=True), rnn(features, features),
             rnn(features, features, reverse=True),
-            LinearCRFEncoder(features, n_base, state_len, bias=True, activation='tanh', scale=scale, blank_score=blank_score)
+            LinearCRFEncoder(
+                features, n_base, state_len, activation='tanh', scale=scale,
+                blank_score=blank_score, expand_blanks=expand_blanks
+            )
     ])
 
 
@@ -162,7 +165,7 @@ class SeqdistModel(Module):
         self.alphabet = seqdist.alphabet
 
     def forward(self, x):
-        return self.encoder(x).to(torch.float32)
+        return self.encoder(x)
 
     def decode_batch(self, x):
         scores = self.seqdist.posteriors(x.to(torch.float32)) + 1e-8
