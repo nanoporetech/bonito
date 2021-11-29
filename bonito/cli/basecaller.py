@@ -52,7 +52,6 @@ def main(args):
     )
 
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
-    model = load_model(args.model_directory, args.device, weights=int(args.weights))
     basecall = load_symbol(args.model_directory, "basecall")
 
     if args.reference:
