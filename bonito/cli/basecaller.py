@@ -6,6 +6,7 @@ import sys
 import mappy
 import numpy as np
 from tqdm import tqdm
+from hashlib import md5
 from time import perf_counter
 from datetime import timedelta
 from itertools import islice as take
@@ -36,6 +37,7 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
+    model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     model = load_model(args.model_directory, args.device, weights=int(args.weights))
     basecall = load_symbol(args.model_directory, "basecall")
 
@@ -47,6 +49,13 @@ def main(args):
             exit(1)
     else:
         aligner = None
+
+    groups = {
+        read.readgroup(args.model_directory, model_hash) for read in get_reads(
+            args.reads_directory, n_proc=8, recursive=args.recursive,
+            read_ids=column_to_set(args.read_ids), skip=args.skip,
+            meta=True, cancel=process_cancel()
+    )}
 
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
@@ -74,15 +83,9 @@ def main(args):
     if aligner:
         results = align_map(aligner, results)
 
-    tags = [
-        f"np:Z:basecall_model={args.model_directory}",
-        f"np:Z:basecaller=bonito@v{bonito.__version__}",
-        f"np:Z:aligner=minimap2@v{mappy.__version__}",
-    ]
-
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
-        aligner=aligner, ref_fn=args.reference, tags=tags
+        aligner=aligner, ref_fn=args.reference, groups=groups, group_key=model_hash
     )
 
     t0 = perf_counter()

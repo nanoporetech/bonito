@@ -12,8 +12,8 @@ from collections import namedtuple
 from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
 
+import mappy
 import numpy as np
-from mappy import revcomp
 from pysam import AlignmentFile, AlignmentHeader, AlignedSegment
 
 import bonito
@@ -23,6 +23,8 @@ from bonito.util import mean_qscore_from_qstring
 
 logger = getLogger('bonito')
 Format = namedtuple("Format", "aligned name mode")
+
+__ont_bam_spec__ = "0.0.1"
 
 
 def biofmt(aligned=False):
@@ -84,17 +86,31 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     fd.flush()
 
 
-def sam_header(sep='\t'):
+def sam_header(groups, sep='\t'):
     """
     Format a string sam header.
     """
-    return '%s\n' % sep.join([
+    HD = sep.join([
+        '@HD',
+        'VN:1.5',
+        'SO:unknown',
+        'ob:%s' % __ont_bam_spec__,
+    ])
+    PG1 = sep.join([
         '@PG',
-        'ID:bonito',
+        'ID:basecaller',
         'PN:bonito',
         'VN:%s' % bonito.__version__,
-        'CL:%s' % ' '.join(sys.argv),
+        'CL:bonito %s' % ' '.join(sys.argv[1:]),
     ])
+    PG2 = sep.join([
+        '@PG',
+        'ID:aligner',
+        'PN:minimap2',
+        'VN:%s' % mappy.__version__,
+        'DS:mappy',
+    ])
+    return '%s\n' % os.linesep.join([HD, PG1, PG2, *groups])
 
 
 def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
@@ -115,7 +131,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
             mapping.mapq,
             ''.join(softclip if mapping.strand == +1 else softclip[::-1]),
             '*', 0, 0,
-            sequence if mapping.strand == +1 else revcomp(sequence),
+            sequence if mapping.strand == +1 else mappy.revcomp(sequence),
             qstring,
             'NM:i:%s' % mapping.NM,
             'MD:Z:%s' % mapping.MD,
@@ -345,7 +361,7 @@ class CSVLogger:
 
 class Writer(Thread):
 
-    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, tags=None):
+    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, groups=None, group_key=None):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -353,18 +369,20 @@ class Writer(Thread):
         self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
-        self.tags = tags if tags else {}
+        self.fastq = mode == 'wfq'
+        self.group_key = group_key
         self.output = AlignmentFile(
-            fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
+            fd, 'w' if self.fastq else self.mode, add_sam_header=not self.fastq,
             reference_filename=ref_fn,
             header=AlignmentHeader.from_references(
                 reference_names=aligner.seq_names if aligner else [],
                 reference_lengths=[
                     len(aligner.seq(name)) for name in aligner.seq_names
                 ] if aligner else [],
-                text=sam_header(),
+                text=sam_header(groups),
             )
         )
+
 
     def run(self):
         with CSVLogger(summary_file(), sep='\t') as summary:
@@ -383,9 +401,9 @@ class Writer(Thread):
                     read_id = read.read_id
 
                 tags = [
-                    *self.tags,
-                    *read.tagdata,
-                    f'np:Z:mean_qscore={mean_qscore}',
+                    f'RG:Z:{read.run_id}_{self.group_key}',
+                    f'qs:i:{round(mean_qscore)}',
+                    *read.tagdata(),
                 ]
 
                 if len(seq):
@@ -413,7 +431,10 @@ class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
-    def __init__(self, mode, iterator, aligner, min_coverage=0.90, min_accuracy=0.99, fd=sys.stdout, ref_fn=None, tags=None):
+    def __init__(
+            self, mode, iterator, aligner, fd=sys.stdout, min_coverage=0.90,
+            min_accuracy=0.99, ref_fn=None, groups=None
+    ):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -422,14 +443,13 @@ class CTCWriter(Thread):
         self.iterator = iterator
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
-        self.tags = tags if tags else {}
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
             reference_filename=ref_fn,
             header=AlignmentHeader.from_references(
                 reference_names=aligner.seq_names,
                 reference_lengths=[len(aligner.seq(name)) for name in aligner.seq_names],
-                text=sam_header(),
+                text=sam_header(groups),
             )
         )
 
@@ -468,7 +488,7 @@ class CTCWriter(Thread):
                 summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
 
                 if mapping.strand == -1:
-                    refseq = revcomp(refseq)
+                    refseq = mappy.revcomp(refseq)
 
                 target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
                 targets.append(target)
