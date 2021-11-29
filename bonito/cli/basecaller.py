@@ -87,11 +87,11 @@ def main(args):
     if aligner:
         results = align_map(aligner, results)
 
-    tags = {
-        "np:Z:basecall_model": args.model_directory,
-        "np:Z:basecaller": "bonito@v%s" % bonito.__version__,
-        "np:Z:aligner": "minimap2@v%s" % mappy.__version__,
-    }
+    tags = [
+        f"np:Z:basecall_model={args.model_directory}",
+        f"np:Z:basecaller=bonito@v{bonito.__version__}",
+        f"np:Z:aligner=minimap2@v{mappy.__version__}",
+    ]
 
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
