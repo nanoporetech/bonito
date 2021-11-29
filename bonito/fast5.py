@@ -5,9 +5,10 @@ Bonito Fast5 Utils
 import sys
 from glob import glob
 from pathlib import Path
+from itertools import chain
 from functools import partial
 from multiprocessing import Pool
-from itertools import chain, starmap
+from collections import OrderedDict
 from datetime import datetime, timedelta
 
 import torch
@@ -18,8 +19,9 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 
 class Read:
 
-    def __init__(self, read, filename):
+    def __init__(self, read, filename, meta=False):
 
+        self.meta = meta
         self.read_id = read.read_id
         self.filename = filename.name
         self.run_id = read.get_run_id()
@@ -47,17 +49,25 @@ class Read:
         if type(self.sample_id) in (bytes, np.bytes_):
             self.sample_id = self.sample_id.decode()
 
-        exp_start_time = tracking_id['exp_start_time']
-        if type(exp_start_time) in (bytes, np.bytes_):
-            exp_start_time = exp_start_time.decode()
+        self.exp_start_time = tracking_id['exp_start_time']
+        if type(self.exp_start_time) in (bytes, np.bytes_):
+            self.exp_start_time = self.exp_start_time.decode()
+        self.exp_start_time = self.exp_start_time.replace('Z', '')
 
-        exp_start_dt = datetime.fromisoformat(exp_start_time.replace('Z', ''))
+        exp_start_dt = datetime.fromisoformat(self.exp_start_time)
         start_time = exp_start_dt + timedelta(seconds=self.start)
-        self.start_time = start_time.replace(microsecond=0).isoformat() + 'Z'
+        self.start_time = start_time.replace(microsecond=0).isoformat()
 
         self.flow_cell_id = tracking_id['flow_cell_id']
         if type(self.flow_cell_id) in (bytes, np.bytes_):
             self.flow_cell_id = self.flow_cell_id.decode()
+
+        self.device_id = tracking_id['device_id']
+        if type(self.device_id) in (bytes, np.bytes_):
+            self.device_id = self.device_id.decode()
+
+        if self.meta:
+            return
 
         raw = read.handle[read.raw_dataset_name][:]
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
@@ -76,15 +86,28 @@ class Read:
     def __repr__(self):
         return "Read('%s')" % self.read_id
 
-    @property
+    def readgroup(self, model, model_hash):
+        self._groupdict = OrderedDict([
+            ('ID', f"{self.run_id}_{model_hash}"),
+            ('PL', f"ONT"),
+            ('DT', f"{self.exp_start_time}"),
+            ('PU', f"{self.flow_cell_id}"),
+            ('PM', f"{self.device_id}"),
+            ('LB', f"{self.sample_id}"),
+            ('DS', f"%s" % ' '.join([
+                f"run_id={self.run_id}",
+                f"basecall_model={model}",
+            ]))
+        ])
+        return '\t'.join(["@RG", *[f"{k}:{v}" for k, v in self._groupdict.items()]])
+
     def tagdata(self):
         return [
-            f"np:Z:run_id={self.run_id}",
-            f"np:Z:channel={self.channel}",
-            f"np:Z:sample_id={self.sample_id}",
-            f"np:Z:start_time={self.start_time}",
-            f"np:Z:read_number={self.read_number}",
-            f"np:Z:flow_cell_id={self.flow_cell_id}",
+            f"mx:i:{self.mux}",
+            f"ch:i:{self.channel}",
+            f"st:Z:{self.start_time}",
+            f"rn:i:{self.read_number}",
+            f"f5:Z:{self.filename}",
         ]
 
 
@@ -200,16 +223,16 @@ def get_read_ids(filename, read_ids=None, skip=False):
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
 
 
-def get_raw_data_for_read(info):
+def get_raw_data_for_read(info, meta=False):
     """
     Get the raw signal from the fast5 file for a given filename, read_id pair
     """
     filename, read_id = info
     with get_fast5_file(filename, 'r') as f5_fh:
-        return Read(f5_fh.get_read(read_id), filename)
+        return Read(f5_fh.get_read(read_id), filename, meta=meta)
 
 
-def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, recursive=False, cancel=None):
+def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, recursive=False, cancel=None, meta=False):
     """
     Get all reads in a given `directory`.
     """
@@ -217,7 +240,7 @@ def get_reads(directory, read_ids=None, skip=False, max_read_size=0, n_proc=1, r
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
     with Pool(n_proc) as pool:
         for job in chain(pool.imap(get_filtered_reads, (Path(x) for x in glob(directory + "/" + pattern, recursive=True)))):
-            for read in pool.imap(get_raw_data_for_read, job):
+            for read in pool.imap(partial(get_raw_data_for_read, meta=meta), job):
                 if max_read_size > 0 and len(read.signal) > max_read_size:
                     sys.stderr.write(
                         "> skipping long read %s (%s samples)\n" % (read.read_id, len(read.signal))
