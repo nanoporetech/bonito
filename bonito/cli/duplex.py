@@ -34,7 +34,7 @@ import bonito
 from bonito.io import Writer, devnull
 from bonito.aligner import Aligner, align_map
 from bonito.util import load_model, half_supported
-#from bonito.crf.basecall import transfer, split_read, stitch
+from bonito.crf.basecall import transfer, split_read, stitch
 from bonito.fast5 import get_raw_data_for_read, get_fast5_file
 from bonito.util import unbatchify, batchify, chunk, concat, accuracy
 from bonito.multiprocessing import thread_map, process_map, process_cancel

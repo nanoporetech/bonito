@@ -1,18 +1,17 @@
-mappy==2.20
+# general requirements
+mappy==2.23
 toml==0.10.2
 tqdm==4.31.1
 scipy==1.4.1
-torch==1.10.0+cu111
 numpy~=1.17.5
-pyspoa==0.0.8
 pysam==0.18.0
 parasail==1.2
-ont-seqdist-cuda111==0.0.3
 pandas==1.1.5
 requests==2.25.1
-crf-beam==0.1.7
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
+# cuda requirements
 koi-cuda111==0.0.4
 cupy-cuda111==9.6.0
-genomeworks-cuda-11-1==2021.2.2
+torch==1.10.0+cu111
+ont-seqdist-cuda111==0.0.3
