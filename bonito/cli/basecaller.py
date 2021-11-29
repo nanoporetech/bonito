@@ -2,6 +2,7 @@
 Bonito Basecaller
 """
 
+import os
 import sys
 import mappy
 import numpy as np
@@ -17,10 +18,12 @@ from bonito.aligner import Aligner, align_map
 from bonito.fast5 import get_reads, read_chunks
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.multiprocessing import process_cancel
-from bonito.util import column_to_set, load_symbol, load_model
+from bonito.util import column_to_set, load_symbol, load_model, init
 
 
 def main(args):
+
+    init(args.seed, args.device)
 
     fmt = biofmt(aligned=args.reference is not None)
 
@@ -37,8 +40,18 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
+
+    model = load_model(
+        args.model_directory,
+        args.device,
+        weights=int(args.weights),
+        chunksize=args.chunksize,
+        batchsize=args.batchsize,
+        quantize=args.quantize,
+        use_koi=True,
+    )
+
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
-    model = load_model(args.model_directory, args.device, weights=int(args.weights))
     basecall = load_symbol(args.model_directory, "basecall")
 
     if args.reference:
@@ -81,7 +94,7 @@ def main(args):
     )
 
     if aligner:
-        results = align_map(aligner, results)
+        results = align_map(aligner, results, n_thread=os.cpu_count())
 
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
@@ -110,10 +123,12 @@ def argparser():
     parser.add_argument("--reference")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--weights", default="0", type=str)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
+    parser.add_argument("--quantize", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
     parser.add_argument("--batchsize", default=32, type=int)
     parser.add_argument("--chunksize", default=4000, type=int)

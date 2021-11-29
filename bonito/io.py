@@ -71,7 +71,6 @@ def write_fasta(header, sequence, fd=sys.stdout):
     Write a fasta record to a file descriptor.
     """
     fd.write(f">{header}\n{sequence}")
-    fd.flush()
 
 
 def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
@@ -83,7 +82,6 @@ def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
     else:
         fd.write(f"@{header}\n")
     fd.write(f"{sequence}\n+\n{qstring}\n")
-    fd.flush()
 
 
 def sam_header(groups, sep='\t'):
@@ -357,6 +355,26 @@ class CSVLogger:
 
     def __exit__(self, *args):
         self.close()
+
+
+class NullWriter(Thread):
+
+    def __init__(self, mode, iterator, duplex=False, **kwargs):
+        super().__init__()
+        self.log = []
+        self.duplex = duplex
+        self.iterator = iterator
+
+    def run(self):
+
+        for read, res in self.iterator:
+            if self.duplex:
+                samples = len(read[0].signal) + len(read[1].signal)
+                read_id = '%s;%s' % (read[0].read_id, read[1].read_id)
+            else:
+                samples = len(read.signal)
+                read_id = read.read_id
+            self.log.append((read_id, samples))
 
 
 class Writer(Thread):

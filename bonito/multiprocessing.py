@@ -47,7 +47,19 @@ def thread_map(func, iterator, n_thread=4, maxsize=2):
     Take an `iterator` of key, value pairs and apply `func` to all values using `n_thread` threads.
     """
     if n_thread == 0: return ((k, func(v)) for k, v in iterator)
-    return iter(ThreadMap(partial(MapWorkerThread, func), iterator, n_thread, maxsize=maxsize))
+    return iter(
+        ThreadMap(partial(MapWorkerThread, func, starmap=False), iterator, n_thread, maxsize=maxsize)
+    )
+
+
+def thread_starmap(func, iterator, n_thread=4, maxsize=2):
+    """
+    Take an `iterator` of key, value pairs and apply `func` to all values using `n_thread` threads.
+    """
+    if n_thread == 0: return ((k, func(*v)) for k, v in iterator)
+    return iter(
+        ThreadMap(partial(MapWorkerThread, func, starmap=True), iterator, n_thread, maxsize=maxsize)
+    )
 
 
 class BackgroundIterator:
@@ -92,7 +104,8 @@ class ProcessIterator(BackgroundIterator, Process):
 
 class MapWorker(Process):
     """
-    Process that reads items from an input_queue, applies a func to them and puts them on an output_queue
+    Process that reads items from an input_queue, applies a
+    func to them and puts them on an output_queue.
     """
     def __init__(self, func, input_queue, output_queue):
         super().__init__()
@@ -117,7 +130,10 @@ class ProcessMap(Thread):
         self.iterator = iterator
         self.work_queue = Queue(n_proc * 2)
         self.output_queue = output_queue or Queue()
-        self.processes = [MapWorker(func, self.work_queue, self.output_queue) for _ in range(n_proc)]
+        self.processes = [
+            MapWorker(func, self.work_queue, self.output_queue)
+            for _ in range(n_proc)
+        ]
 
     def start(self):
         for process in self.processes:
@@ -146,11 +162,13 @@ class ProcessMap(Thread):
 
 class MapWorkerThread(Thread):
     """
-    Process that reads items from an input_queue, applies a func to them and puts them on an output_queue
+    Process that reads items from an input_queue, applies a func
+    to them and puts them on an output_queue.
     """
-    def __init__(self, func, input_queue=None, output_queue=None):
+    def __init__(self, func, input_queue=None, output_queue=None, starmap=False):
         super().__init__()
         self.func = func
+        self.starmap = starmap
         self.input_queue = input_queue
         self.output_queue = output_queue
 
@@ -161,8 +179,10 @@ class MapWorkerThread(Thread):
                 self.output_queue.put(item)
                 break
             k, v = item
-            self.output_queue.put((k, self.func(v)))
-
+            if self.starmap:
+                self.output_queue.put((k, self.func(*v)))
+            else:
+                self.output_queue.put((k, self.func(v)))
 
 class ThreadMap(Thread):
 
@@ -172,7 +192,10 @@ class ThreadMap(Thread):
         self.n_thread = n_thread
         self.work_queues = [queue.Queue(maxsize) for _ in range(n_thread)]
         self.output_queues = [queue.Queue(maxsize) for _ in range(n_thread)]
-        self.workers = [worker_type(input_queue=in_q, output_queue=out_q) for (in_q, out_q) in zip(self.work_queues, self.output_queues)]
+        self.workers = [
+            worker_type(input_queue=in_q, output_queue=out_q)
+            for (in_q, out_q) in zip(self.work_queues, self.output_queues)
+        ]
 
     def start(self):
         for worker in self.workers:
