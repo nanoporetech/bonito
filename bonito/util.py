@@ -271,9 +271,9 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     basecall_params = config.get("basecaller", {})
     # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
     # flags override values in config
-    chunksize = basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize")
-    overlap = basecall_params["overlap"] = overlap or basecall_params.get("overlap")
-    batchsize = basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize")
+    chunksize = basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
+    overlap = basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
+    batchsize = basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
     quantize = basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
     config["basecaller"] = basecall_params
 
