@@ -12,6 +12,6 @@ ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 # cuda requirements
 torch~=1.10.0
-koi-cuda102==0.0.4
+koi-cuda102==0.0.5
 cupy-cuda102==9.6.0
 seqdist==0.0.3
