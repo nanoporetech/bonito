@@ -1,7 +1,33 @@
+import sys
 import numpy as np
 
+from remora.model_util import load_model
 from remora.data_chunks import RemoraRead
 from remora.inference import call_read_mods
+
+
+def load_mods_model(mod_bases, bc_model_str, model_path):
+    if mod_bases is not None:
+        try:
+            bc_model_type, model_version = bc_model_str.split('@')
+            bc_model_type_attrs = bc_model_type.split('_')
+            pore = '_'.join(bc_model_type_attrs[:-1])
+            bc_model_subtype = bc_model_type_attrs[-1]
+        except:
+            sys.stderr.write(
+                f"Could not parse basecall model directory ({bc_model_str}) "
+                "for automatic modified base model loading"
+            )
+            sys.exit(1)
+        mod_bases = "_".join(sorted(x.lower() for x in mod_bases))
+        return load_model(
+            pore=pore,
+            basecall_model_type=bc_model_subtype,
+            basecall_model_version=model_version,
+            modified_bases=mod_bases,
+            quiet=True,
+        )
+    return load_model(model_path, quiet=True)
 
 
 def mods_tags_to_str(mods_tags):

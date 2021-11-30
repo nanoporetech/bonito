@@ -11,12 +11,11 @@ from time import perf_counter
 from functools import partial
 from datetime import timedelta
 from itertools import islice as take
-from remora.model_util import load_model as load_mods_model
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.mod_util import call_mods
 from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
+from bonito.mod_util import call_mods, load_mods_model
 from bonito.fast5 import get_reads, get_read_groups, read_chunks
 from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
@@ -56,9 +55,11 @@ def main(args):
     basecall = load_symbol(args.model_directory, "basecall")
 
     mods_model = None
-    if args.modified_base_model is not None:
+    if args.modified_base_model is not None or args.modified_bases is not None:
         sys.stderr.write("> loading modified base model\n")
-        mods_model = load_mods_model(args.modified_base_model)
+        mods_model = load_mods_model(
+            args.modified_bases, args.model_directory, args.modified_base_model
+        )
         sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
@@ -139,6 +140,7 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
+    parser.add_argument("--modified-bases", nargs="+")
     parser.add_argument("--modified-base-model")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
