@@ -51,6 +51,19 @@ def thread_map(func, iterator, n_thread=4, maxsize=2):
     )
 
 
+def thread_itemmap(func, iterator, n_thread=4, maxsize=2):
+    """
+    Take an `iterator` of key, value pairs and apply `func` to all (key, values) using `n_thread` threads.
+    """
+    if n_thread == 0: return ((k, func(k, v)) for k, v in iterator)
+    yield from ThreadMap(
+        partial(MapWorkerThread, func, starmap=False, send_key=True),
+        iterator,
+        n_thread,
+        maxsize=maxsize,
+    )
+
+
 def thread_starmap(func, iterator, n_thread=4, maxsize=2):
     """
     Take an `iterator` of key, value pairs and apply `func` to all values using `n_thread` threads.
@@ -164,10 +177,11 @@ class MapWorkerThread(Thread):
     Process that reads items from an input_queue, applies a func
     to them and puts them on an output_queue.
     """
-    def __init__(self, func, input_queue=None, output_queue=None, starmap=False):
+    def __init__(self, func, input_queue=None, output_queue=None, starmap=False, send_key=False):
         super().__init__()
         self.func = func
         self.starmap = starmap
+        self.send_key = send_key
         self.input_queue = input_queue
         self.output_queue = output_queue
 
@@ -179,9 +193,15 @@ class MapWorkerThread(Thread):
                 break
             k, v = item
             if self.starmap:
-                self.output_queue.put((k, self.func(*v)))
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, *v)))
+                else:
+                    self.output_queue.put((k, self.func(*v)))
             else:
-                self.output_queue.put((k, self.func(v)))
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, v)))
+                else:
+                    self.output_queue.put((k, self.func(v)))
 
 class ThreadMap(Thread):
 

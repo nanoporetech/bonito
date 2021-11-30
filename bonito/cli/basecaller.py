@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from hashlib import md5
 from time import perf_counter
+from functools import partial
 from datetime import timedelta
 from itertools import islice as take
 from remora.model_util import load_model as load_mods_model
@@ -17,7 +18,7 @@ from bonito.mod_util import call_mods
 from bonito.aligner import Aligner, align_map
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.fast5 import get_reads, read_chunks
-from bonito.multiprocessing import process_cancel, thread_iter
+from bonito.multiprocessing import process_cancel, thread_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
 
 
@@ -107,10 +108,7 @@ def main(args):
     )
 
     if mods_model is not None:
-        results = thread_iter(
-            (read, call_mods(mods_model, read, read_attrs))
-            for read, read_attrs in results
-        )
+        results = thread_itemmap(partial(call_mods, mods_model), results)
     if aligner:
         results = align_map(aligner, results, n_thread=os.cpu_count())
 
