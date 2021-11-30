@@ -19,7 +19,6 @@ def load_mods_model(mod_bases, bc_model_str, model_path):
                 "for automatic modified base model loading"
             )
             sys.exit(1)
-        mod_bases = "_".join(sorted(x.lower() for x in mod_bases))
         return load_model(
             pore=pore,
             basecall_model_type=bc_model_subtype,
