@@ -40,16 +40,17 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
-
     model = load_model(
         args.model_directory,
         args.device,
         weights=int(args.weights),
         chunksize=args.chunksize,
+        overlap=args.overlap,
         batchsize=args.batchsize,
         quantize=args.quantize,
         use_koi=True,
     )
+    sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     basecall = load_symbol(args.model_directory, "basecall")
@@ -82,7 +83,11 @@ def main(args):
     if args.save_ctc:
         reads = (
             chunk for read in reads
-            for chunk in read_chunks(read, chunksize=args.chunksize)
+            for chunk in read_chunks(
+                read,
+                chunksize=model.config["basecaller"]["chunksize"],
+                overlap=model.config["basecaller"]["overlap"]
+            )
         )
         ResultsWriter = CTCWriter
     else:
@@ -90,7 +95,9 @@ def main(args):
 
     results = basecall(
         model, reads, reverse=args.revcomp,
-        batchsize=args.batchsize, chunksize=args.chunksize,
+        batchsize=model.config["basecaller"]["batchsize"],
+        chunksize=model.config["basecaller"]["chunksize"],
+        overlap=model.config["basecaller"]["overlap"]
     )
 
     if aligner:
@@ -128,9 +135,15 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
-    parser.add_argument("--quantize", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
-    parser.add_argument("--batchsize", default=32, type=int)
-    parser.add_argument("--chunksize", default=4000, type=int)
+
+    quant_parser = parser.add_mutually_exclusive_group(required=False)
+    quant_parser.add_argument("--quantize", dest="quantize", action="store_true")
+    quant_parser.add_argument("--no-quantize", dest="quantize", action="store_false")
+    parser.set_defaults(quantize=None)
+
+    parser.add_argument("--chunksize", default=None, type=int)
+    parser.add_argument("--overlap", default=None, type=int)
+    parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
     return parser

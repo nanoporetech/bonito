@@ -251,8 +251,7 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-
-def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=0, quantize=False, use_koi=False):
+def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
     Load a model from disk
     """
@@ -268,6 +267,15 @@ def load_model(dirname, device, weights=None, half=None, chunksize=0, batchsize=
     device = torch.device(device)
     config = toml.load(os.path.join(dirname, 'config.toml'))
     weights = os.path.join(dirname, 'weights_%s.tar' % weights)
+
+    basecall_params = config.get("basecaller", {})
+    # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
+    # flags override values in config
+    chunksize = basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize")
+    overlap = basecall_params["overlap"] = overlap or basecall_params.get("overlap")
+    batchsize = basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize")
+    quantize = basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
+    config["basecaller"] = basecall_params
 
     Model = load_symbol(config, "Model")
     model = Model(config)
