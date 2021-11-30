@@ -40,7 +40,6 @@ def main(args):
         exit(1)
 
     sys.stderr.write("> loading model\n")
-
     model = load_model(
         args.model_directory,
         args.device,
@@ -51,6 +50,7 @@ def main(args):
         quantize=args.quantize,
         use_koi=True,
     )
+    sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     basecall = load_symbol(args.model_directory, "basecall")
@@ -135,8 +135,13 @@ def argparser():
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
-    parser.add_argument("--quantize", action="store_true", default=None)
     parser.add_argument("--recursive", action="store_true", default=False)
+
+    quant_parser = parser.add_mutually_exclusive_group(required=False)
+    quant_parser.add_argument("--quantize", dest="quantize", action="store_true")
+    quant_parser.add_argument("--no-quantize", dest="quantize", action="store_false")
+    parser.set_defaults(quantize=None)
+
     parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--overlap", default=None, type=int)
     parser.add_argument("--batchsize", default=None, type=int)
