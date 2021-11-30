@@ -12,7 +12,7 @@ ont-remora==0.1.0
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 # cuda requirements
-koi-cuda111==0.0.4
+koi-cuda111==0.0.5
 cupy-cuda111==9.6.0
 torch==1.10.0+cu111
 ont-seqdist-cuda111==0.0.3
