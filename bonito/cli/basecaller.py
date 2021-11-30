@@ -17,10 +17,9 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.mod_util import call_mods
 from bonito.aligner import Aligner, align_map
 from bonito.io import CTCWriter, Writer, biofmt
-from bonito.fast5 import get_reads, read_chunks
+from bonito.fast5 import get_reads, get_read_groups, read_chunks
 from bonito.multiprocessing import process_cancel, thread_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
-
 
 def main(args):
 
@@ -71,12 +70,15 @@ def main(args):
     else:
         aligner = None
 
-    groups = {
-        read.readgroup(args.model_directory, model_hash) for read in get_reads(
-            args.reads_directory, n_proc=8, recursive=args.recursive,
+    if fmt.name != 'fastq':
+        groups = get_read_groups(
+            args.reads_directory, args.model_directory, model_hash,
+            n_proc=8, recursive=args.recursive,
             read_ids=column_to_set(args.read_ids), skip=args.skip,
-            meta=True, cancel=process_cancel()
-    )}
+            cancel=process_cancel()
+        )
+    else:
+        groups = []
 
     reads = get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
