@@ -7,7 +7,6 @@ import sys
 import numpy as np
 from tqdm import tqdm
 from hashlib import md5
-from mappy import Aligner
 from time import perf_counter
 from functools import partial
 from datetime import timedelta
@@ -16,7 +15,7 @@ from remora.model_util import load_model as load_mods_model
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.mod_util import call_mods
-from bonito.aligner import align_map
+from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.fast5 import get_reads, get_read_groups, read_chunks
 from bonito.multiprocessing import process_cancel, process_itemmap
