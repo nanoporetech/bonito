@@ -282,8 +282,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
 
     if use_koi:
         model.encoder = koi.lstm.update_graph(
-            model.encoder,
-            batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
+            model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
 
     state_dict = torch.load(weights, map_location=device)
