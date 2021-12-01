@@ -23,7 +23,7 @@ class File:
     """
     __url__ = "https://nanoporetech.box.com/shared/static/"
 
-    def __init__(self, path, url_frag, force):
+    def __init__(self, path, url_frag, force=False):
         self.path = path
         self.force = force
         self.url = os.path.join(self.__url__, url_frag)

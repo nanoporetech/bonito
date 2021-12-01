@@ -16,13 +16,19 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
+from bonito.cli.download import File, models, __models__
 from bonito.fast5 import get_reads, get_read_groups, read_chunks
 from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
 
+
 def main(args):
 
     init(args.seed, args.device)
+
+    if args.model_directory in models and args.model_directory not in os.listdir(__models__):
+        sys.stderr.write("> downloading model\n")
+        File(__models__, models[args.model_directory]).download()
 
     sys.stderr.write("> loading model\n")
     model = load_model(
