@@ -162,7 +162,7 @@ def med_mad(x, factor=1.4826):
     Calculate signal median and median absolute deviation
     """
     med = np.median(x)
-    mad = np.median(np.absolute(x - med)) * factor
+    mad = np.median(np.absolute(x - med)) * factor + np.finfo(np.float32).eps
     return med, mad
 
 
