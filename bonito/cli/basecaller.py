@@ -4,20 +4,20 @@ Bonito Basecaller
 
 import os
 import sys
-import mappy
 import numpy as np
 from tqdm import tqdm
 from hashlib import md5
 from time import perf_counter
+from functools import partial
 from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-import bonito
-from bonito.aligner import Aligner, align_map
+from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
-from bonito.multiprocessing import process_cancel
+from bonito.mod_util import call_mods, load_mods_model
 from bonito.fast5 import get_reads, get_read_groups, read_chunks
+from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
 
 def main(args):
@@ -53,6 +53,14 @@ def main(args):
 
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     basecall = load_symbol(args.model_directory, "basecall")
+
+    mods_model = None
+    if args.modified_base_model is not None or args.modified_bases is not None:
+        sys.stderr.write("> loading modified base model\n")
+        mods_model = load_mods_model(
+            args.modified_bases, args.model_directory, args.modified_base_model
+        )
+        sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -102,6 +110,8 @@ def main(args):
         overlap=model.config["basecaller"]["overlap"]
     )
 
+    if mods_model is not None:
+        results = process_itemmap(partial(call_mods, mods_model), results)
     if aligner:
         results = align_map(aligner, results, n_thread=os.cpu_count())
 
@@ -130,6 +140,8 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
+    parser.add_argument("--modified-bases", nargs="+")
+    parser.add_argument("--modified-base-model")
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)

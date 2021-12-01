@@ -70,7 +70,7 @@ def write_fasta(header, sequence, fd=sys.stdout):
     """
     Write a fasta record to a file descriptor.
     """
-    fd.write(f">{header}\n{sequence}")
+    fd.write(f">{header}\n{sequence}\n")
 
 
 def write_fastq(header, sequence, qstring, fd=sys.stdout, tags=None, sep="\t"):
@@ -143,7 +143,6 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
         record.extend(tags)
 
     return sep.join(map(str, record))
-
 
 
 def summary_file():
@@ -401,7 +400,6 @@ class Writer(Thread):
             )
         )
 
-
     def run(self):
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, res in self.iterator:
@@ -410,6 +408,7 @@ class Writer(Thread):
                 qstring = res.get('qstring', '*')
                 mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
                 mapping = res.get('mapping', False)
+                mods_tags = res.get('mods', [])
 
                 if self.duplex:
                     samples = len(read[0].signal) + len(read[1].signal)
@@ -422,6 +421,7 @@ class Writer(Thread):
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
                     *read.tagdata(),
+                    *mods_tags,
                 ]
 
                 if len(seq):

@@ -74,6 +74,18 @@ $ bonito train /data/training/model-dir
 
 All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
 
+## Modified Bases
+
+Modified base calling is handled by the ``ont-remora`` dependency.
+[See Remora documentation](https://github.com/nanoporetech/remora) for more information.
+
+Remora is provided with a set of pre-trained models.
+See the available models with the ``remora model list_pretrained`` command.
+
+```bash
+$ bonito basecaller dna_r9.4.1_e8_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi --device cuda:0 > basecalls_with_mods.bam
+```
+
 ## Duplex
 
 Duplex calling takes template and complement reads and produces a single higher quality call.

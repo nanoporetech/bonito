@@ -3,7 +3,9 @@ Bonito basecall
 """
 
 import torch
+import numpy as np
 from functools import partial
+
 from bonito.multiprocessing import process_map
 from bonito.util import mean_qscore_from_qstring
 from bonito.util import chunk, stitch, batchify, unbatchify, permute
@@ -22,7 +24,7 @@ def basecall(model, reads, beamsize=5, chunksize=0, overlap=0, batchsize=1, qsco
     scores = (
         (read, {'scores': stitch(v, chunksize, overlap, len(read.signal), model.stride)}) for read, v in scores
     )
-    decoder = partial(decode, decode=model.decode, beamsize=beamsize, qscores=qscores)
+    decoder = partial(decode, decode=model.decode, beamsize=beamsize, qscores=qscores, stride=model.stride)
     basecalls = process_map(decoder, scores, n_proc=4)
     return basecalls
 
@@ -38,7 +40,7 @@ def compute_scores(model, batch):
     return probs.cpu().to(torch.float32)
 
 
-def decode(scores, decode, beamsize=5, qscores=False):
+def decode(scores, decode, beamsize=5, qscores=False, stride=1):
     """
     Convert the network scores into a sequence.
     """
@@ -55,4 +57,8 @@ def decode(scores, decode, beamsize=5, qscores=False):
             qstring = '*'
         except:
             pass
-    return {'sequence': seq, 'qstring': qstring, 'mean_qscore': mean_qscore, 'path': path}
+    sig_move = None
+    if path is not None:
+        sig_move = np.full(path.size * stride, False)
+        sig_move[np.where(path)[0] * stride] = True
+    return {'sequence': seq, 'qstring': qstring, 'mean_qscore': mean_qscore, 'path': path, 'sig_move': sig_move}

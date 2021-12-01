@@ -6,9 +6,8 @@ import queue
 from itertools import count
 from threading import Thread
 from functools import partial
-from collections import deque
 from signal import signal, SIGINT
-from multiprocessing import Process, Queue, Event, Lock, cpu_count
+from multiprocessing import Process, Queue, Event
 
 
 def process_iter(iterator, maxsize=1):
@@ -34,12 +33,27 @@ def process_cancel():
     return event
 
 
-def process_map(func, iterator, n_proc=4, maxsize=0):
+def process_map(func, iterator, n_proc=4, maxsize=2):
     """
     Take an `iterator` of key, value pairs and apply `func` to all values using `n_proc` processes.
     """
     if n_proc == 0: return ((k, func(v)) for k, v in iterator)
     return iter(ProcessMap(func, iterator, n_proc, output_queue=Queue(maxsize)))
+
+
+def process_itemmap(func, iterator, n_proc=4, maxsize=2):
+    """
+    Take an `iterator` of key, value pairs and apply `func` to all (key, values) using `n_proc` processes.
+    """
+    if n_proc == 0: return ((k, func(k, v)) for k, v in iterator)
+    yield from ProcessMap(
+        func,
+        iterator,
+        n_proc,
+        output_queue=Queue(maxsize),
+        starmap=False,
+        send_key=True
+    )
 
 
 def thread_map(func, iterator, n_thread=4, maxsize=2):
@@ -49,6 +63,19 @@ def thread_map(func, iterator, n_thread=4, maxsize=2):
     if n_thread == 0: return ((k, func(v)) for k, v in iterator)
     return iter(
         ThreadMap(partial(MapWorkerThread, func, starmap=False), iterator, n_thread, maxsize=maxsize)
+    )
+
+
+def thread_itemmap(func, iterator, n_thread=4, maxsize=2):
+    """
+    Take an `iterator` of key, value pairs and apply `func` to all (key, values) using `n_thread` threads.
+    """
+    if n_thread == 0: return ((k, func(k, v)) for k, v in iterator)
+    yield from ThreadMap(
+        partial(MapWorkerThread, func, starmap=False, send_key=True),
+        iterator,
+        n_thread,
+        maxsize=maxsize,
     )
 
 
@@ -107,11 +134,13 @@ class MapWorker(Process):
     Process that reads items from an input_queue, applies a
     func to them and puts them on an output_queue.
     """
-    def __init__(self, func, input_queue, output_queue):
+    def __init__(self, func, input_queue, output_queue, starmap=False, send_key=False):
         super().__init__()
         self.func = func
         self.input_queue = input_queue
         self.output_queue = output_queue
+        self.starmap = starmap
+        self.send_key = send_key
 
     def run(self):
         while True:
@@ -119,19 +148,29 @@ class MapWorker(Process):
             if item is StopIteration:
                 break
             k, v = item
-            self.output_queue.put((k, self.func(v)))
+            if self.starmap:
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, *v)))
+                else:
+                    self.output_queue.put((k, self.func(*v)))
+            else:
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, v)))
+                else:
+                    self.output_queue.put((k, self.func(v)))
 
 
 class ProcessMap(Thread):
 
-    def __init__(self, func, iterator, n_proc, output_queue=None):
+    def __init__(self, func, iterator, n_proc, output_queue=None, starmap=False, send_key=False):
         super().__init__()
-        self.key_map = {}
         self.iterator = iterator
+        self.starmap = starmap
+        self.send_key = send_key
         self.work_queue = Queue(n_proc * 2)
         self.output_queue = output_queue or Queue()
         self.processes = [
-            MapWorker(func, self.work_queue, self.output_queue)
+            MapWorker(func, self.work_queue, self.output_queue, self.starmap, self.send_key)
             for _ in range(n_proc)
         ]
 
@@ -141,9 +180,8 @@ class ProcessMap(Thread):
         super().start()
 
     def run(self):
-        for (k, v) in self.iterator:
-            self.work_queue.put((id(k), v))
-            self.key_map[id(k)] = k
+        for k, v in self.iterator:
+            self.work_queue.put((k, v))
         for _ in self.processes:
             self.work_queue.put(StopIteration)
         for process in self.processes:
@@ -156,8 +194,7 @@ class ProcessMap(Thread):
             item = self.output_queue.get()
             if item is StopIteration:
                 break
-            k, v = item
-            yield self.key_map.pop(k), v
+            yield item
 
 
 class MapWorkerThread(Thread):
@@ -165,10 +202,11 @@ class MapWorkerThread(Thread):
     Process that reads items from an input_queue, applies a func
     to them and puts them on an output_queue.
     """
-    def __init__(self, func, input_queue=None, output_queue=None, starmap=False):
+    def __init__(self, func, input_queue=None, output_queue=None, starmap=False, send_key=False):
         super().__init__()
         self.func = func
         self.starmap = starmap
+        self.send_key = send_key
         self.input_queue = input_queue
         self.output_queue = output_queue
 
@@ -180,9 +218,15 @@ class MapWorkerThread(Thread):
                 break
             k, v = item
             if self.starmap:
-                self.output_queue.put((k, self.func(*v)))
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, *v)))
+                else:
+                    self.output_queue.put((k, self.func(*v)))
             else:
-                self.output_queue.put((k, self.func(v)))
+                if self.send_key:
+                    self.output_queue.put((k, self.func(k, v)))
+                else:
+                    self.output_queue.put((k, self.func(v)))
 
 class ThreadMap(Thread):
 

@@ -5,10 +5,10 @@ Bonito Fast5 Utils
 import sys
 from glob import glob
 from pathlib import Path
+from itertools import chain
 from functools import partial
 from multiprocessing import Pool
 from collections import OrderedDict
-from itertools import chain, starmap
 from datetime import datetime, timedelta
 
 import torch

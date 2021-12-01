@@ -3,11 +3,11 @@ Bonito CRF basecalling
 """
 
 import torch
+import numpy as np
 from koi.decode import beam_search, to_str
 
 from bonito.multiprocessing import thread_iter
 from bonito.util import chunk, stitch, batchify, unbatchify, half_supported
-
 
 
 def stitch_results(results, length, size, overlap, stride, reverse=False):
@@ -30,7 +30,8 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
         device = next(model.parameters()).device
         dtype = torch.float16 if half_supported() else torch.float32
         scores = model(batch.to(dtype).to(device))
-        if reverse: scores = model.seqdist.reverse_complement(scores)
+        if reverse:
+            scores = model.seqdist.reverse_complement(scores)
         sequence, qstring, moves = beam_search(
             scores, beam_width=beam_width, beam_cut=beam_cut,
             scale=scale, offset=offset, blank_score=blank_score
@@ -38,7 +39,19 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
         return {
             'qstring': qstring,
             'sequence': sequence,
+            'moves': np.array(moves, dtype=bool),
         }
+
+
+def apply_stride_to_moves(model, attrs):
+    moves = np.array(attrs['moves'], dtype=bool)
+    sig_move = np.full(moves.size * model.stride, False)
+    sig_move[np.where(moves)[0] * model.stride] = True
+    return {
+        'qstring': to_str(attrs['qstring']),
+        'sequence': to_str(attrs['sequence']),
+        'sig_move': sig_move,
+    }
 
 
 def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=False):
@@ -61,8 +74,7 @@ def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=Fa
         for ((read, start, end), scores) in unbatchify(scores)
     )
 
-    basecalls = thread_iter(
-        (read, {k: to_str(v) for k, v in attrs.items()}) for read, attrs in results
+    return thread_iter(
+        (read, apply_stride_to_moves(model, attrs))
+        for read, attrs in results
     )
-
-    return basecalls
