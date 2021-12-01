@@ -96,7 +96,7 @@ class Trainer:
             for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
                 data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
                 scores_ = self.model(data_)
-                losses_ = self.criterion(scores_, targets_, lengths_)
+                losses_ = self.criterion(scores_.to(torch.float32), targets_, lengths_)
 
                 if not isinstance(losses_, dict): losses_ = {'loss': losses_}
 
@@ -160,7 +160,7 @@ class Trainer:
         data, targets, lengths = batch
 
         scores = self.model(data.to(self.device))
-        losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+        losses = self.criterion(scores.to(torch.float32), targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
         if hasattr(self.model, 'decode_batch'):
             seqs = self.model.decode_batch(scores)
