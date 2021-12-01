@@ -9,10 +9,17 @@ $ pip install ont-bonito
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads > basecalls.bam
 ```
 
-Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`. 
+Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`.
 
 ```bash
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 --reference reference.mmi /data/reads > basecalls.bam
+```
+
+Bonito will download and cache the basecalling model automatically on first use but all models can be downloaded with -
+
+``` bash
+$ bonito download --models --show  # show all available models
+$ bonito download --models         # download all available models
 ```
 
 The default `ont-bonito` package is built against CUDA 10.2 however a CUDA 11.1 build is available.
@@ -30,18 +37,6 @@ $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads --modified-bases 5mC --r
 ```
 
 To see the available models with the ``remora model list_pretrained`` command.
-
-## Developer Quickstart
-
-```bash
-$ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
-$ cd bonito
-$ python3 -m venv venv3
-$ source venv3/bin/activate
-(venv3) $ pip install --upgrade pip
-(venv3) $ pip install -r requirements.txt
-(venv3) $ python setup.py develop
-```
 
 ## Training your own model
 
@@ -67,6 +62,18 @@ $ bonito train /data/training/model-dir
 
 All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
 
+## Developer Quickstart
+
+```bash
+$ git clone https://github.com/nanoporetech/bonito.git  # or fork first and clone that
+$ cd bonito
+$ python3 -m venv venv3
+$ source venv3/bin/activate
+(venv3) $ pip install --upgrade pip
+(venv3) $ pip install -r requirements.txt
+(venv3) $ python setup.py develop
+```
+
 ## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
@@ -74,25 +81,6 @@ All training calls use Automatic Mixed Precision to speed up training. To disabl
  - `bonito evaluate` - evaluate a model performance.
  - `bonito download` - download pretrained models and training datasets.
  - `bonito basecaller` - basecaller *(`.fast5` -> `.bam`)*.
-
-## Models
-
-The following pretrained models are available.  
-
-| Model                     | Type                              | Bonito Version  | 
-| ------------------------- | --------------------------------- |---------------- |
-| dna_r10.4_e8.1_fast@v3.4  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r10.4_e8.1_hac@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r10.4_e8.1_sup@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8.1_fast@v3.4 | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8.1_hac@v3.3  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8.1_sup@v3.3  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8_fast@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8_hac@v3.3    | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-| dna_r9.4.1_e8_sup@v3.3    | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
-
-Models will be downloaded automatically on first use however you can download all the models with `bonito download --models`.
-
 
 ### References
 
