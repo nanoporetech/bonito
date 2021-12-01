@@ -14,12 +14,15 @@ if mo:
 else:
     raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
 
-USE_CUDA111 = False
 
-if USE_CUDA111:
-    print("Building with CUDA 11.1")
-    require_file = 'requirements-cuda111.txt'
-    package_name = "ont-%s-cuda111" % __pkg_name__
+CUDA_VERSION = os.environ.get('CUDA_VERSION')
+assert(CUDA_VERSION in {'111', '113', None})
+
+
+if CUDA_VERSION:
+    print("Building with CUDA %s" % CUDA_VERSION)
+    require_file = 'requirements-cuda%s.txt' % CUDA_VERSION
+    package_name = "ont-%s-cuda%s" % (__pkg_name__, CUDA_VERSION)
 else:
     print("Building with CUDA 10.2")
     require_file = 'requirements.txt'
