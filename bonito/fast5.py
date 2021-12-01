@@ -96,6 +96,7 @@ class Read:
             ('PU', f"{self.flow_cell_id}"),
             ('PM', f"{self.device_id}"),
             ('LB', f"{self.sample_id}"),
+            ('SM', f"{self.sample_id}"),
             ('DS', f"%s" % ' '.join([
                 f"run_id={self.run_id}",
                 f"basecall_model={model}",
