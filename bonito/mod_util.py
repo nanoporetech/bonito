@@ -1,9 +1,13 @@
 import sys
+import logging
 import numpy as np
 
+from remora import log
 from remora.model_util import load_model
 from remora.data_chunks import RemoraRead
 from remora.inference import call_read_mods
+
+log.CONSOLE.setLevel(logging.WARNING)
 
 
 def load_mods_model(mod_bases, bc_model_str, model_path):
