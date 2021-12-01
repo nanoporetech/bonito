@@ -1,6 +1,5 @@
 import os
 import re
-from subprocess import check_call
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 
@@ -32,10 +31,6 @@ with open(require_file) as f:
 with open('README.md', encoding='utf-8') as f:
     long_description = f.read()
 
-class download_latest_model(install):
-    def run(self):
-        install.run(self)
-        check_call("bonito download --models --latest -f".split())
 
 setup(
     name=package_name,
@@ -48,9 +43,6 @@ setup(
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
-    cmdclass={
-        'install': download_latest_model,
-    },
     entry_points = {
         'console_scripts': [
             '{0} = {0}:main'.format(__pkg_name__)
