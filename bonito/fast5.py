@@ -230,8 +230,8 @@ def get_read_groups(directory, model, model_hash, read_ids=None, skip=False, n_p
 
     with Pool(n_proc) as pool:
         for reads in tqdm(
-                pool.imap(get_filtered_meta_data, fast5s), total=len(fast5s),
-                desc="> loading", unit=" fast5s", leave=False
+                pool.imap(get_filtered_meta_data, fast5s), total=len(fast5s), leave=False,
+                desc="> preprocessing reads", unit=" fast5s", ascii=True, ncols=100
         ):
             groups.update({read.readgroup(model, model_hash) for read in reads})
         return groups
