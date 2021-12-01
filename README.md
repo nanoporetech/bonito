@@ -6,20 +6,30 @@ A PyTorch Basecaller for Oxford Nanopore Reads.
 
 ```bash
 $ pip install ont-bonito
-$ bonito basecaller dna_r9.4.1 /data/reads > basecalls.fastq
+$ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads > basecalls.bam
 ```
 
-If a reference is provided in either `.fasta` or `.mmi` format then bonito will output in `sam` format.
+Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`. 
 
 ```bash
-$ bonito basecaller dna_r9.4.1 --reference reference.mmi /data/reads > basecalls.sam
+$ bonito basecaller dna_r10.4_e8.1_sup@v3.4 --reference reference.mmi /data/reads > basecalls.bam
 ```
 
 The default `ont-bonito` package is built against CUDA 10.2 however a CUDA 11.1 build is available.
 
-```
+```bash
 $ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
 ```
+
+## Modified Bases
+
+Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
+
+```bash
+$ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
+```
+
+To see the available models with the ``remora model list_pretrained`` command.
 
 ## Developer Quickstart
 
@@ -31,24 +41,7 @@ $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
-(venv3) $ bonito download --models --latest
 ```
-
-## Models
-
-The following pretrained models are available to download with `bonito download`.
-
-| Model | Type | Bonito Version  | 
-| ------ | ------ |------ |
-| `dna_r9.4.1@v3.3`, `dna_r10.3@v3.3`  | CRF-CTC RNN _(fixed blank score)_ | v0.3.7 |
-| `dna_r9.4.1@v3.2`, `dna_r10.3@v3.2`  | CRF-CTC RNN | v0.3.6 |
-| `dna_r10.3@v3` | CRF-CTC RNN  | v0.3.2 |
-| `dna_r9.4.1@v3.1`  | CRF-CTC RNN  | v0.3.1 |
-| `dna_r9.4.1@v3`  | CRF-CTC RNN  | v0.3.0 |
-| `dna_r9.4.1@v2` | CTC CNN _(Custom QuartzNet)_ | v0.2.0 | 
-| `dna_r9.4.1@v1` | CTC CNN _(5x5 QuartzNet)_ | v0.1.2 |
-
-All models can be downloaded with `bonito download --models` or if you just want the latest version then `bonito download --models --latest -f`.
 
 ## Training your own model
 
@@ -62,7 +55,7 @@ $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
 
 ```bash
-bonito train --epochs 1 --lr 5e-4 --pretrained dna_r9.4.1@v3.3 --directory /data/training/ctc-data /data/training/fine-tuned-model
+bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4_e8.1_sup@v3.4 --directory /data/training/ctc-data /data/training/fine-tuned-model
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
@@ -74,42 +67,32 @@ $ bonito train /data/training/model-dir
 
 All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
 
-## Modified Bases
-
-Modified base calling is handled by the ``ont-remora`` dependency.
-[See Remora documentation](https://github.com/nanoporetech/remora) for more information.
-
-Remora is provided with a set of pre-trained models.
-See the available models with the ``remora model list_pretrained`` command.
-
-```bash
-$ bonito basecaller dna_r9.4.1_e8_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi --device cuda:0 > basecalls_with_mods.bam
-```
-
-## Duplex
-
-Duplex calling takes template and complement reads and produces a single higher quality call.
-
-```bash
-$ bonito duplex dna_r9.4.1 /data/reads --pairs pairs.txt --reference ref.mmi > basecalls.sam
-```
-
-The `pairs.csv` file is expected to contain pairs of read ids per line *(seperated by a single space)*.
-
-Follow on reads can also be automatically paired if an alignment summary file is provided instead of a `pairs.csv`.
-
-```bash
-$ bonito duplex dna_r9.4.1 /data/reads --summary sequencing_summary.txt --reference ref.mmi > basecalls.sam
-```
-
 ## Interface
 
  - `bonito view` - view a model architecture for a given `.toml` file and the number of parameters in the network.
  - `bonito train` - train a bonito model.
- - `bonito convert` - convert a hdf5 training file into a bonito format.
  - `bonito evaluate` - evaluate a model performance.
  - `bonito download` - download pretrained models and training datasets.
- - `bonito basecaller` - basecaller *(`.fast5` -> `.fastq`)*.
+ - `bonito basecaller` - basecaller *(`.fast5` -> `.bam`)*.
+
+## Models
+
+The following pretrained models are available.  
+
+| Model                     | Type                              | Bonito Version  | 
+| ------------------------- | --------------------------------- |---------------- |
+| dna_r10.4_e8.1_fast@v3.4  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r10.4_e8.1_hac@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r10.4_e8.1_sup@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8.1_fast@v3.4 | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8.1_hac@v3.3  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8.1_sup@v3.3  | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8_fast@v3.4   | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8_hac@v3.3    | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+| dna_r9.4.1_e8_sup@v3.3    | CRF-CTC RNN _(fixed blank score)_ | v0.5.0          |
+
+Models will be downloaded automatically on first use however you can download all the models with `bonito download --models`.
+
 
 ### References
 
