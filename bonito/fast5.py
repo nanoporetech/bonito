@@ -88,9 +88,9 @@ class Read:
     def __repr__(self):
         return "Read('%s')" % self.read_id
 
-    def readgroup(self, model, model_hash):
+    def readgroup(self, model):
         self._groupdict = OrderedDict([
-            ('ID', f"{self.run_id}_{model_hash}"),
+            ('ID', f"{self.run_id}_{model}"),
             ('PL', f"ONT"),
             ('DT', f"{self.exp_start_time}"),
             ('PU', f"{self.flow_cell_id}"),
@@ -219,7 +219,7 @@ def get_meta_data(filename, read_ids=None, skip=False):
         return meta_reads
 
 
-def get_read_groups(directory, model, model_hash, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
     """
     Get all the read meta data for a given `directory`.
     """
@@ -233,7 +233,7 @@ def get_read_groups(directory, model, model_hash, read_ids=None, skip=False, n_p
                 pool.imap(get_filtered_meta_data, fast5s), total=len(fast5s), leave=False,
                 desc="> preprocessing reads", unit=" fast5s", ascii=True, ncols=100
         ):
-            groups.update({read.readgroup(model, model_hash) for read in reads})
+            groups.update({read.readgroup(model) for read in reads})
         return groups
 
 

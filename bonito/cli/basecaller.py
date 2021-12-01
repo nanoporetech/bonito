@@ -6,7 +6,6 @@ import os
 import sys
 import numpy as np
 from tqdm import tqdm
-from hashlib import md5
 from time import perf_counter
 from functools import partial
 from datetime import timedelta
@@ -51,7 +50,6 @@ def main(args):
     if args.verbose:
         sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
-    model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     basecall = load_symbol(args.model_directory, "basecall")
 
     mods_model = None
@@ -87,7 +85,7 @@ def main(args):
 
     if fmt.name != 'fastq':
         groups = get_read_groups(
-            args.reads_directory, args.model_directory, model_hash,
+            args.reads_directory, args.model_directory,
             n_proc=8, recursive=args.recursive,
             read_ids=column_to_set(args.read_ids), skip=args.skip,
             cancel=process_cancel()
@@ -131,7 +129,8 @@ def main(args):
 
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
-        aligner=aligner, ref_fn=args.reference, groups=groups, group_key=model_hash
+        aligner=aligner, group_key=args.model_directory,
+        ref_fn=args.reference, groups=groups,
     )
 
     t0 = perf_counter()
