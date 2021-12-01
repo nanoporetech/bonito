@@ -76,23 +76,20 @@ class File:
             convert(args)
 
 
-r9_models = [
-    "n8c07gc9ro09zt0ivgcoeuz6krnwsnf6.zip", # dna_r9.4.1@v1
-    "nas0uhf46fd1lh2jndhx2a54a9vvhxp4.zip", # dna_r9.4.1@v2
-    "1wodp3ur4jhvqvu5leowfg6lrw54jxp2.zip", # dna_r9.4.1@v3
-    "uetgwsnb8yfqvuyoka8p09mxilgskqc7.zip", # dna_r9.4.1@v3.1
-    "47t2y48zw4waly25lmzx6sagf4bbbqqz.zip", # dna_r9.4.1@v3.2
-    "hrv649cvx8lvomu1u0tsd47e5u2bbabt.zip", # dna_r9.4.1@v3.3
-    "arqi4qwcj9btsd6bbjsnlbai0s6dg8yd.zip",
-]
+models = {
+    "dna_r10.4_e8.1_sup@v3.4": "q07kb0p2f3qbj8cpnb35l1tcink21k82.zip",
+    "dna_r10.4_e8.1_hac@v3.4": "tlxt45rmp5sv2c0f0p3jy8qf24lsidgv.zip",
+    "dna_r10.4_e8.1_fast@v3.4": "biesc8w0ug1d59gpqpjin1utgcevvhs7.zip",
 
-r10_models = [
-    "e70s615lh3i24rkhz006i0e4u4m8y2xa.zip", # dna_r10.3_q20ea
-    "hnr5mwlm8vmdsfpvn5fsxn3mvhbucy5f.zip", # dna_r10.3@v3
-    "yesf11tisfrncmod5hj2xtx9kbdveuqt.zip", # dna_r10.3@v3.2
-    "ci6xdu7d4wczmhorhw1sweyg4gczx97t.zip", # dna_r10.3@v3.3
-    "4cunv5z7nwjag7v2bun0g7vk2lf8rqnc.zip",
-]
+    "dna_r9.4.1_e8.1_sup@v3.3": "ts3h4rv1hqhjcv7t6wwng1dcfpzujvkg.zip",
+    "dna_r9.4.1_e8.1_hac@v3.3": "25gua32bys32gnvj240hsml2ixnh4drc.zip",
+    "dna_r9.4.1_e8.1_fast@v3.4": "h55evnpfq041ghniapmbklzqkdohkmo5.zip",
+
+    "dna_r9.4.1_e8_sup@v3.3": "w10qhiggmg32gjcag6dv1wmwipzmcj84.zip",
+    "dna_r9.4.1_e8_hac@v3.3": "5evhvoqb07u6d3y4jfy2oi3bmyrww293.zip",
+    "dna_r9.4.1_e8_fast@v3.4": "3bq726s52at88zd9ve53x4px4quf3dpg.zip",
+}
+
 
 training = [
     "cmh91cxupa0are1kc3z9aok425m75vrb.hdf5",
@@ -105,11 +102,8 @@ def main(args):
     """
     if args.models or args.all:
         print("[downloading models]")
-        for model in r9_models[-1 if args.latest else 0:]:
+        for model in models.values():
             File(__models__, model, args.force).download()
-        for model in r10_models[-1 if args.latest else 0:]:
-            File(__models__, model, args.force).download()
-
     if args.training or args.all:
         print("[downloading training data]")
         for train in training:
@@ -126,5 +120,4 @@ def argparser():
     group.add_argument('--models', action='store_true')
     group.add_argument('--training', action='store_true')
     parser.add_argument('-f', '--force', action='store_true')
-    parser.add_argument('--latest', action='store_true')
     return parser
