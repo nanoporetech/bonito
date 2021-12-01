@@ -1,6 +1,8 @@
 # Bonito Draft SAM specification
 
-Bonito v0.5.0 added support for outputing aligned and unaligned SAM, BAM or CRAM. 
+Bonito v0.5.0 added support for outputing aligned and unaligned SAM, BAM or CRAM.
+Output type is triggered by the extension of the specified output file.
+All outputs are unsorted.
 
 ```
 $ bonito basecaller $model $data > unaligned.sam
@@ -23,24 +25,33 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 #### Read Group Header
 
 |    |    |                                                       |
-| -- | -- | ----------------------------------------------------- |            
-| RG | ID | `<runid>_<basecalling_model>`  	                      |
-|    | PU | `<flow_cell_id>`                                      |	    
+| -- | -- | ----------------------------------------------------- |
+| RG | ID | `<runid>_<basecalling_model>`  	                  |
+|    | PU | `<flow_cell_id>`                                      |
 |    | PM | `<device_id>`                                         |
 |    | DT | `<exp_start_time>`                                    |
 |    | PL | `ONT`                                                 |
 |    | DS | `basecall_model=<basecall_model_name> runid=<run_id>` |
-|    | LB | `<sample_id>`                                         |    
+|    | LB | `<sample_id>`                                         |
 |    | SM | `<sample_id>`                                         |
 
 #### Read Tags
 
 |       |                                                     |
 | ----- | --------------------------------------------------- |
-| RG:Z: | `<runid>_<basecalling_model>`                        |
+| RG:Z: | `<runid>_<basecalling_model>`                       |
 | qs:i: | mean basecall qscore rounded to the nearest integer |
-| mx:i:	| read mux                                            | 
+| mx:i:	| read mux                                            |
 | ch:i: | read channel                                        |
 | rn:i:	| read number                                         |
 | st:Z:	| read start time                                     |
 | f5:Z:	| fast5 file name                                     |
+
+#### Modified Base Tags
+
+When modified base output is requested (via the `--modified-bases` CLI argument), the modified base calls will be output directly in the output files via SAM tags.
+The `MM` and `ML` tags are specified in the [SAM format specification documentation](https://samtools.github.io/hts-specs/SAMtags.pdf).
+Breifly, these tags represent the relative positions and probability that particular canonical bases have the specified modified bases.
+
+These tags in the SAM/BAM/CRAM formats can be parsed by either the `modbam2bed` or `pysam` software for downstream analysis.
+For algined outputs, visualization of these tags is available in popular genome browsers, including IGV and JBrowse.
