@@ -29,7 +29,7 @@ $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
 
-The default `ont-bonito` package is built against CUDA 10.2 however a CUDA 11.1 build is available.
+The default `ont-bonito` package is built against CUDA 10.2 however CUDA 11.1 and 11.3 builds are available.
 
 ```bash
 $ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
