@@ -2,8 +2,8 @@
 mappy==2.23
 toml==0.10.2
 tqdm==4.31.1
-scipy==1.4.1
-numpy~=1.17.5
+scipy==1.5.4
+numpy~=1.19.5
 pysam==0.18.0
 parasail==1.2
 pandas==1.1.5
@@ -15,4 +15,4 @@ fast-ctc-decode==0.3.0
 torch~=1.10.0
 koi-cuda102==0.0.5
 cupy-cuda102==9.6.0
-seqdist==0.0.3
+ont-seqdist-cuda102==0.0.4

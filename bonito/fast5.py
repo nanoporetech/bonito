@@ -67,7 +67,7 @@ class Read:
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
 
-        exp_start_dt = datetime.fromisoformat(self.exp_start_time)
+        exp_start_dt = datetime.strptime(self.exp_start_time, "%Y-%m-%dT%H:%M:%S")
         start_time = exp_start_dt + timedelta(seconds=self.start)
         self.start_time = start_time.replace(microsecond=0).isoformat()
 
