@@ -30,17 +30,23 @@ def main(args):
         sys.stderr.write("> downloading model\n")
         File(__models__, models[args.model_directory]).download()
 
-    sys.stderr.write("> loading model\n")
-    model = load_model(
-        args.model_directory,
-        args.device,
-        weights=int(args.weights),
-        chunksize=args.chunksize,
-        overlap=args.overlap,
-        batchsize=args.batchsize,
-        quantize=args.quantize,
-        use_koi=True,
-    )
+    sys.stderr.write(f"> loading model {args.model_directory}\n")
+    try:
+        model = load_model(
+            args.model_directory,
+            args.device,
+            weights=int(args.weights),
+            chunksize=args.chunksize,
+            overlap=args.overlap,
+            batchsize=args.batchsize,
+            quantize=args.quantize,
+            use_koi=True,
+        )
+    except FileNotFoundError:
+        sys.stderr.write(f"> error: failed to load {args.model_directory}\n")
+        sys.stderr.write(f"> available models:\n")
+        for model in sorted(models): sys.stderr.write(f" - {model}\n")
+        exit(1)
 
     if args.verbose:
         sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
