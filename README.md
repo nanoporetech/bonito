@@ -1,4 +1,4 @@
-# Bonito 
+# Bonito
 
 [![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito) 
 [![py36](https://img.shields.io/badge/python-3.6-brightgreen.svg)](https://img.shields.io/badge/python-3.6-brightgreen.svg)
@@ -40,7 +40,7 @@ Modified base calling is handled by [Remora](https://github.com/nanoporetech/rem
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
 ```
 
-To see the available models with the ``remora model list_pretrained`` command.
+See available modified base models with the ``remora model list_pretrained`` command.
 
 ## Training your own model
 
@@ -91,7 +91,7 @@ $ source venv3/bin/activate
  - [Sequence Modeling With CTC](https://distill.pub/2017/ctc/)
  - [Quartznet: Deep Automatic Speech Recognition With 1D Time-Channel Separable Convolutions](https://arxiv.org/pdf/1910.10261.pdf)
  - [Pair consensus decoding improves accuracy of neural network basecallers for nanopore sequencing](https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1.full.pdf)
- 
+
 ### Licence and Copyright
 (c) 2019 Oxford Nanopore Technologies Ltd.
 
