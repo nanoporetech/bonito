@@ -24,20 +24,6 @@ def main(args):
 
     init(args.seed, args.device)
 
-    fmt = biofmt(aligned=args.reference is not None)
-
-    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
-        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
-        exit(1)
-    elif args.reference and fmt.name == "fastq":
-        sys.stderr.write("> warning: did you really want %s %s?\n" % (fmt.aligned, fmt.name))
-    else:
-        sys.stderr.write("> output fmt: %s %s\n" % (fmt.aligned, fmt.name))
-
-    if args.save_ctc and not args.reference:
-        sys.stderr.write("> a reference is needed to output ctc training data\n")
-        exit(1)
-
     sys.stderr.write("> loading model\n")
     model = load_model(
         args.model_directory,
@@ -49,7 +35,9 @@ def main(args):
         quantize=args.quantize,
         use_koi=True,
     )
-    sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
+
+    if args.verbose:
+        sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
     model_hash = md5(args.model_directory.encode('utf-8')).hexdigest()
     basecall = load_symbol(args.model_directory, "basecall")
@@ -70,6 +58,20 @@ def main(args):
             exit(1)
     else:
         aligner = None
+
+    fmt = biofmt(aligned=args.reference is not None)
+
+    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
+        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
+        exit(1)
+    elif args.reference and fmt.name == "fastq":
+        sys.stderr.write(f"> warning: did you really want {fmt.aligned} {fmt.name}?\n")
+    else:
+        sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
+
+    if args.save_ctc and not args.reference:
+        sys.stderr.write("> a reference is needed to output ctc training data\n")
+        exit(1)
 
     if fmt.name != 'fastq':
         groups = get_read_groups(
@@ -150,14 +152,13 @@ def argparser():
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
-
     quant_parser = parser.add_mutually_exclusive_group(required=False)
     quant_parser.add_argument("--quantize", dest="quantize", action="store_true")
     quant_parser.add_argument("--no-quantize", dest="quantize", action="store_false")
     parser.set_defaults(quantize=None)
-
-    parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--overlap", default=None, type=int)
+    parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
+    parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser

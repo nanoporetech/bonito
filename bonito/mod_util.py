@@ -8,9 +8,9 @@ from remora.data_chunks import RemoraRead
 from remora.inference import call_read_mods
 
 class CustomFormatter(logging.Formatter):
-    err_fmt = "> REMORA ERROR: %(msg)s"
-    warn_fmt = "> REMORA WARNING: %(msg)s"
-    info_fmt = "> Remora message: %(msg)s"
+    err_fmt = "> error (remora): %(msg)s"
+    warn_fmt = "> warning (remora): %(msg)s"
+    info_fmt = "> %(msg)s"
 
     def __init__(self, fmt="> %(message)s"):
         super().__init__(fmt=fmt, style="%")
