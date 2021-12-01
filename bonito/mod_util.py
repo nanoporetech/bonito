@@ -7,7 +7,28 @@ from remora.model_util import load_model
 from remora.data_chunks import RemoraRead
 from remora.inference import call_read_mods
 
+class CustomFormatter(logging.Formatter):
+    err_fmt = "> REMORA ERROR: %(msg)s"
+    warn_fmt = "> REMORA WARNING: %(msg)s"
+    info_fmt = "> Remora message: %(msg)s"
+
+    def __init__(self, fmt="> %(message)s"):
+        super().__init__(fmt=fmt, style="%")
+
+    def format(self, record):
+        format_orig = self._fmt
+        if record.levelno == logging.INFO:
+            self._style._fmt = self.info_fmt
+        elif record.levelno == logging.WARNING:
+            self._style._fmt = self.warn_fmt
+        elif record.levelno == logging.ERROR:
+            self._style._fmt = self.fmt
+        result = logging.Formatter.format(self, record)
+        self._fmt = format_orig
+        return result
+
 log.CONSOLE.setLevel(logging.WARNING)
+log.CONSOLE.setFormatter(CustomFormatter())
 
 
 def load_mods_model(mod_bases, bc_model_str, model_path):
