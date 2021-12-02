@@ -11,6 +11,7 @@ requests==2.25.1
 ont-remora==0.1.1
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
+python-dateutil==2.8.2
 # cuda requirements
 torch==1.10.0+cu113
 koi-cuda113==0.0.5

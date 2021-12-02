@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import torch
 import numpy as np
 from tqdm import tqdm
+from dateutil import parser
 from scipy.signal import find_peaks
 from ont_fast5_api.fast5_interface import get_fast5_file
 
@@ -67,7 +68,7 @@ class Read:
         self.start = read_attrs['start_time'] / self.sampling_rate
         self.duration = read_attrs['duration'] / self.sampling_rate
 
-        exp_start_dt = datetime.strptime(self.exp_start_time, "%Y-%m-%dT%H:%M:%S")
+        exp_start_dt = parser.parse(self.exp_start_time)
         start_time = exp_start_dt + timedelta(seconds=self.start)
         self.start_time = start_time.replace(microsecond=0).isoformat()
 
