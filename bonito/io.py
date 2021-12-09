@@ -451,7 +451,7 @@ class CTCWriter(Thread):
     """
     def __init__(
             self, mode, iterator, aligner, fd=sys.stdout, min_coverage=0.90,
-            min_accuracy=0.99, ref_fn=None, groups=None
+            min_accuracy=0.99, ref_fn=None, groups=None, group_key=None,
     ):
         super().__init__()
         self.fd = fd
@@ -459,6 +459,7 @@ class CTCWriter(Thread):
         self.mode = mode
         self.aligner = aligner
         self.iterator = iterator
+        self.group_key = group_key
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
         self.output = AlignmentFile(
