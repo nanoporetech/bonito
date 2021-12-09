@@ -125,7 +125,7 @@ def main(args):
     if mods_model is not None:
         results = process_itemmap(partial(call_mods, mods_model), results)
     if aligner:
-        results = align_map(aligner, results, n_thread=os.cpu_count())
+        results = align_map(aligner, results)
 
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
