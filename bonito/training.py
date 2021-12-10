@@ -79,7 +79,7 @@ class Trainer:
         self.device = device
         self.train_loader = train_loader
         self.valid_loader = valid_loader
-        self.criterion = criterion or (model.seqdist.ctc_loss if hasattr(model, 'seqdist') else model.ctc_label_smoothing_loss)
+        self.criterion = criterion or model.loss
         self.use_amp = use_amp
         self.lr_scheduler_fn = lr_scheduler_fn or linear_warmup_cosine_decay()
         self.restore_optim = restore_optim
@@ -96,16 +96,15 @@ class Trainer:
             for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
                 data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
                 scores_ = self.model(data_)
-                losses_ = self.criterion(scores_.to(torch.float32), targets_, lengths_)
+                losses_ = self.criterion(scores_, targets_, lengths_)
 
                 if not isinstance(losses_, dict): losses_ = {'loss': losses_}
 
-                losses_['loss'] = losses_['loss'] / self.grad_accum_split
-
-                self.scaler.scale(losses_['loss']).backward()
+                total_loss = losses_.get('total_loss', losses_['loss']) / self.grad_accum_split
+                self.scaler.scale(total_loss).backward()
 
                 losses = {
-                    k: (v.item() if losses is None else v.item() + losses[k])
+                    k: ((v.item() / self.grad_accum_split) if losses is None else (v.item() / self.grad_accum_split) + losses[k])
                     for k, v in losses_.items()
                 }
 
@@ -160,7 +159,7 @@ class Trainer:
         data, targets, lengths = batch
 
         scores = self.model(data.to(self.device))
-        losses = self.criterion(scores.to(torch.float32), targets.to(self.device), lengths.to(self.device))
+        losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
         if hasattr(self.model, 'decode_batch'):
             seqs = self.model.decode_batch(scores)
@@ -177,22 +176,34 @@ class Trainer:
         with torch.no_grad():
             seqs, refs, accs, losses = zip(*(self.validate_one_step(batch) for batch in self.valid_loader))
         seqs, refs, accs = (sum(x, []) for x in (seqs, refs, accs))
-        loss = np.mean([(x['ctc_loss'] if isinstance(x, dict) else x) for x in losses])
+        loss = np.mean([(x['loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, **kwargs):
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
+    def init_optimizer(self, lr, decoder_lr=None, **kwargs):
+        if decoder_lr != None:
+            param_groups = [
+                {'params': list(self.model.encoder.parameters())},
+                {'params': list(self.model.decoder.parameters()), 'lr': decoder_lr},
+            ]
+            self.optimizer = torch.optim.AdamW(param_groups, lr=lr, **kwargs)
+        else:
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
+
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
 
-    def fit(self, workdir, epochs=1, lr=2e-3):
+    def fit(self, workdir, epochs=1, lr=2e-3, **optim_kwargs):
         if self.optimizer is None:
-            self.init_optimizer(lr)
+            self.init_optimizer(lr, **optim_kwargs)
 
         last_epoch = load_state(workdir, self.device, self.model, self.optimizer if self.restore_optim else None)
+
+        if self.restore_optim:
         # override learning rate to new value
-        for pg in self.optimizer.param_groups: pg["initial_lr"] = pg["lr"] = lr
+            lr_stored = self.optimizer.param_groups[0]["initial_lr"]
+            for pg in self.optimizer.param_groups:
+                pg["initial_lr"] = pg["lr"] = lr * pg["initial_lr"] / lr_stored
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 

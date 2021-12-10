@@ -37,7 +37,7 @@ default_data = os.path.join(__data__, "dna_r9.4.1")
 default_config = os.path.join(__configs__, "dna_r9.4.1@v3.1.toml")
 
 
-def init(seed, device):
+def init(seed, device, deterministic=True):
     """
     Initialise random libs and setup cudnn
 
@@ -48,8 +48,8 @@ def init(seed, device):
     torch.manual_seed(seed)
     if device == "cpu": return
     torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = (not deterministic)
     assert(torch.cuda.is_available())
 
 

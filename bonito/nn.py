@@ -31,6 +31,15 @@ class Serial(torch.nn.Sequential):
     def __init__(self, sublayers):
         super().__init__(*sublayers)
 
+    def forward(self, x, return_features=False):
+        if return_features:
+            fmaps = []
+            for layer in self:
+                x = layer(x)
+                fmaps.append(x)
+            return x, fmaps
+        return super().forward(x)
+
     def to_dict(self, include_weights=False):
         return {
             'sublayers': [to_dict(layer, include_weights) for layer in self._modules.values()]
