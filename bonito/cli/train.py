@@ -29,7 +29,7 @@ def main(args):
         print("[error] %s exists, use -f to force continue training." % workdir)
         exit(1)
 
-    init(args.seed, args.device)
+    init(args.seed, args.device, (not args.nondeterministic))
     device = torch.device(args.device)
 
     print("[loading data]")
@@ -89,7 +89,11 @@ def main(args):
         save_optim_every=args.save_optim_every,
         grad_accum_split=args.grad_accum_split
     )
-    trainer.fit(workdir, args.epochs, args.lr)
+
+    if hasattr(model, 'decoder'):
+        trainer.fit(workdir, args.epochs, args.lr, decoder_lr=args.lr / 4)
+    else:
+        trainer.fit(workdir, args.epochs, args.lr)
 
 def argparser():
     parser = ArgumentParser(
@@ -111,6 +115,7 @@ def argparser():
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     parser.add_argument("--restore-optim", action="store_true", default=False)
+    parser.add_argument("--nondeterministic", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
     return parser

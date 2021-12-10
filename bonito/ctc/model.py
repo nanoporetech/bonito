@@ -51,7 +51,10 @@ class Model(Module):
         log_probs_lengths = torch.full(size=(N, ), fill_value=T, dtype=torch.int64)
         loss = ctc_loss(log_probs.to(torch.float32), targets, log_probs_lengths, lengths, reduction='mean')
         label_smoothing_loss = -((log_probs * weights.to(log_probs.device)).mean())
-        return {'loss': loss + label_smoothing_loss, 'ctc_loss': loss, 'label_smooth_loss': label_smoothing_loss}
+        return {'total_loss': loss + label_smoothing_loss, 'loss': loss, 'label_smooth_loss': label_smoothing_loss}
+
+    def loss(self, log_probs, targets, lengths):
+        return self.ctc_label_smoothing_loss(self, log_probs, targets, lengths)
 
 class Encoder(Module):
     """
