@@ -90,10 +90,11 @@ def main(args):
         grad_accum_split=args.grad_accum_split
     )
 
-    if hasattr(model, 'decoder'):
-        trainer.fit(workdir, args.epochs, args.lr, decoder_lr=args.lr / 4)
+    if isinstance(args.lr, str):
+        lr = [float(x) for x in args.lr.split(',')]
     else:
-        trainer.fit(workdir, args.epochs, args.lr)
+        lr = args.lr
+    trainer.fit(workdir, args.epochs, lr)
 
 def argparser():
     parser = ArgumentParser(
@@ -106,7 +107,7 @@ def argparser():
     group.add_argument('--pretrained', default="")
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--lr", default=2e-3, type=float)
+    parser.add_argument("--lr", default=2e-3)
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)

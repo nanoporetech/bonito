@@ -179,16 +179,12 @@ class Trainer:
         loss = np.mean([(x['loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, decoder_lr=None, **kwargs):
-        if decoder_lr != None:
-            param_groups = [
-                {'params': list(self.model.encoder.parameters())},
-                {'params': list(self.model.decoder.parameters()), 'lr': decoder_lr},
-            ]
-            self.optimizer = torch.optim.AdamW(param_groups, lr=lr, **kwargs)
+    def init_optimizer(self, lr, **kwargs):
+        if isinstance(lr, (list, tuple)):
+            param_groups = [{'params': list(m.parameters()), 'lr': x} for (m, x) in zip(self.model.children(), lr)]
+            self.optimizer = torch.optim.AdamW(param_groups, lr=lr[0], **kwargs)
         else:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
-
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
