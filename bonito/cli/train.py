@@ -90,10 +90,10 @@ def main(args):
         grad_accum_split=args.grad_accum_split
     )
 
-    if isinstance(args.lr, str):
+    if (',' in args.lr):
         lr = [float(x) for x in args.lr.split(',')]
     else:
-        lr = args.lr
+        lr = float(args.lr)
     trainer.fit(workdir, args.epochs, lr)
 
 def argparser():
