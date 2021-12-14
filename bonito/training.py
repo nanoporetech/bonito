@@ -197,9 +197,8 @@ class Trainer:
 
         if self.restore_optim:
         # override learning rate to new value
-            lr_stored = self.optimizer.param_groups[0]["initial_lr"]
-            for pg in self.optimizer.param_groups:
-                pg["initial_lr"] = pg["lr"] = lr * pg["initial_lr"] / lr_stored
+            for i, pg in enumerate(self.optimizer.param_groups):
+                pg["initial_lr"] = pg["lr"] = lr[i] if isinstance(lr, (list, tuple)) else lr
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
