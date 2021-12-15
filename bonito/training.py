@@ -179,16 +179,14 @@ class Trainer:
         loss = np.mean([(x['loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, decoder_lr=None, **kwargs):
-        if decoder_lr != None:
-            param_groups = [
-                {'params': list(self.model.encoder.parameters())},
-                {'params': list(self.model.decoder.parameters()), 'lr': decoder_lr},
-            ]
-            self.optimizer = torch.optim.AdamW(param_groups, lr=lr, **kwargs)
+    def init_optimizer(self, lr, **kwargs):
+        if isinstance(lr, (list, tuple)):
+            if len(list(self.model.children())) != len(lr):
+                raise ValueError('Number of lrs does not match number of model children')
+            param_groups = [{'params': list(m.parameters()), 'lr': v} for (m, v) in zip(self.model.children(), lr)]
+            self.optimizer = torch.optim.AdamW(param_groups, lr=lr[0], **kwargs)
         else:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
-
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return self.lr_scheduler_fn(self.optimizer, self.train_loader, epochs, last_epoch)
@@ -201,9 +199,8 @@ class Trainer:
 
         if self.restore_optim:
         # override learning rate to new value
-            lr_stored = self.optimizer.param_groups[0]["initial_lr"]
-            for pg in self.optimizer.param_groups:
-                pg["initial_lr"] = pg["lr"] = lr * pg["initial_lr"] / lr_stored
+            for i, pg in enumerate(self.optimizer.param_groups):
+                pg["initial_lr"] = pg["lr"] = lr[i] if isinstance(lr, (list, tuple)) else lr
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
