@@ -181,7 +181,9 @@ class Trainer:
 
     def init_optimizer(self, lr, **kwargs):
         if isinstance(lr, (list, tuple)):
-            param_groups = [{'params': list(m.parameters()), 'lr': x} for (m, x) in zip(self.model.children(), lr)]
+            if len(list(self.model.children())) != len(lr):
+                raise ValueError('Number of lrs does not match number of model children')
+            param_groups = [{'params': list(m.parameters()), 'lr': v} for (m, v) in zip(self.model.children(), lr)]
             self.optimizer = torch.optim.AdamW(param_groups, lr=lr[0], **kwargs)
         else:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
