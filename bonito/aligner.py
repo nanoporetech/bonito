@@ -16,6 +16,24 @@ def align_map(aligner, sequences, n_thread=4):
     return ThreadMap(partial(MappyWorker, aligner), sequences, n_thread)
 
 
+class ManagedThreadBuffer:
+    """
+    Minimap2 ThreadBuffer that is periodically reallocated.
+    """
+    def __init__(self, max_uses=20):
+        self.max_uses = max_uses
+        self.uses = 0
+        self._b = ThreadBuffer()
+
+    @property
+    def buffer(self):
+        if self.uses > self.max_uses:
+            self._b = ThreadBuffer()
+            self.uses = 0
+        self.uses += 1
+        return self._b
+
+
 class MappyWorker(Thread):
     """
     Process that reads items from an input_queue, applies a func to them and puts them on an output_queue
@@ -27,12 +45,12 @@ class MappyWorker(Thread):
         self.output_queue = output_queue
 
     def run(self):
-        thrbuf = ThreadBuffer()
+        thrbuf = ManagedThreadBuffer()
         while True:
             item = self.input_queue.get()
             if item is StopIteration:
                 self.output_queue.put(item)
                 break
             k, v = item
-            mapping = next(self.aligner.map(v['sequence'], buf=thrbuf, MD=True), None)
+            mapping = next(self.aligner.map(v['sequence'], buf=thrbuf.buffer, MD=True), None)
             self.output_queue.put((k, {**v, 'mapping': mapping}))

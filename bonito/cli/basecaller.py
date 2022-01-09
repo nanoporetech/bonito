@@ -125,7 +125,7 @@ def main(args):
     if mods_model is not None:
         results = process_itemmap(partial(call_mods, mods_model), results)
     if aligner:
-        results = align_map(aligner, results)
+        results = align_map(aligner, results, n_thread=args.alignment_threads)
 
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
@@ -171,5 +171,6 @@ def argparser():
     parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
+    parser.add_argument("--alignment_threads", default=8, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser
