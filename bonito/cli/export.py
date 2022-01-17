@@ -2,6 +2,7 @@
 Bonito Export
 """
 
+import io
 import os
 import re
 import sys
@@ -80,12 +81,27 @@ def main(args):
         print("[error] file given - please provide a model directory to export.", file=sys.stderr)
         return 1
 
+
     model = bonito.util.load_model(args.model, device='cpu')
-    jsn = to_guppy_dict(model)
-    weight_files = glob(os.path.join(args.model, "weights_*.tar"))
-    weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-    jsn["md5sum"] = file_md5(os.path.join(args.model, 'weights_%s.tar' % weights))
-    json.dump(jsn, sys.stdout, cls=JsonEncoder)
+
+
+    if args.export_format == 'guppy':
+        jsn = to_guppy_dict(model)
+        weight_files = glob(os.path.join(args.model, "weights_*.tar"))
+        weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+        jsn["md5sum"] = file_md5(os.path.join(args.model, 'weights_%s.tar' % weights))
+        json.dump(jsn, sys.stdout, cls=JsonEncoder)
+    elif args.export_format == 'torchscript':
+        tmp_tensor = torch.rand(10, 1, 1000)
+        model = model.float()
+        traced_script_module = torch.jit.trace(model, tmp_tensor)
+        buffer = io.BytesIO()
+        torch.jit.save(traced_script_module, buffer)
+        buffer.seek(0)
+        sys.stdout.buffer.write(buffer.getvalue())
+        sys.stdout.flush()
+    else:
+        raise(NotImplementedError("Export format not supported"))
 
 
 def argparser():
@@ -94,4 +110,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument('model')
+    parser.add_argument('--export_format',
+                        help='guppy or torchscript',
+                        default='guppy')
     return parser
