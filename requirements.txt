@@ -1,5 +1,5 @@
 # general requirements
-mappy==2.23
+mappy==2.24
 toml==0.10.2
 tqdm==4.31.1
 scipy==1.5.4
