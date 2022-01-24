@@ -24,7 +24,7 @@ from bonito.util import mean_qscore_from_qstring
 logger = getLogger('bonito')
 Format = namedtuple("Format", "aligned name mode")
 
-__ont_bam_spec__ = "0.0.1"
+__ont_bam_spec__ = "0.0.2"
 
 
 def biofmt(aligned=False):
@@ -47,6 +47,22 @@ def biofmt(aligned=False):
         return Format(aligned, 'sam', 'w')
     else:
         return Format(aligned, name, mode)
+
+
+def encode_moves(moves, stride, sep=','):
+    """
+    Encode a numpy array of integers into a comma seperated string
+    starting with `stride`. For efficiency, this method is only
+    valid for +ve single digit values in `moves`.
+
+    >>> encode_moves(np.array([0, 1, 0, 1, 1], dtype=np.int8), 5)
+    '5,0,1,0,1,1'
+    """
+    separators = np.full(2 * moves.size, ord(sep), dtype=np.dtype('B'))
+    # convert moves to ascii and interleave with separators
+    #  ~3 orders faster than `sep.join(np.char.mod("%d", moves))`
+    separators[1::2] = moves + ord('0')
+    return f"{stride}{separators.tobytes().decode('ascii')}"
 
 
 @contextmanager
@@ -420,6 +436,7 @@ class Writer(Thread):
                 tags = [
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
+                    f'mv:B:c,{encode_moves(res["moves"], res["stride"])}',
                     *read.tagdata(),
                     *mods_tags,
                 ]

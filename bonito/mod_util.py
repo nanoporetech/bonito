@@ -61,16 +61,24 @@ def mods_tags_to_str(mods_tags):
     ]
 
 
+def apply_stride_to_moves(attrs):
+    moves = np.array(attrs['moves'], dtype=bool)
+    sig_move = np.full(moves.size * attrs['stride'], False)
+    sig_move[np.where(moves)[0] * attrs['stride']] = True
+    return sig_move
+
+
 def call_mods(mods_model, read, read_attrs):
     if len(read_attrs['sequence']) == 0:
         return read_attrs
     remora_model, remora_metadata = mods_model
     # convert signal move table to remora read format
+    sig_move = apply_stride_to_moves(read_attrs)
     seq_to_sig_map = np.empty(
         len(read_attrs['sequence']) + 1, dtype=np.int32
     )
     seq_to_sig_map[-1] = read.signal.shape[0]
-    seq_to_sig_map[:-1] = np.where(read_attrs['sig_move'])[0]
+    seq_to_sig_map[:-1] = np.where(sig_move)[0]
     remora_read = RemoraRead(
         read.signal,
         seq_to_sig_map,
