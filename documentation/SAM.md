@@ -46,7 +46,7 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 | rn:i:	 | read number                                         |
 | st:Z:	 | read start time                                     |
 | f5:Z:	 | fast5 file name                                     |
-| mv:B:c | sequence to signal move table                       |
+| mv:B:c | sequence to signal move table _(optional)_          |
 
 #### Modified Base Tags
 
