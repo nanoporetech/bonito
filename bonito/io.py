@@ -436,10 +436,12 @@ class Writer(Thread):
                 tags = [
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
-                    f'mv:B:c,{encode_moves(res["moves"], res["stride"])}',
                     *read.tagdata(),
                     *mods_tags,
                 ]
+
+                if res["moves"] is not None:
+                    tags.append(f'mv:B:c,{encode_moves(res["moves"], res["stride"])}')
 
                 if len(seq):
                     if self.mode == 'wfq':
