@@ -119,8 +119,6 @@ class CTC_CRF(SequenceDist):
         if normalise_scores:
             scores = self.normalise(scores)
         stay_scores, move_scores = self.prepare_ctc_scores(scores, targets)
-        #logz = logZ_cupy(stay_scores, move_scores, target_lengths + 1 - self.state_len)
-        #TODO: This is where we swap out for my impl
         logz = logZ_cu(stay_scores, move_scores, target_lengths + 1 - self.state_len)
         loss = - (logz / target_lengths)
         if loss_clip:
