@@ -282,7 +282,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     Model = load_symbol(config, "Model")
     model = Model(config)
 
-    if use_koi:
+    if use_koi and device != 'cpu':
         model.encoder = koi.lstm.update_graph(
             model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
@@ -299,7 +299,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     if use_openvino:
         model = load_openvino_model(model, dirname)
 
-    if half is None and device != torch.device('cpu'):
+    if half is None and device != 'cpu':
         half = half_supported()
 
     if half: model = model.half()

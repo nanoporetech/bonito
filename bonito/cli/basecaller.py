@@ -12,6 +12,7 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+import bonito.openvino.basecall
 from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
@@ -51,7 +52,10 @@ def main(args):
     if args.verbose:
         sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
-    basecall = load_symbol(args.model_directory, "basecall")
+    if args.use_openvino:
+        basecall = bonito.openvino.basecall.basecall
+    else:
+        basecall = load_symbol(args.model_directory, "basecall")
 
     mods_model = None
     if args.modified_base_model is not None or args.modified_bases is not None:
