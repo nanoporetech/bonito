@@ -43,10 +43,7 @@ class CTC_CRF(SequenceDist):
         Ms = scores.reshape(T, N, -1, len(self.alphabet))
         alpha_0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        if not Ms.device.index is None:
-            return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
-        else:
-            return sparse_logZ(Ms, self.idx, alpha_0, beta_T, S)
+        return seqdist.sparse.logZ(Ms, self.idx, alpha_0, beta_T, S)
 
     def normalise(self, scores):
         return (scores - self.logZ(scores)[:, None] / len(scores))
@@ -61,10 +58,7 @@ class CTC_CRF(SequenceDist):
         T, N, _ = scores.shape
         Ms = scores.reshape(T, N, -1, self.n_base + 1)
         beta_T = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
-        if not Ms.device.index is None:
-            return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
-        else:
-            return logZ_bwd_cpu(Ms, self.idx, beta_T, S, K=1)
+        return seqdist.sparse.bwd_scores_cupy(Ms, self.idx, beta_T, S, K=1)
 
     def compute_transition_probs(self, scores, betas):
         T, N, C = scores.shape
