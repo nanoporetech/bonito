@@ -116,7 +116,7 @@ class LinearCRFEncoder(Module):
         if self.blank_score is not None and self.expand_blanks:
             T, N, C = scores.shape
             scores = torch.nn.functional.pad(
-                scores.view(T, N, C // self.n_base, self.n_base),
+                scores.view(T, N, -1, self.n_base),
                 (1, 0, 0, 0, 0, 0, 0, 0),
                 value=self.blank_score
             ).view(T, N, -1)

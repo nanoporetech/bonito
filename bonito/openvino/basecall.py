@@ -7,8 +7,8 @@ from bonito.util import chunk, stitch, batchify, unbatchify
 
 def compute_scores(model, batch):
     scores = model(batch)
-    fwd = model.forward_scores(scores)
-    bwd = model.backward_scores(scores)
+    fwd = model.seqdist.forward_scores(scores)
+    bwd = model.seqdist.backward_scores(scores)
     posts = torch.softmax(fwd + bwd, dim=-1)
     return {
         'scores': scores.transpose(0, 1),

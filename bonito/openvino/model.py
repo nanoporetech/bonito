@@ -1,8 +1,9 @@
 import os
-import io
 import torch
 import numpy as np
+from io import BytesIO
 from collections import namedtuple
+from bonito.crf.model import CTC_CRF
 from torch.nn import Conv2d, BatchNorm2d
 
 try: from openvino.inference_engine import IECore, StatusCode
@@ -51,7 +52,6 @@ def convert_to_2d(model):
             convert_to_2d(l)
 
 
-
 class OpenVINOModel:
 
     def __init__(self, model, dirname):
@@ -87,7 +87,7 @@ class OpenVINOModel:
             self.net = self.ie.read_network(xml_path, bin_path)
         else:
             # Convert model to ONNX buffer
-            buf = io.BytesIO()
+            buf = BytesIO()
             inp = torch.randn(inp_shape)
             torch.onnx.export(model, inp, buf, input_names=['input'], output_names=['output'], opset_version=11)
 
@@ -173,57 +173,85 @@ class OpenVINOCTCModel(OpenVINOModel):
         )
 
 
+def grad(f, x):
+    x = x.detach().requires_grad_()
+    with torch.enable_grad():
+        y = f(x)
+    return torch.autograd.grad(y, x)[0].detach()
+
+
+def max_grad(x, dim=0):
+    return torch.zeros_like(x).scatter_(dim, x.argmax(dim, True), 1.0)
+
+
 semiring = namedtuple('semiring', ('zero', 'one', 'mul', 'sum', 'dsum'))
 Log = semiring(zero=-1e38, one=0., mul=torch.add, sum=torch.logsumexp, dsum=torch.softmax)
+Max = semiring(zero=-1e38, one=0., mul=torch.add, sum=(lambda x, dim=0: torch.max(x, dim=dim)[0]), dsum=max_grad)
 
 
-def logZ_fwd_cpu(Ms, idx, v0, S:semiring=Log):
-
-    idx = idx.to(torch.int64)
-    T, N, C, nz = Ms.shape
-    alpha = Ms.new_full((T+1, N, C), S.zero)
+def scan(Ms, idx, v0, S:semiring=Log):
+    T, N, C, NZ = Ms.shape
+    alpha = Ms.new_full((T + 1, N, C), S.zero)
     alpha[0] = v0
     for t in range(T):
-        alpha[t+1] = S.sum(S.mul(Ms[t], alpha[t, :, idx]), dim=2)
+        alpha[t+1] = S.sum(S.mul(Ms[t], alpha[t, :, idx]), dim=-1)
     return alpha
 
 
-def logZ_bwd_cpu(Ms, idx, vT, S):
+class LogZ(torch.autograd.Function):
 
-    T, N, C, NZ = Ms.shape
-    Ms = Ms.reshape(T, N, -1)
-    idx_T = idx.flatten().argsort().to(dtype=torch.long).reshape(C, NZ)
+    @staticmethod
+    def forward(ctx, Ms, idx, v0, vT, scan, S:semiring):
+        alpha = scan(Ms, idx, v0, S)
+        ctx.save_for_backward(alpha, Ms, idx, vT)
+        ctx.semiring, ctx.scan = S, scan
+        return S.sum(S.mul(alpha[-1], vT), dim=1)
 
-    betas = torch.ones(T + 1, N, C)
+    @staticmethod
+    def backward(ctx, grad):
+        alpha, Ms, idx, vT = ctx.saved_tensors
+        S, scan = ctx.semiring, ctx.scan
+        T, N, C, NZ = Ms.shape
+        idx_T = idx.flatten().argsort().reshape(*idx.shape)
+        Ms_T = Ms.reshape(T, N, -1)[:, :, idx_T]
+        idx_T = torch.div(idx_T, NZ, rounding_mode='floor')
+        beta = scan(Ms_T.flip(0), idx_T, vT, S)
+        g = S.mul(S.mul(Ms.reshape(T, N, -1), alpha[:-1, :, idx.flatten()]).reshape(T, N, C, NZ), beta[:-1, :, :, None].flip(0))
+        g = S.dsum(g.reshape(T, N, -1), dim=2).reshape(T, N, C, NZ)
+        return grad[None, :, None, None] * g, None, None, None, None, None
 
-    a = vT
-    betas[T] = a
-    for t in reversed(range(T)):
-        s = S.mul(a[:, idx_T // NZ], Ms[t, :, idx_T])
-        a = S.sum(s, dim=-1)
-        betas[t] = a
-    return betas
+
+class CTC_CRF_CPU(CTC_CRF):
+
+    def logZ(self, scores, S:semiring=Log):
+        T, N, _ = scores.shape
+        Ms = scores.reshape(T, N, -1, self.n_base + 1)
+        v0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
+        vT = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
+        return LogZ.apply(Ms, self.idx.to(torch.int64), v0, vT, scan, S)
+
+    def forward_scores(self, scores, S: semiring=Log):
+        T, N, _ = scores.shape
+        Ms = scores.reshape(T, N, -1, self.n_base + 1)
+        v0 = Ms.new_full((N, self.n_base**(self.state_len)), S.one)
+        return scan(Ms, self.idx.to(torch.int64), v0, S)
+
+    def backward_scores(self, scores, S: semiring=Log):
+        T, N, _ = scores.shape
+        vT = scores.new_full((N, self.n_base**(self.state_len)), S.one)
+        idx_T = self.idx.flatten().argsort().reshape(*self.idx.shape)
+        Ms_T = scores[:, :, idx_T]
+        idx_T = torch.div(idx_T, self.n_base + 1, rounding_mode='floor')
+        return scan(Ms_T.flip(0), idx_T.to(torch.int64), vT, S).flip(0)
 
 
 class OpenVINOCRFModel(OpenVINOModel):
 
     def __init__(self, model, dirname):
         super().__init__(model, dirname)
-        self.seqdist = model.seqdist
+        self.seqdist = CTC_CRF_CPU(model.seqdist.state_len, model.seqdist.alphabet)
 
     def __call__(self, data):
         if self.exec_net is None:
             self.init_model(self.model.encoder, [1, 1, data.shape[-1]])
         return self.process(data)
-
-    def forward_scores(self, scores, S: semiring=Log):
-        T, N, _ = scores.shape
-        Ms = scores.reshape(T, N, -1, self.seqdist.n_base + 1)
-        v0 = Ms.new_full((N, self.seqdist.n_base**(self.seqdist.state_len)), S.one)
-        return logZ_fwd_cpu(Ms, self.seqdist.idx, v0, S)
-
-    def backward_scores(self, scores, S: semiring=Log):
-        T, N, _ = scores.shape
-        Ms = scores.reshape(T, N, -1, self.seqdist.n_base + 1)
-        beta_T = Ms.new_full((N, self.seqdist.n_base**(self.seqdist.state_len)), S.one)
-        return logZ_bwd_cpu(Ms, self.seqdist.idx, beta_T, S)
