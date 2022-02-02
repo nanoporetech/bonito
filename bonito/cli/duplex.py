@@ -325,7 +325,7 @@ def main(args):
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset='ont-map')
+        aligner = Aligner(args.reference, preset='map-ont')
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
