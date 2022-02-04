@@ -82,7 +82,7 @@ class Read:
 
         if len(scaled) > 8000:
             med, mad = med_mad(scaled)
-            self.signal = (scaled - med) / mad
+            self.signal = (scaled - med) / max(1.0, mad)
         else:
             self.signal = norm_by_noisiest_section(scaled)
 
