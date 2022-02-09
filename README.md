@@ -1,7 +1,6 @@
 # Bonito
 
 [![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
-[![py36](https://img.shields.io/badge/python-3.6-brightgreen.svg)](https://img.shields.io/badge/python-3.6-brightgreen.svg)
 [![py37](https://img.shields.io/badge/python-3.7-brightgreen.svg)](https://img.shields.io/badge/python-3.7-brightgreen.svg)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
