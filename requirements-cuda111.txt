@@ -14,6 +14,4 @@ fast-ctc-decode==0.3.0
 python-dateutil==2.8.2
 # cuda requirements
 torch==1.10.0+cu111
-koi-cuda111==0.0.5
-cupy-cuda111==9.6.0
-ont-seqdist-cuda111==0.0.4
+koi-cuda==0.0.6
