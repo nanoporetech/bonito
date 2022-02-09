@@ -37,16 +37,18 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 
 #### Read Tags
 
-|        |                                                     |
-| ------ | --------------------------------------------------- |
-| RG:Z:  | `<runid>_<basecalling_model>`                       |
-| qs:i:  | mean basecall qscore rounded to the nearest integer |
-| mx:i:	 | read mux                                            |
-| ch:i:  | read channel                                        |
-| rn:i:	 | read number                                         |
-| st:Z:	 | read start time                                     |
-| f5:Z:	 | fast5 file name                                     |
-| mv:B:c | sequence to signal move table _(optional)_          |
+|        |                                                        |
+| ------ | ---------------------------------------------------    |
+| RG:Z:  | `<runid>_<basecalling_model>`                          |
+| qs:i:  | mean basecall qscore rounded to the nearest integer    | 
+| ns:i:  | the number of samples in the signal                    |
+| ts:i:  | the number of samples trimmed from the start of signal |
+| mx:i:	 | read mux                                               |
+| ch:i:  | read channel                                           |
+| rn:i:	 | read number                                            |
+| st:Z:	 | read start time                                        |
+| f5:Z:	 | fast5 file name                                        |
+| mv:B:c | sequence to signal move table _(optional)_             |
 
 #### Modified Base Tags
 
