@@ -107,7 +107,7 @@ def argparser():
     group.add_argument('--pretrained', default="")
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--lr", default=2e-3)
+    parser.add_argument("--lr", default='2e-3')
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)

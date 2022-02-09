@@ -8,12 +8,10 @@ pysam==0.18.0
 parasail==1.2
 pandas==1.1.5
 requests==2.25.1
+ont-koi==0.0.7
 ont-remora==0.1.2
 ont-fast5-api==3.3.0
 fast-ctc-decode==0.3.0
 python-dateutil==2.8.2
 # cuda requirements
 torch~=1.10.0
-koi-cuda102==0.0.5
-cupy-cuda102==9.6.0
-ont-seqdist-cuda102==0.0.4
