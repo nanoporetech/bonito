@@ -436,6 +436,8 @@ class Writer(Thread):
                 tags = [
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
+                    f'ns:i:{read.num_samples}',
+                    f'ts:i:{read.trimmed_samples}',
                     *read.tagdata(),
                     *mods_tags,
                 ]
