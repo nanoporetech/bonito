@@ -280,7 +280,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     Model = load_symbol(config, "Model")
     model = Model(config)
 
-    if use_koi:
+    if config["model"]["package"] == "bonito.crf" and use_koi:
         model.encoder = koi.lstm.update_graph(
             model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
         )
