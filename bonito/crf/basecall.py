@@ -38,20 +38,18 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
             scale=scale, offset=offset, blank_score=blank_score
         )
         return {
+            'moves': moves,
             'qstring': qstring,
             'sequence': sequence,
-            'moves': np.array(moves, dtype=bool),
         }
 
 
-def apply_stride_to_moves(model, attrs):
-    moves = np.array(attrs['moves'], dtype=bool)
-    sig_move = np.full(moves.size * model.stride, False)
-    sig_move[np.where(moves)[0] * model.stride] = True
+def fmt(stride, attrs):
     return {
+        'stride': stride,
+        'moves': attrs['moves'].numpy(),
         'qstring': to_str(attrs['qstring']),
         'sequence': to_str(attrs['sequence']),
-        'sig_move': sig_move,
     }
 
 
@@ -76,6 +74,6 @@ def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=Fa
     )
 
     return thread_iter(
-        (read, apply_stride_to_moves(model, attrs))
+        (read, fmt(model.stride, attrs))
         for read, attrs in results
     )
