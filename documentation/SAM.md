@@ -41,7 +41,7 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 | ------ | -----------------------------------------------------------|
 | RG:Z:  | `<runid>_<basecalling_model>`                              |
 | qs:i:  | mean basecall qscore rounded to the nearest integer        |
-| ns:i:  | the number of samples in the signal                        |
+| ns:i:  | the number of samples in the signal prior to trimming      |
 | ts:i:  | the number of samples trimmed from the start of the signal |
 | mx:i:	 | read mux                                                   |
 | ch:i:  | read channel                                               |
