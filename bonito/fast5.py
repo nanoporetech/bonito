@@ -190,7 +190,7 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
         med, mad = med_mad(signal[info['left_bases'][widest]: info['right_bases'][widest]])
     else:
         med, mad = med_mad(signal)
-    return (signal - med) / mad
+    return (signal - med) / max(1.0, mad)
 
 
 def read_chunks(read, chunksize=4000, overlap=400):
