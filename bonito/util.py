@@ -135,7 +135,7 @@ def decode_ref(encoded, labels):
     """
     Convert a integer encoded reference into a string and remove blanks
     """
-    return ''.join(labels[e] for e in encoded if e)
+    return ''.join(labels[e] for e in encoded.tolist() if e)
 
 
 def column_to_set(filename, idx=0, skip_header=False):
