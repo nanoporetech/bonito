@@ -51,15 +51,17 @@ def main(args):
     train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
     valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
 
-    if args.pretrained:
+    if not args.pretrained:
+        config = toml.load(args.config)
+    else:
         dirname = args.pretrained
         if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
             dirname = os.path.join(__models__, dirname)
-        config_file = os.path.join(dirname, 'config.toml')
-    else:
-        config_file = args.config
-
-    config = toml.load(config_file)
+        pretrain_file = os.path.join(dirname, 'config.toml')
+        config = toml.load(pretrain_file)
+        if 'lr_scheduler' in config:
+            print(f"[ignoring 'lr_scheduler' in --pretrained config]")
+            del config['lr_scheduler']
 
     argsdict = dict(training=vars(args))
 
