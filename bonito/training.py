@@ -204,7 +204,7 @@ class Trainer:
 
         lr_scheduler = self.get_lr_scheduler(epochs, last_epoch=last_epoch)
 
-        for epoch in range(1 + last_epoch, epochs + 1 + last_epoch):
+        for epoch in range(1 + last_epoch, epochs + 1):
             try:
                 with bonito.io.CSVLogger(os.path.join(workdir, 'losses_{}.csv'.format(epoch))) as loss_log:
                     train_loss, duration = self.train_one_epoch(loss_log, lr_scheduler)
