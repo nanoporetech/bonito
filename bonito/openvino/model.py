@@ -1,4 +1,5 @@
 import os
+from math import ceil
 import torch
 import numpy as np
 from io import BytesIO
@@ -6,7 +7,7 @@ from collections import namedtuple
 from bonito.crf.model import CTC_CRF
 from torch.nn import Conv2d, BatchNorm2d
 
-try: from openvino.inference_engine import IECore, StatusCode
+try: from openvino.runtime import Core, AsyncInferQueue
 except ImportError: pass
 
 
@@ -59,10 +60,10 @@ class OpenVINOModel:
         self.alphabet = model.alphabet
         self.parameters = model.parameters
         self.stride = model.stride
-        self.net = None
-        self.exec_net = None
+        self.infer_queue = None
         self.dirname = dirname
-        self.ie = IECore()
+        self.batch_size = 32
+        self.ie = Core()
 
     def eval(self):
         pass
@@ -84,73 +85,53 @@ class OpenVINOModel:
         # First, we try to check if there is IR on disk. If not - load model in runtime
         xml_path, bin_path = [os.path.join(self.dirname, 'model') + ext for ext in ['.xml', '.bin']]
         if os.path.exists(xml_path) and os.path.exists(bin_path):
-            self.net = self.ie.read_network(xml_path, bin_path)
+            net = self.ie.read_model(xml_path, bin_path)
         else:
             # Convert model to ONNX buffer
             buf = BytesIO()
+            inp_shape[0] = self.batch_size
             inp = torch.randn(inp_shape)
             torch.onnx.export(model, inp, buf, input_names=['input'], output_names=['output'], opset_version=11)
 
             # Import network from memory buffer
-            self.net = self.ie.read_network(buf.getvalue(), b'', init_from_buffer=True)
+            net = self.ie.read_model(buf.getvalue(), b'')
+
+        self.output_shape = list(net.outputs[0].get_tensor().shape)
 
         # Load model to device
-        config = {}
         if self.device == 'CPU':
-            config={'CPU_THROUGHPUT_STREAMS': 'CPU_THROUGHPUT_AUTO'}
-        self.exec_net = self.ie.load_network(self.net, self.device, config=config, num_requests=0)
+            self.ie.set_property('CPU', {'CPU_THROUGHPUT_STREAMS': 'CPU_THROUGHPUT_AUTO', 'CPU_BIND_THREAD': 'YES'})
+
+        compiled_model = self.ie.compile_model(net, self.device)
+        num_requests = compiled_model.get_property('OPTIMAL_NUMBER_OF_INFER_REQUESTS')
+        self.infer_queue = AsyncInferQueue(compiled_model, num_requests)
 
     def process(self, data):
 
         data = data.float()
-        batch_size = data.shape[0]
-        inp_shape = list(data.shape)
-        inp_shape[0] = 1  # We will run the batch asynchronously
+        num_samples = data.shape[0]
 
-        # List that maps infer requests to index of processed chunk from batch.
-        # -1 means that request has not been started yet.
-        infer_request_input_id = [-1] * len(self.exec_net.requests)
-        out_shape = self.net.outputs['output'].shape
+        out_shape = self.output_shape
 
         if len(out_shape) == 3:
-            out_shape = [1, *out_shape]
+            out_shape = [self.batch_size, *out_shape]
 
         # CTC network produces 1xWxNxC
-        output = np.zeros([out_shape[-3], batch_size, out_shape[-1]], dtype=np.float32)
+        output = np.zeros([out_shape[-3], num_samples, out_shape[-1]], dtype=np.float32)
 
-        for inp_id in range(batch_size):
-            # Get idle infer request
-            infer_request_id = self.exec_net.get_idle_request_id()
-            if infer_request_id < 0:
-                status = self.exec_net.wait(num_requests=1)
-                if status != StatusCode.OK:
-                    raise Exception("Wait for idle request failed!")
-                infer_request_id = self.exec_net.get_idle_request_id()
-                if infer_request_id < 0:
-                    raise Exception("Invalid request id!")
+        def completion_callback(request, inp_id):
+            out_i = next(iter(request.results.values()))
+            output[:, inp_id:inp_id + self.batch_size] = out_i
 
-            out_id = infer_request_input_id[infer_request_id]
-            request = self.exec_net.requests[infer_request_id]
+        self.infer_queue.set_callback(completion_callback)
 
-            # Copy output prediction
-            if out_id != -1:
-                output[:, out_id:out_id + 1] = request.output_blobs['output'].buffer
-
+        for inp_id in range(ceil(num_samples / self.batch_size)):
             # Start this request on new data
-            infer_request_input_id[infer_request_id] = inp_id
-            request.async_infer({'input': data[inp_id]})
-            inp_id += 1
+            inp_id *= self.batch_size
+            inp_id = min(inp_id, data.shape[0] - self.batch_size)
+            self.infer_queue.start_async({'input': data[inp_id:inp_id + self.batch_size]}, inp_id)
 
-        # Wait for the rest of requests
-        status = self.exec_net.wait()
-        if status != StatusCode.OK:
-            raise Exception("Wait for idle request failed!")
-
-        for infer_request_id, out_id in enumerate(infer_request_input_id):
-            if out_id == -1:
-                continue
-            request = self.exec_net.requests[infer_request_id]
-            output[:, out_id:out_id + 1] = request.output_blobs['output'].buffer
+        self.infer_queue.wait_all()
 
         return torch.tensor(output)
 
@@ -162,7 +143,7 @@ class OpenVINOCTCModel(OpenVINOModel):
 
     def __call__(self, data):
         data = data.unsqueeze(2)  # 1D->2D
-        if self.exec_net is None:
+        if self.infer_queue is None:
             convert_to_2d(self.model)
             self.init_model(self.model, [1, 1, 1, data.shape[-1]])
         return self.process(data)
@@ -252,6 +233,6 @@ class OpenVINOCRFModel(OpenVINOModel):
         self.seqdist = CTC_CRF_CPU(model.seqdist.state_len, model.seqdist.alphabet)
 
     def __call__(self, data):
-        if self.exec_net is None:
+        if self.infer_queue is None:
             self.init_model(self.model.encoder, [1, 1, data.shape[-1]])
         return self.process(data)
