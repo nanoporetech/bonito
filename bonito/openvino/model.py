@@ -1,4 +1,5 @@
 import os
+from math import ceil
 import torch
 import numpy as np
 from io import BytesIO
@@ -62,6 +63,7 @@ class OpenVINOModel:
         self.net = None
         self.exec_net = None
         self.dirname = dirname
+        self.batch_size = 32
         self.ie = IECore()
 
     def eval(self):
@@ -88,6 +90,7 @@ class OpenVINOModel:
         else:
             # Convert model to ONNX buffer
             buf = BytesIO()
+            inp_shape[0] = self.batch_size
             inp = torch.randn(inp_shape)
             torch.onnx.export(model, inp, buf, input_names=['input'], output_names=['output'], opset_version=11)
 
@@ -103,9 +106,7 @@ class OpenVINOModel:
     def process(self, data):
 
         data = data.float()
-        batch_size = data.shape[0]
-        inp_shape = list(data.shape)
-        inp_shape[0] = 1  # We will run the batch asynchronously
+        num_samples = data.shape[0]
 
         # List that maps infer requests to index of processed chunk from batch.
         # -1 means that request has not been started yet.
@@ -116,9 +117,9 @@ class OpenVINOModel:
             out_shape = [1, *out_shape]
 
         # CTC network produces 1xWxNxC
-        output = np.zeros([out_shape[-3], batch_size, out_shape[-1]], dtype=np.float32)
+        output = np.zeros([out_shape[-3], num_samples, out_shape[-1]], dtype=np.float32)
 
-        for inp_id in range(batch_size):
+        for inp_id in range(ceil(num_samples / self.batch_size)):
             # Get idle infer request
             infer_request_id = self.exec_net.get_idle_request_id()
             if infer_request_id < 0:
@@ -134,12 +135,13 @@ class OpenVINOModel:
 
             # Copy output prediction
             if out_id != -1:
-                output[:, out_id:out_id + 1] = request.output_blobs['output'].buffer
+                output[:, out_id:out_id + self.batch_size] = request.output_blobs['output'].buffer
 
             # Start this request on new data
+            inp_id *= self.batch_size
+            inp_id = min(inp_id, data.shape[0] - self.batch_size)
             infer_request_input_id[infer_request_id] = inp_id
-            request.async_infer({'input': data[inp_id]})
-            inp_id += 1
+            request.async_infer({'input': data[inp_id:inp_id + self.batch_size]})
 
         # Wait for the rest of requests
         status = self.exec_net.wait()
@@ -150,7 +152,7 @@ class OpenVINOModel:
             if out_id == -1:
                 continue
             request = self.exec_net.requests[infer_request_id]
-            output[:, out_id:out_id + 1] = request.output_blobs['output'].buffer
+            output[:, out_id:out_id + self.batch_size] = request.output_blobs['output'].buffer
 
         return torch.tensor(output)
 
