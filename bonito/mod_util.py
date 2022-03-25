@@ -80,8 +80,10 @@ def call_mods(mods_model, read, read_attrs):
     seq_to_sig_map[-1] = read.signal.shape[0]
     seq_to_sig_map[:-1] = np.where(sig_move)[0]
     remora_read = RemoraRead(
-        read.signal,
-        seq_to_sig_map,
+        dacs=read.signal,
+        shift=0,
+        scale=1,
+        seq_to_sig_map=seq_to_sig_map,
         str_seq=read_attrs['sequence'].upper(),
     )
     read_attrs['mods'] = mods_tags_to_str(
