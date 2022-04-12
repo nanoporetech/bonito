@@ -53,5 +53,5 @@ setup(
     },
     dependency_links=[
         'https://download.pytorch.org/whl/torch_stable.html',
-    ]
+    ] if CUDA_VERSION else None
 )
