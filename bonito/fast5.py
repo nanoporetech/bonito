@@ -18,75 +18,126 @@ from dateutil import parser
 from scipy.signal import find_peaks
 from ont_fast5_api.fast5_interface import get_fast5_file
 
+import pyslow5
 
 class Read:
 
-    def __init__(self, read, filename, meta=False):
+    def __init__(self, read, filename, meta=False, slow5_meta=None, use_slow5=False):
+        if(use_slow5):
+            self.meta = meta
+            self.read_id = read['read_id']
+            self.filename = filename
+            if slow5_meta is not None:
+                self.run_id = slow5_meta['run_id']
 
-        self.meta = meta
-        self.read_id = read.read_id
-        self.filename = filename.name
-        self.run_id = read.get_run_id()
-        if type(self.run_id) in (bytes, np.bytes_):
-            self.run_id = self.run_id.decode('ascii')
+                self.sample_id = slow5_meta['sample_id']
 
-        tracking_id = read.handle[read.global_key + 'tracking_id'].attrs
+                self.exp_start_time = slow5_meta['exp_start_time']
 
-        self.sample_id = tracking_id['sample_id']
-        if type(self.sample_id) in (bytes, np.bytes_):
-            self.sample_id = self.sample_id.decode()
+                self.flow_cell_id = slow5_meta['flow_cell_id']
 
-        self.exp_start_time = tracking_id['exp_start_time']
-        if type(self.exp_start_time) in (bytes, np.bytes_):
-            self.exp_start_time = self.exp_start_time.decode('ascii')
-        self.exp_start_time = self.exp_start_time.replace('Z', '')
+                self.device_id = slow5_meta['device_id']
 
-        self.flow_cell_id = tracking_id['flow_cell_id']
-        if type(self.flow_cell_id) in (bytes, np.bytes_):
-            self.flow_cell_id = self.flow_cell_id.decode('ascii')
+            if self.meta:
+                return
 
-        self.device_id = tracking_id['device_id']
-        if type(self.device_id) in (bytes, np.bytes_):
-            self.device_id = self.device_id.decode('ascii')
+            self.offset = read['offset']
+            self.sampling_rate = read['sampling_rate']
+            self.scaling = read['range'] / read['digitisation']
 
-        if self.meta:
-            return
+            self.mux = read['start_mux']
+            self.read_number = read['read_number']
+            self.channel = read['channel_number']
+            if type(self.channel) in (bytes, np.bytes_):
+                self.channel = self.channel.decode()
 
-        read_attrs = read.handle[read.raw_dataset_group_name].attrs
-        channel_info = read.handle[read.global_key + 'channel_id'].attrs
+            self.start = read['start_time'] / self.sampling_rate
+            self.duration = read['len_raw_signal'] / self.sampling_rate
 
-        self.offset = int(channel_info['offset'])
-        self.sampling_rate = channel_info['sampling_rate']
-        self.scaling = channel_info['range'] / channel_info['digitisation']
+            exp_start_dt = parser.parse(self.exp_start_time)
+            start_time = exp_start_dt + timedelta(seconds=self.start)
+            self.start_time = start_time.replace(microsecond=0).isoformat()
 
-        self.mux = read_attrs['start_mux']
-        self.read_number = read_attrs['read_number']
-        self.channel = channel_info['channel_number']
-        if type(self.channel) in (bytes, np.bytes_):
-            self.channel = self.channel.decode()
+            raw = read['signal']
+            scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+            self.num_samples = len(scaled)
 
-        self.start = read_attrs['start_time'] / self.sampling_rate
-        self.duration = read_attrs['duration'] / self.sampling_rate
+            trim_start, _ = trim(scaled[:8000])
+            scaled = scaled[trim_start:]
+            self.trimmed_samples = trim_start
+            self.template_start = self.start + (1 / self.sampling_rate) * trim_start
+            self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
 
-        exp_start_dt = parser.parse(self.exp_start_time)
-        start_time = exp_start_dt + timedelta(seconds=self.start)
-        self.start_time = start_time.replace(microsecond=0).isoformat()
-
-        raw = read.handle[read.raw_dataset_name][:]
-        scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
-        self.num_samples = len(scaled)
-
-        trim_start, _ = trim(scaled[:8000])
-        scaled = scaled[trim_start:]
-        self.trimmed_samples = trim_start
-        self.template_start = self.start + (1 / self.sampling_rate) * trim_start
-        self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
-
-        if len(scaled) > 8000:
-            med, mad = med_mad(scaled)
-            self.signal = (scaled - med) / max(1.0, mad)
+            if len(scaled) > 8000:
+                med, mad = med_mad(scaled)
+                self.signal = (scaled - med) / max(1.0, mad)
+            else:
+                self.signal = norm_by_noisiest_section(scaled)
         else:
-            self.signal = norm_by_noisiest_section(scaled)
+            self.meta = meta
+            self.read_id = read.read_id
+            self.filename = filename.name
+            self.run_id = read.get_run_id()
+            if type(self.run_id) in (bytes, np.bytes_):
+                self.run_id = self.run_id.decode('ascii')
+
+            tracking_id = read.handle[read.global_key + 'tracking_id'].attrs
+
+            self.sample_id = tracking_id['sample_id']
+            if type(self.sample_id) in (bytes, np.bytes_):
+                self.sample_id = self.sample_id.decode()
+
+            self.exp_start_time = tracking_id['exp_start_time']
+            if type(self.exp_start_time) in (bytes, np.bytes_):
+                self.exp_start_time = self.exp_start_time.decode('ascii')
+            self.exp_start_time = self.exp_start_time.replace('Z', '')
+
+            self.flow_cell_id = tracking_id['flow_cell_id']
+            if type(self.flow_cell_id) in (bytes, np.bytes_):
+                self.flow_cell_id = self.flow_cell_id.decode('ascii')
+
+            self.device_id = tracking_id['device_id']
+            if type(self.device_id) in (bytes, np.bytes_):
+                self.device_id = self.device_id.decode('ascii')
+
+            if self.meta:
+                return
+
+            read_attrs = read.handle[read.raw_dataset_group_name].attrs
+            channel_info = read.handle[read.global_key + 'channel_id'].attrs
+
+            self.offset = int(channel_info['offset'])
+            self.sampling_rate = channel_info['sampling_rate']
+            self.scaling = channel_info['range'] / channel_info['digitisation']
+
+            self.mux = read_attrs['start_mux']
+            self.read_number = read_attrs['read_number']
+            self.channel = channel_info['channel_number']
+            if type(self.channel) in (bytes, np.bytes_):
+                self.channel = self.channel.decode()
+
+            self.start = read_attrs['start_time'] / self.sampling_rate
+            self.duration = read_attrs['duration'] / self.sampling_rate
+
+            exp_start_dt = parser.parse(self.exp_start_time)
+            start_time = exp_start_dt + timedelta(seconds=self.start)
+            self.start_time = start_time.replace(microsecond=0).isoformat()
+
+            raw = read.handle[read.raw_dataset_name][:]
+            scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+            self.num_samples = len(scaled)
+
+            trim_start, _ = trim(scaled[:8000])
+            scaled = scaled[trim_start:]
+            self.trimmed_samples = trim_start
+            self.template_start = self.start + (1 / self.sampling_rate) * trim_start
+            self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
+
+            if len(scaled) > 8000:
+                med, mad = med_mad(scaled)
+                self.signal = (scaled - med) / max(1.0, mad)
+            else:
+                self.signal = norm_by_noisiest_section(scaled)
 
     def __repr__(self):
         return "Read('%s')" % self.read_id
@@ -190,7 +241,7 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
         med, mad = med_mad(signal[info['left_bases'][widest]: info['right_bases'][widest]])
     else:
         med, mad = med_mad(signal)
-    return (signal - med) / max(1.0, mad)
+    return (signal - med) / mad
 
 
 def read_chunks(read, chunksize=4000, overlap=400):
@@ -270,16 +321,87 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_slow5_batch(reads, size=4096):
+    """
+    re-batchify slow5 output
+    """
+    batch = []
+    for read in reads:
+        batch.append(read)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if len(batch) > 0:
+        yield batch
+
+def build_slow5_read(read, filename, meta):
+    """
+    construct object for slow5 read
+    """
+    return Read(read, filename, slow5_meta=meta, use_slow5=True)
+
+
+def get_meta_data_slow5(s5):
+    """
+    get metadata from slow5 file to avoud multi proc pickling issues
+    """
+    meta = {}
+    run_id = s5.get_header_value('run_id')
+    if type(run_id) in (bytes, np.bytes_):
+        run_id = run_id.decode('ascii')
+    meta["run_id"] = run_id
+
+    sample_id = s5.get_header_value('sample_id')
+    if type(sample_id) in (bytes, np.bytes_):
+        sample_id = sample_id.decode()
+    meta["sample_id"] = sample_id
+
+    exp_start_time = s5.get_header_value('exp_start_time')
+    if type(exp_start_time) in (bytes, np.bytes_):
+        exp_start_time = exp_start_time.decode('ascii')
+    exp_start_time = exp_start_time.replace('Z', '')
+    meta["exp_start_time"] = exp_start_time
+
+    flow_cell_id = s5.get_header_value('flow_cell_id')
+    if type(flow_cell_id) in (bytes, np.bytes_):
+        flow_cell_id = flow_cell_id.decode('ascii')
+    meta["flow_cell_id"] = flow_cell_id
+
+    device_id = s5.get_header_value('device_id')
+    if type(device_id) in (bytes, np.bytes_):
+        device_id = device_id.decode('ascii')
+    meta["device_id"] = device_id
+
+    return meta
+
+
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None, use_slow5=False, slow5_threads=4, slow5_batchsize=4096):
     """
     Get all reads in a given `directory`.
     """
-    pattern = "**/*.fast5" if recursive else "*.fast5"
-    get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
-    reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
-    with Pool(n_proc) as pool:
-        for job in chain(pool.imap(get_filtered_reads, reads)):
-            for read in pool.imap(get_raw_data_for_read, job):
-                yield read
-                if cancel is not None and cancel.is_set():
-                    return
+    if(use_slow5):
+        pattern = "**/*.*low5" if recursive else "*.*low5"
+        files = (x for x in glob(directory + "/" + pattern, recursive=True))
+        with Pool(n_proc) as pool:
+            for file in files:
+                s5 = pyslow5.Open(file, 'r')
+                s5_meta = get_meta_data_slow5(s5)
+                reads = s5.seq_reads_multi(threads=slow5_threads, batchsize=slow5_batchsize, aux='all')
+                build_read = partial(build_slow5_read, filename=file, meta=s5_meta)
+                batches = get_slow5_batch(reads, size=slow5_batchsize)
+                for batch in chain(batches):
+                    for read in pool.imap(build_read, batch):
+                        yield read
+                        if cancel is not None and cancel.is_set():
+                            return
+    else:
+        sys.stderr.write("use_fast5\n")
+        pattern = "**/*.fast5" if recursive else "*.fast5"
+        get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
+        reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
+        with Pool(n_proc) as pool:
+            for job in chain(pool.imap(get_filtered_reads, reads)):
+                for read in pool.imap(get_raw_data_for_read, job):
+                    yield read
+                    if cancel is not None and cancel.is_set():
+                        return

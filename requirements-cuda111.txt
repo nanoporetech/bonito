@@ -16,3 +16,4 @@ fast-ctc-decode==0.3.2
 python-dateutil==2.8.2
 # cuda requirements
 torch==1.11+cu111
+pyslow5==0.5.0a1
