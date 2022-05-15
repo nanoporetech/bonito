@@ -12,8 +12,8 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.reader import Reader
 from bonito.aligner import align_map, Aligner
+from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
 from bonito.cli.download import File, models, __models__

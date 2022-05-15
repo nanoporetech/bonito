@@ -3,14 +3,15 @@ Bonito MKR Utils
 """
 
 from glob import glob
+from uuid import UUID
 from pathlib import Path
-from dateutil import parser
 from datetime import timedelta
 
-import mkr_format
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
+from dateutil import parser
+from mkr_format import open_combined_file
 
 
 class Read(bonito.reader.Read):
@@ -82,7 +83,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
 
     for mkr_file in mkr_files:
         for read in tqdm(
-                mkr_format.open_combined_file(mkr_file).reads(),
+                open_combined_file(mkr_file).reads(),
                 leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
         ):
             read = Read(read, mkr_file, meta=True)
@@ -98,7 +99,7 @@ def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, c
     mkr_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
     for mkr_file in mkr_files:
-        for read in mkr_format.open_combined_file(mkr_file).reads():
+        for read in open_combined_file(mkr_file).reads():
             yield Read(read, mkr_file)
             if cancel is not None and cancel.is_set():
                 return

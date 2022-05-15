@@ -2,7 +2,6 @@
 Bonito Fast5 Utils
 """
 
-import sys
 from glob import glob
 from pathlib import Path
 from itertools import chain
@@ -10,7 +9,6 @@ from functools import partial
 from multiprocessing import Pool
 from datetime import datetime, timedelta
 
-import torch
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
@@ -86,40 +84,6 @@ class Read(bonito.reader.Read):
             self.signal = (scaled - med) / max(1.0, mad)
         else:
             self.signal = bonito.reader.norm_by_noisiest_section(scaled)
-
-
-class ReadChunk:
-
-    def __init__(self, read, chunk, i, n):
-        self.read_id = "%s:%i:%i" % (read.read_id, i, n)
-        self.run_id = read.run_id
-        self.filename = read.filename
-        self.mux = read.mux
-        self.channel = read.channel
-        self.start = read.start
-        self.duration = read.duration
-        self.template_start = self.start
-        self.template_duration = self.duration
-        self.signal = chunk
-
-    def __repr__(self):
-        return "ReadChunk('%s')" % self.read_id
-
-
-
-def read_chunks(read, chunksize=4000, overlap=400):
-    """
-    Split a Read in fixed sized ReadChunks
-    """
-    if len(read.signal) < chunksize:
-        return
-
-    _, offset = divmod(len(read.signal) - chunksize, chunksize - overlap)
-    signal = torch.from_numpy(read.signal[offset:])
-    blocks = signal.unfold(0, chunksize, chunksize - overlap)
-
-    for i, block in enumerate(blocks):
-        yield ReadChunk(read, block.numpy(), i+1, blocks.shape[0])
 
 
 def get_meta_data(filename, read_ids=None, skip=False):
