@@ -73,6 +73,20 @@ class Read(bonito.reader.Read):
             self.signal = bonito.reader.norm_by_noisiest_section(scaled)
 
 
+def mkr_reads(mkr_file, read_ids, skip=False):
+    """
+    Get all the reads from the `mkr_file`.
+    """
+    if read_ids is None:
+        yield from open_combined_file(mkr_file).reads()
+    elif skip:
+        for read in open_combined_file(mkr_file).reads():
+            if read.read_id not in read_ids:
+                yield read
+    else:
+        yield from open_combined_file(mkr_file).select_reads({UUID(rid) for rid in read_ids}, missing_ok=True)
+
+
 def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
     """
     Get all the read meta data for a given `directory`.
@@ -83,8 +97,8 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
 
     for mkr_file in mkr_files:
         for read in tqdm(
-                open_combined_file(mkr_file).reads(),
-                leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
+            mkr_reads(mkr_file, read_ids, skip),
+            leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
         ):
             read = Read(read, mkr_file, meta=True)
             groups.add(read.readgroup(model))
@@ -99,7 +113,7 @@ def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, c
     mkr_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
     for mkr_file in mkr_files:
-        for read in open_combined_file(mkr_file).reads():
+        for read in mkr_reads(mkr_file, read_ids, skip):
             yield Read(read, mkr_file)
             if cancel is not None and cancel.is_set():
                 return
