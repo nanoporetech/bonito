@@ -71,8 +71,6 @@ class Read:
         ]
 
 
-
-
 def trim(signal, window_size=40, threshold_factor=2.4, min_elements=3):
 
     min_trim = 10

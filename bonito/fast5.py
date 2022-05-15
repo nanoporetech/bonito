@@ -12,14 +12,13 @@ from datetime import datetime, timedelta
 
 import torch
 import numpy as np
+import bonito.reader
 from tqdm import tqdm
 from dateutil import parser
 from ont_fast5_api.fast5_interface import get_fast5_file
 
-import bonito.read
 
-
-class Read(bonito.read.Read):
+class Read(bonito.reader.Read):
 
     def __init__(self, read, filename, meta=False):
 
@@ -76,17 +75,17 @@ class Read(bonito.read.Read):
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
         self.num_samples = len(scaled)
 
-        trim_start, _ = bonito.read.trim(scaled[:8000])
+        trim_start, _ = bonito.reader.trim(scaled[:8000])
         scaled = scaled[trim_start:]
         self.trimmed_samples = trim_start
         self.template_start = self.start + (1 / self.sampling_rate) * trim_start
         self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
 
         if len(scaled) > 8000:
-            med, mad = bonito.read.med_mad(scaled)
+            med, mad = bonito.reader.med_mad(scaled)
             self.signal = (scaled - med) / max(1.0, mad)
         else:
-            self.signal = bonito.read.norm_by_noisiest_section(scaled)
+            self.signal = bonito.reader.norm_by_noisiest_section(scaled)
 
 
 class ReadChunk:

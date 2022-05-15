@@ -9,13 +9,11 @@ from datetime import timedelta
 
 import mkr_format
 import numpy as np
-import bonito.fast5
+import bonito.reader
 from tqdm import tqdm
 
-import bonito.read
 
-
-class Read(bonito.read.Read):
+class Read(bonito.reader.Read):
 
     def __init__(self, read, filename, meta=False):
 
@@ -58,7 +56,7 @@ class Read(bonito.read.Read):
         self.offset = self.calibration.offset
 
         scaled = self.scaling * (self.raw.astype(np.float32) + self.offset)
-        trim_start, _ = bonito.read.trim(scaled[:8000])
+        trim_start, _ = bonito.reader.trim(scaled[:8000])
         scaled = scaled[trim_start:]
         self.trimmed_samples = trim_start
 
@@ -68,10 +66,10 @@ class Read(bonito.read.Read):
         self.signal = scaled
 
         if len(scaled) > 8000:
-            med, mad = bonito.read.med_mad(scaled)
+            med, mad = bonito.reader.med_mad(scaled)
             self.signal = (scaled - med) / max(1.0, mad)
         else:
-            self.signal = bonito.read.norm_by_noisiest_section(scaled)
+            self.signal = bonito.reader.norm_by_noisiest_section(scaled)
 
 
 def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
