@@ -10,7 +10,6 @@ from datetime import timedelta
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
-from dateutil import parser
 from mkr_format import open_combined_file
 
 
@@ -26,7 +25,8 @@ class Read(bonito.reader.Read):
 
         self.sample_id = self.run_info.sample_id
         self.run_id = self.run_info.acquisition_id
-        self.exp_start_time = self.run_info.acquisition_start_time.isoformat().replace('Z', '')
+        self.acquisition_start_time = self.run_info.acquisition_start_time
+        self.exp_start_time = self.acquisition_start_time.isoformat().replace('Z', '')
 
         self.flow_cell_id = self.run_info.flow_cell_id
         self.device_id = self.run_info.sequencer_position
@@ -46,8 +46,7 @@ class Read(bonito.reader.Read):
         self.start = read.start_sample / self.sample_rate
         self.duration = self.num_samples / self.sample_rate
 
-        exp_start_dt = parser.parse(self.exp_start_time)
-        start_time = exp_start_dt + timedelta(seconds=self.start)
+        start_time = self.acquisition_start_time + timedelta(seconds=self.start)
         self.start_time = start_time.replace(microsecond=0).isoformat()
 
         self.raw = read.signal
