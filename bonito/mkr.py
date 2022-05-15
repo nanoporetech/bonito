@@ -81,7 +81,7 @@ def mkr_reads(mkr_file, read_ids, skip=False):
         yield from open_combined_file(mkr_file).reads()
     elif skip:
         for read in open_combined_file(mkr_file).reads():
-            if read.read_id not in read_ids:
+            if str(read.read_id) not in read_ids:
                 yield read
     else:
         yield from open_combined_file(mkr_file).select_reads({UUID(rid) for rid in read_ids}, missing_ok=True)
