@@ -8,18 +8,18 @@ from pathlib import Path
 from itertools import chain
 from functools import partial
 from multiprocessing import Pool
-from collections import OrderedDict
 from datetime import datetime, timedelta
 
 import torch
 import numpy as np
 from tqdm import tqdm
 from dateutil import parser
-from scipy.signal import find_peaks
 from ont_fast5_api.fast5_interface import get_fast5_file
 
+import bonito.read
 
-class Read:
+
+class Read(bonito.read.Read):
 
     def __init__(self, read, filename, meta=False):
 
@@ -76,45 +76,17 @@ class Read:
         scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
         self.num_samples = len(scaled)
 
-        trim_start, _ = trim(scaled[:8000])
+        trim_start, _ = bonito.read.trim(scaled[:8000])
         scaled = scaled[trim_start:]
         self.trimmed_samples = trim_start
         self.template_start = self.start + (1 / self.sampling_rate) * trim_start
         self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
 
         if len(scaled) > 8000:
-            med, mad = med_mad(scaled)
+            med, mad = bonito.read.med_mad(scaled)
             self.signal = (scaled - med) / max(1.0, mad)
         else:
-            self.signal = norm_by_noisiest_section(scaled)
-
-    def __repr__(self):
-        return "Read('%s')" % self.read_id
-
-    def readgroup(self, model):
-        self._groupdict = OrderedDict([
-            ('ID', f"{self.run_id}_{model}"),
-            ('PL', f"ONT"),
-            ('DT', f"{self.exp_start_time}"),
-            ('PU', f"{self.flow_cell_id}"),
-            ('PM', f"{self.device_id}"),
-            ('LB', f"{self.sample_id}"),
-            ('SM', f"{self.sample_id}"),
-            ('DS', f"%s" % ' '.join([
-                f"run_id={self.run_id}",
-                f"basecall_model={model}",
-            ]))
-        ])
-        return '\t'.join(["@RG", *[f"{k}:{v}" for k, v in self._groupdict.items()]])
-
-    def tagdata(self):
-        return [
-            f"mx:i:{self.mux}",
-            f"ch:i:{self.channel}",
-            f"st:Z:{self.start_time}",
-            f"rn:i:{self.read_number}",
-            f"f5:Z:{self.filename}",
-        ]
+            self.signal = bonito.read.norm_by_noisiest_section(scaled)
 
 
 class ReadChunk:
@@ -134,63 +106,6 @@ class ReadChunk:
     def __repr__(self):
         return "ReadChunk('%s')" % self.read_id
 
-
-def trim(signal, window_size=40, threshold_factor=2.4, min_elements=3):
-
-    min_trim = 10
-    signal = signal[min_trim:]
-
-    med, mad = med_mad(signal[-(window_size*100):])
-
-    threshold = med + mad * threshold_factor
-    num_windows = len(signal) // window_size
-
-    seen_peak = False
-
-    for pos in range(num_windows):
-        start = pos * window_size
-        end = start + window_size
-        window = signal[start:end]
-        if len(window[window > threshold]) > min_elements or seen_peak:
-            seen_peak = True
-            if window[-1] > threshold:
-                continue
-            return min(end + min_trim, len(signal)), len(signal)
-
-    return min_trim, len(signal)
-
-
-def med_mad(x, factor=1.4826):
-    """
-    Calculate signal median and median absolute deviation
-    """
-    med = np.median(x)
-    mad = np.median(np.absolute(x - med)) * factor + np.finfo(np.float32).eps
-    return med, mad
-
-
-def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
-    """
-    Normalise using the medmad from the longest continuous region where the
-    noise is above some threshold relative to the std of the full signal.
-    """
-    threshold = signal.std() / threshold
-    noise = np.ones(signal.shape)
-
-    for idx in np.arange(signal.shape[0] // samples):
-        window = slice(idx * samples, (idx + 1) * samples)
-        noise[window] = np.where(signal[window].std() > threshold, 1, 0)
-
-    # start and end low for peak finding
-    noise[0] = 0; noise[-1] = 0
-    peaks, info = find_peaks(noise, width=(None, None))
-
-    if len(peaks):
-        widest = np.argmax(info['widths'])
-        med, mad = med_mad(signal[info['left_bases'][widest]: info['right_bases'][widest]])
-    else:
-        med, mad = med_mad(signal)
-    return (signal - med) / max(1.0, mad)
 
 
 def read_chunks(read, chunksize=4000, overlap=400):

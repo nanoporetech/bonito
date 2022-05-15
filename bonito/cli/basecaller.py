@@ -12,11 +12,11 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from bonito.reader import Reader
 from bonito.aligner import align_map, Aligner
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
 from bonito.cli.download import File, models, __models__
-from bonito.fast5 import get_reads, get_read_groups, read_chunks
 from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init
 
@@ -24,6 +24,23 @@ from bonito.util import column_to_set, load_symbol, load_model, init
 def main(args):
 
     init(args.seed, args.device)
+
+    try:
+        reader = Reader(args.reads_directory, args.recursive)
+        sys.stderr.write("> reading %s\n" % reader.fmt)
+    except FileNotFoundError:
+        sys.stderr.write("> error: no suitable files found in %s\n" % args.reads_directory)
+        exit(1)
+
+    fmt = biofmt(aligned=args.reference is not None)
+
+    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
+        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
+        exit(1)
+    elif args.reference and fmt.name == "fastq":
+        sys.stderr.write(f"> warning: did you really want {fmt.aligned} {fmt.name}?\n")
+    else:
+        sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
 
     if args.model_directory in models and args.model_directory not in os.listdir(__models__):
         sys.stderr.write("> downloading model\n")
@@ -69,22 +86,12 @@ def main(args):
     else:
         aligner = None
 
-    fmt = biofmt(aligned=args.reference is not None)
-
-    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
-        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
-        exit(1)
-    elif args.reference and fmt.name == "fastq":
-        sys.stderr.write(f"> warning: did you really want {fmt.aligned} {fmt.name}?\n")
-    else:
-        sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
-
     if args.save_ctc and not args.reference:
         sys.stderr.write("> a reference is needed to output ctc training data\n")
         exit(1)
 
     if fmt.name != 'fastq':
-        groups = get_read_groups(
+        groups = reader.get_read_groups(
             args.reads_directory, args.model_directory,
             n_proc=8, recursive=args.recursive,
             read_ids=column_to_set(args.read_ids), skip=args.skip,
@@ -93,7 +100,7 @@ def main(args):
     else:
         groups = []
 
-    reads = get_reads(
+    reads = reader.get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
         cancel=process_cancel()
