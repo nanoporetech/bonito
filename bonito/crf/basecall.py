@@ -19,6 +19,8 @@ def stitch_results(results, length, size, overlap, stride, reverse=False):
             k: stitch_results(v, length, size, overlap, stride, reverse=reverse)
             for k, v in results.items()
         }
+    if length < size:
+        return results[0, :int(np.floor(length / stride))]
     return stitch(results, size, overlap, length, stride, reverse=reverse)
 
 

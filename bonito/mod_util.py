@@ -69,7 +69,7 @@ def apply_stride_to_moves(attrs):
 
 
 def call_mods(mods_model, read, read_attrs):
-    if len(read_attrs['sequence']) == 0:
+    if len(read_attrs['sequence']) < 10:
         return read_attrs
     remora_model, remora_metadata = mods_model
     # convert signal move table to remora read format
