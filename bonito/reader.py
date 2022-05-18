@@ -139,7 +139,7 @@ def med_mad(x, factor=1.4826):
     return med, mad
 
 
-def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
+def norm_by_noisiest_section(signal, samples=100, threshold=6.0, return_medmad=False):
     """
     Normalise using the medmad from the longest continuous region where the
     noise is above some threshold relative to the std of the full signal.
@@ -160,5 +160,10 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0):
         med, mad = med_mad(signal[info['left_bases'][widest]: info['right_bases'][widest]])
     else:
         med, mad = med_mad(signal)
-    return (signal - med) / max(1.0, mad)
+
+    scaled = (signal - med) / max(1.0, mad)
+
+    if return_medmad:
+        return scaled, (med, mad)
+    return scaled
 
