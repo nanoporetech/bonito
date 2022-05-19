@@ -12,8 +12,8 @@ ont-koi==0.0.9
 onnxruntime==1.11.0
 ont-remora==1.0.0
 ont-fast5-api==3.3.0
-mkr-format==0.0.11
-mkr-format-tools==0.0.11
+pod5-format==0.0.14
+pod5-format-tools==0.0.14
 fast-ctc-decode==0.3.2
 python-dateutil==2.8.2
 # cuda requirements
