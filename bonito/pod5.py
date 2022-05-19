@@ -1,5 +1,5 @@
 """
-Bonito MKR Utils
+Bonito POD5 Utils
 """
 
 from glob import glob
@@ -10,7 +10,7 @@ from datetime import timedelta
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
-from mkr_format import open_combined_file
+from pod5_format import open_combined_file
 
 
 class Read(bonito.reader.Read):
@@ -72,18 +72,18 @@ class Read(bonito.reader.Read):
             self.signal = bonito.reader.norm_by_noisiest_section(scaled)
 
 
-def mkr_reads(mkr_file, read_ids, skip=False):
+def pod5_reads(pod5_file, read_ids, skip=False):
     """
-    Get all the reads from the `mkr_file`.
+    Get all the reads from the `pod5_file`.
     """
     if read_ids is None:
-        yield from open_combined_file(mkr_file).reads()
+        yield from open_combined_file(pod5_file).reads()
     elif skip:
-        for read in open_combined_file(mkr_file).reads():
+        for read in open_combined_file(pod5_file).reads():
             if str(read.read_id) not in read_ids:
                 yield read
     else:
-        yield from open_combined_file(mkr_file).select_reads({UUID(rid) for rid in read_ids}, missing_ok=True)
+        yield from open_combined_file(pod5_file).select_reads({UUID(rid) for rid in read_ids}, missing_ok=True)
 
 
 def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
@@ -91,15 +91,15 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     Get all the read meta data for a given `directory`.
     """
     groups = set()
-    pattern = "**/*.mkr" if recursive else "*.mkr"
-    mkr_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
+    pattern = "**/*.pod5" if recursive else "*.pod5"
+    pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
-    for mkr_file in mkr_files:
+    for pod5_file in pod5_files:
         for read in tqdm(
-            mkr_reads(mkr_file, read_ids, skip),
+            pod5_reads(pod5_file, read_ids, skip),
             leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
         ):
-            read = Read(read, mkr_file, meta=True)
+            read = Read(read, pod5_file, meta=True)
             groups.add(read.readgroup(model))
     return groups
 
@@ -108,11 +108,11 @@ def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, c
     """
     Get all reads in a given `directory`.
     """
-    pattern = "**/*.mkr" if recursive else "*.mkr"
-    mkr_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
+    pattern = "**/*.pod5" if recursive else "*.pod5"
+    pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
-    for mkr_file in mkr_files:
-        for read in mkr_reads(mkr_file, read_ids, skip):
-            yield Read(read, mkr_file)
+    for pod5_file in pod5_files:
+        for read in pod5_reads(pod5_file, read_ids, skip):
+            yield Read(read, pod5_file)
             if cancel is not None and cancel.is_set():
                 return

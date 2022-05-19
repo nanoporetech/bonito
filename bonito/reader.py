@@ -11,7 +11,7 @@ import numpy as np
 from scipy.signal import find_peaks
 
 
-__formats__ = ["fast5", "mkr"]
+__formats__ = ["fast5", "pod5"]
 
 
 class Reader:
