@@ -81,13 +81,16 @@ def main(args):
         print("[error] file given - please provide a model directory to export.", file=sys.stderr)
         return 1
 
-    model = bonito.util.load_model(args.model, device='cpu')
+    model = bonito.util.load_model(args.model, weights=args.checkpoint_number, device='cpu')
 
     if args.format == 'guppy':
         jsn = to_guppy_dict(model)
-        weight_files = glob(os.path.join(args.model, "weights_*.tar"))
-        weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-        jsn["md5sum"] = file_md5(os.path.join(args.model, 'weights_%s.tar' % weights))
+        if args.checkpoint_number is None:
+            weight_files = glob(os.path.join(args.model, "weights_*.tar"))
+            checkpoint_number = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+        else:
+            checkpoint_number = args.checkpoint_number
+        jsn["md5sum"] = file_md5(os.path.join(args.model, 'weights_%s.tar' % checkpoint_number))
         json.dump(jsn, sys.stdout, cls=JsonEncoder)
     elif args.format == 'torchscript':
         tmp_tensor = torch.rand(10, 1, 1000)
@@ -109,4 +112,6 @@ def argparser():
     )
     parser.add_argument('model')
     parser.add_argument('--format', help='guppy or torchscript', default='guppy')
+    parser.add_argument('--checkpoint_number', default=None,
+                        help='checkpoint number to select checkpoint model from folder')
     return parser
