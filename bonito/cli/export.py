@@ -7,12 +7,16 @@ import os
 import re
 import sys
 import json
+
+import toml
 import torch
 import bonito
 import hashlib
 import numpy as np
 from glob import glob
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+
+from bonito.util import _load_model
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -76,21 +80,22 @@ def to_guppy_dict(model, include_weights=True):
 
 
 def main(args):
+    if os.path.isdir(args.model):
+        weight_files = glob(os.path.join(args.model, "weights_*.tar"))
+        last_checkpoint = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+        model_file = os.path.join(args.model, 'weights_%s.tar' % last_checkpoint)
+    else:
+        model_file = args.model
 
-    if not os.path.isdir(args.model):
-        print("[error] file given - please provide a model directory to export.", file=sys.stderr)
-        return 1
+    if args.config is None:
+        args.config = os.path.join(os.path.dirname(model_file), "config.toml")
 
-    model = bonito.util.load_model(args.model, weights=args.checkpoint_number, device='cpu')
+    config = toml.load(args.config)
+    model = _load_model(model_file, config, device='cpu')
 
     if args.format == 'guppy':
         jsn = to_guppy_dict(model)
-        if args.checkpoint_number is None:
-            weight_files = glob(os.path.join(args.model, "weights_*.tar"))
-            checkpoint_number = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-        else:
-            checkpoint_number = args.checkpoint_number
-        jsn["md5sum"] = file_md5(os.path.join(args.model, 'weights_%s.tar' % checkpoint_number))
+        jsn["md5sum"] = file_md5(model_file)
         json.dump(jsn, sys.stdout, cls=JsonEncoder)
     elif args.format == 'torchscript':
         tmp_tensor = torch.rand(10, 1, 1000)
@@ -112,6 +117,6 @@ def argparser():
     )
     parser.add_argument('model')
     parser.add_argument('--format', help='guppy or torchscript', default='guppy')
-    parser.add_argument('--checkpoint_number', default=None,
-                        help='checkpoint number to select checkpoint model from folder')
+    parser.add_argument('--config', default=None,
+                        help='config file to read settings from')
     return parser
