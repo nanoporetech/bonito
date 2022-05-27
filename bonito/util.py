@@ -258,6 +258,17 @@ def get_last_weights_file(dirname):
     weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
     return os.path.join(dirname, 'weights_%s.tar' % weights)
 
+def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, quantize=False):
+    basecall_params = config.get("basecaller", {})
+    # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
+    # flags override values in config
+    basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
+    basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
+    basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
+    basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
+    config["basecaller"] = basecall_params
+    return config
+
 def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
     Load a model from disk
@@ -269,15 +280,8 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
         weights = get_last_weights_file(dirname)
 
     config = toml.load(os.path.join(dirname, 'config.toml'))
+    config = set_config_defaults(config, chunksize, batchsize, overlap, quantize)
 
-    basecall_params = config.get("basecaller", {})
-    # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
-    # flags override values in config
-    basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
-    basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
-    basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
-    basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
-    config["basecaller"] = basecall_params
     return _load_model(weights, config, device, half, use_koi)
 
 def _load_model(model_file, config, device, half=None, use_koi=False):

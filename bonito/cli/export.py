@@ -16,7 +16,7 @@ import numpy as np
 from glob import glob
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import _load_model, get_last_weights_file
+from bonito.util import _load_model, get_last_weights_file, set_config_defaults
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -89,6 +89,7 @@ def main(args):
         args.config = os.path.join(os.path.dirname(model_file), "config.toml")
 
     config = toml.load(args.config)
+    config = set_config_defaults(config)
     model = _load_model(model_file, config, device='cpu')
 
     if args.format == 'guppy':
