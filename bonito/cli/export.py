@@ -16,7 +16,7 @@ import numpy as np
 from glob import glob
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import _load_model
+from bonito.util import _load_model, get_last_weights_file
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -81,9 +81,7 @@ def to_guppy_dict(model, include_weights=True):
 
 def main(args):
     if os.path.isdir(args.model):
-        weight_files = glob(os.path.join(args.model, "weights_*.tar"))
-        last_checkpoint = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-        model_file = os.path.join(args.model, 'weights_%s.tar' % last_checkpoint)
+        model_file = get_last_weights_file(args.model)
     else:
         model_file = args.model
 

@@ -251,6 +251,13 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
+def get_last_weights_file(dirname):
+    weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+    if not weight_files:
+        raise FileNotFoundError("no model weights found in '%s'" % dirname)
+    weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+    return os.path.join(dirname, 'weights_%s.tar' % weights)
+
 def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
     Load a model from disk
@@ -259,14 +266,9 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
         dirname = os.path.join(__models__, dirname)
 
     if not weights: # take the latest checkpoint
-        weight_files = glob(os.path.join(dirname, "weights_*.tar"))
-        if not weight_files:
-            raise FileNotFoundError("no model weights found in '%s'" % dirname)
-        weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
-
+        weights = get_last_weights_file(dirname)
 
     config = toml.load(os.path.join(dirname, 'config.toml'))
-    weights = os.path.join(dirname, 'weights_%s.tar' % weights)
 
     basecall_params = config.get("basecaller", {})
     # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
