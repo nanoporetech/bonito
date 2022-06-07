@@ -12,6 +12,7 @@ import bonito
 import hashlib
 import numpy as np
 from glob import glob
+import base64
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 
@@ -27,6 +28,8 @@ class JsonEncoder(json.JSONEncoder):
             return obj.data
         elif isinstance(obj, torch.Tensor):
             return obj.detach().numpy()
+        elif isinstance(obj, bytes):
+            return obj.decode('ascii')
         else:
             return super(JsonEncoder, self).default(obj)
 
@@ -65,13 +68,20 @@ def reformat_output_layer(layer_dict):
     return layer_dict
 
 
-def to_guppy_dict(model, include_weights=True):
+def to_guppy_dict(model, include_weights=True, binary_weights=True):
     guppy_dict = bonito.nn.to_dict(model.encoder, include_weights=include_weights)
     guppy_dict['sublayers'] = [x for x in guppy_dict['sublayers'] if x['type'] != 'permute']
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'] = [{'type': 'reverse', 'sublayers': x} if x.pop('reverse', False) else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'][-1] = reformat_output_layer(guppy_dict['sublayers'][-1])
+    if binary_weights:
+        for layer_dict in guppy_dict['sublayers']:
+            if 'params' in layer_dict:
+                layer_dict['params'] = {
+                    f'{k}_binary': base64.b64encode(v.data.detach().numpy().astype(np.float32).tobytes()) for (k, v) in layer_dict['params'].items()
+                }
+    guppy_dict['sublayers'] = [{'type': 'reverse', 'sublayers': x} if x.pop('reverse', False) else x for x in guppy_dict['sublayers']]
+
     return guppy_dict
 
 
