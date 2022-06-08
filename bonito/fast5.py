@@ -2,6 +2,7 @@
 Bonito Fast5 Utils
 """
 
+import sys
 from glob import glob
 from pathlib import Path
 from itertools import chain
@@ -92,7 +93,12 @@ def get_meta_data(filename, read_ids=None, skip=False):
     """
     meta_reads = []
     with get_fast5_file(filename, 'r') as f5_fh:
-        for read_id in f5_fh.get_read_ids():
+        try:
+            read_ids = f5_fh.get_read_ids()
+        except RuntimeError as e:
+            sys.stderr.write(f"> warning: f{filename} - {e}\n")
+            return meta_reads
+        for read_id in read_ids:
             if read_ids is None or (read_id in read_ids) ^ skip:
                 meta_reads.append(
                     Read(f5_fh.get_read(read_id), filename, meta=True)
@@ -123,7 +129,11 @@ def get_read_ids(filename, read_ids=None, skip=False):
     Get all the read_ids from the file `filename`.
     """
     with get_fast5_file(filename, 'r') as f5_fh:
-        ids = [(filename, rid) for rid in f5_fh.get_read_ids()]
+        try:
+            ids = [(filename, rid) for rid in f5_fh.get_read_ids()]
+        except RuntimeError as e:
+            sys.stderr.write(f"> warning: f{filename} - {e}\n")
+            return []
         if read_ids is None:
             return ids
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
