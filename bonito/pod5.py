@@ -91,6 +91,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     Get all the read meta data for a given `directory`.
     """
     groups = set()
+    num_reads = 0
     pattern = "**/*.pod5" if recursive else "*.pod5"
     pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
@@ -101,7 +102,8 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
         ):
             read = Read(read, pod5_file, meta=True)
             groups.add(read.readgroup(model))
-    return groups
+            num_reads += 1
+    return groups, num_reads
 
 
 def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):

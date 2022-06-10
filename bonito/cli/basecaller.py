@@ -91,7 +91,7 @@ def main(args):
         exit(1)
 
     if fmt.name != 'fastq':
-        groups = reader.get_read_groups(
+        groups, num_reads = reader.get_read_groups(
             args.reads_directory, args.model_directory,
             n_proc=8, recursive=args.recursive,
             read_ids=column_to_set(args.read_ids), skip=args.skip,
@@ -99,6 +99,7 @@ def main(args):
         )
     else:
         groups = []
+        num_reads = None
 
     reads = reader.get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
@@ -137,7 +138,8 @@ def main(args):
         results = align_map(aligner, results, n_thread=args.alignment_threads)
 
     writer = ResultsWriter(
-        fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
+        fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False,
+                       total=num_reads, smoothing=0, ascii=True, ncols=100),
         aligner=aligner, group_key=args.model_directory,
         ref_fn=args.reference, groups=groups,
     )

@@ -105,6 +105,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     Get all the read meta data for a given `directory`.
     """
     groups = set()
+    num_reads = 0
     pattern = "**/*.fast5" if recursive else "*.fast5"
     fast5s = [Path(x) for x in glob(directory + "/" + pattern, recursive=True)]
     get_filtered_meta_data = partial(get_meta_data, read_ids=read_ids, skip=skip)
@@ -115,7 +116,8 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
                 desc="> preprocessing reads", unit=" fast5s", ascii=True, ncols=100
         ):
             groups.update({read.readgroup(model) for read in reads})
-        return groups
+            num_reads += len(reads)
+        return groups, num_reads
 
 
 def get_read_ids(filename, read_ids=None, skip=False):
