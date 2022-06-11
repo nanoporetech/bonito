@@ -43,6 +43,8 @@ Modified base calling is handled by [Remora](https://github.com/nanoporetech/rem
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
 ```
 
+To use the GPU-powered modified bases inference the `onnxruntime-gpu` package is required. 
+
 See available modified base models with the ``remora model list_pretrained`` command.
 
 ## Training your own model

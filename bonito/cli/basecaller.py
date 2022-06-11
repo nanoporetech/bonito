@@ -73,7 +73,8 @@ def main(args):
     if args.modified_base_model is not None or args.modified_bases is not None:
         sys.stderr.write("> loading modified base model\n")
         mods_model = load_mods_model(
-            args.modified_bases, args.model_directory, args.modified_base_model
+            args.modified_bases, args.model_directory, args.modified_base_model,
+            device=args.modified_device,
         )
         sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
@@ -131,9 +132,12 @@ def main(args):
     )
 
     if mods_model is not None:
-        results = process_itemmap(
-            partial(call_mods, mods_model), results, n_proc=args.modified_procs
-        )
+        if args.modified_device:
+            results = ((k, call_mods(mods_model, k, v)) for k, v in results)
+        else:
+            results = process_itemmap(
+                partial(call_mods, mods_model), results, n_proc=args.modified_procs
+            )
     if aligner:
         results = align_map(aligner, results, n_thread=args.alignment_threads)
 
@@ -167,6 +171,7 @@ def argparser():
     parser.add_argument("--modified-bases", nargs="+")
     parser.add_argument("--modified-base-model")
     parser.add_argument("--modified-procs", default=8, type=int)
+    parser.add_argument("--modified-device", default=None)
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
