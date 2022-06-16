@@ -10,7 +10,7 @@ pandas>1,<2
 requests==2.25.1
 ont-koi==0.0.9
 onnxruntime==1.11.0
-ont-remora==1.1.0
+ont-remora==1.1.1
 ont-fast5-api==3.3.0
 pod5-format==0.0.14
 pod5-format-tools==0.0.14
