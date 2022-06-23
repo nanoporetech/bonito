@@ -153,18 +153,33 @@ def chunk(signal, chunksize, overlap):
     """
     Convert a read into overlapping chunks before calling
     """
-    T = signal.shape[0]
-    if chunksize == 0:
-        chunks = signal[None, :]
-    elif T < chunksize:
-        chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
+    if signal.ndim == 1:
+        T = signal.shape[0]
+        if chunksize == 0:
+            chunks = signal[None, :]
+        elif T < chunksize:
+            chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
+        else:
+            stub = (T - overlap) % (chunksize - overlap)
+            chunks = signal[stub:].unfold(0, chunksize, chunksize - overlap)
+            if stub > 0:
+                chunks = torch.cat([signal[None, :chunksize], chunks], dim=0)
+        return chunks.unsqueeze(1)
     else:
-        stub = (T - overlap) % (chunksize - overlap)
-        chunks = signal[stub:].unfold(0, chunksize, chunksize - overlap)
-        if stub > 0:
-            chunks = torch.cat([signal[None, :chunksize], chunks], dim=0)
-    return chunks.unsqueeze(1)
+        T = signal.shape[-1]
+        if chunksize == 0:
+            chunks = signal[None, :]
+        elif T < chunksize:
+            chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
+        else:
+            stub = (T - overlap) % (chunksize - overlap)
+            chunks = signal[...,stub:].unfold(1, chunksize, chunksize - overlap)
+            chunks = torch.swapaxes(chunks,0,1)
+            if stub > 0:
+                chunks = torch.cat([signal[None, ..., :chunksize], chunks], dim=0)
+        return chunks
 
+    
 
 def stitch(chunks, chunksize, overlap, length, stride, reverse=False):
     """

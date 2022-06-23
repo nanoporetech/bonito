@@ -27,14 +27,21 @@ import pandas as pd
 from tqdm import tqdm
 from fast_ctc_decode import crf_beam_search, crf_beam_search_duplex
 
-from genomeworks import cuda
-from genomeworks.cudapoa import CudaPoaBatch, status_to_str
+#from genomeworks import cuda
+#from genomeworks.cudapoa import CudaPoaBatch, status_to_str
+
+try:
+    from claragenomics.bindings import cuda
+    from claragenomics.bindings.cudapoa import CudaPoaBatch
+except ImportError:
+    pass
+
 
 import bonito
 from bonito.io import Writer, devnull
 from bonito.aligner import Aligner, align_map
 from bonito.util import load_model, half_supported
-from bonito.crf.basecall import transfer, split_read, stitch
+from bonito.crf.basecall import basecall #transfer, split_read, stitch
 from bonito.fast5 import get_raw_data_for_read, get_fast5_file
 from bonito.util import unbatchify, batchify, chunk, concat, accuracy
 from bonito.multiprocessing import thread_map, process_map, process_cancel
@@ -228,30 +235,30 @@ def compute_scores(model, batch, reverse=False):
     }
 
 
-def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=False):
-    reads = (
-        read_chunk for read in reads
-        for read_chunk in split_read(read, chunksize * batchsize)[::-1 if reverse else 1]
-    )
-    chunks = (
-        ((read, start, end),
-        chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
-        for (read, start, end) in reads
-    )
-    batches = (
-        (k, compute_scores(model, batch, reverse=reverse))
-        for k, batch in batchify(chunks, batchsize=batchsize)
-    )
-    stitched = (
-        (read, stitch(x, chunksize, overlap, end - start, model.stride, reverse=reverse))
-        for ((read, start, end), x) in unbatchify(batches)
-    )
-    transferred = thread_map(transfer, stitched, n_thread=1)
-
-    return (
-        (read, concat([part for k, part in parts]))
-        for read, parts in groupby(transferred, lambda x: x[0])
-    )
+#def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=False):
+#    reads = (
+#        read_chunk for read in reads
+#        for read_chunk in split_read(read, chunksize * batchsize)[::-1 if reverse else 1]
+#    )
+#    chunks = (
+#        ((read, start, end),
+#        chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
+#        for (read, start, end) in reads
+#    )
+#    batches = (
+#        (k, compute_scores(model, batch, reverse=reverse))
+#        for k, batch in batchify(chunks, batchsize=batchsize)
+#    )
+#    stitched = (
+#        (read, stitch(x, chunksize, overlap, end - start, model.stride, reverse=reverse))
+#        for ((read, start, end), x) in unbatchify(batches)
+#    )
+#    transferred = thread_map(transfer, stitched, n_thread=1)
+#
+#    return (
+#        (read, concat([part for k, part in parts]))
+#        for read, parts in groupby(transferred, lambda x: x[0])
+#    )
 
 
 def beam_search_duplex(seq1, path1, t1, b1, seq2, path2, t2, b2, alphabet='NACGT', beamsize=5, pad=40, T=0.01):
@@ -317,9 +324,29 @@ def call(model, reads_directory, templates, complements, aligner=None, cudapoa=T
     if aligner is None: return res
     return align_map(aligner, res)
 
+def argparser():
+    parser = ArgumentParser(
+        formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False
+    )
+    parser.add_argument("model")
+    parser.add_argument("reads_directory")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--summary", default=None)
+    group.add_argument("--pairs", default=None)
+    parser.add_argument("--sep", default=' ')
+    parser.add_argument("--index", default=None)
+    parser.add_argument("--save-index", action="store_true", default=False)
+    parser.add_argument("--reference")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--max-reads", default=0, type=int)
+    return parser
 
-def main(args):
+#def main(args):
+if __name__ == "__main__":
 
+    args = argparser().parse_args()
+    
     sys.stderr.write("> loading model\n")
     model = load_model(args.model, args.device)
 
@@ -398,20 +425,4 @@ def main(args):
     print("> samples per second %.1E" % (num_samples / duration), file=sys.stderr)
 
 
-def argparser():
-    parser = ArgumentParser(
-        formatter_class=ArgumentDefaultsHelpFormatter,
-        add_help=False
-    )
-    parser.add_argument("model")
-    parser.add_argument("reads_directory")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--summary", default=None)
-    group.add_argument("--pairs", default=None)
-    parser.add_argument("--sep", default=' ')
-    parser.add_argument("--index", default=None)
-    parser.add_argument("--save-index", action="store_true", default=False)
-    parser.add_argument("--reference")
-    parser.add_argument("--device", default="cuda")
-    parser.add_argument("--max-reads", default=0, type=int)
-    return parser
+
