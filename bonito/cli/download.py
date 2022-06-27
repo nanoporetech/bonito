@@ -4,6 +4,7 @@ Bonito Download
 
 import os
 import re
+import sys
 from shutil import rmtree
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -45,7 +46,7 @@ class File:
 
         # skip download if local file is found
         if self.exists(fname.strip('.zip')) and not self.force:
-            print("[skipping %s]" % fname)
+            print("[skipping %s]" % fname, file=sys.stderr)
             return
 
         if self.exists(fname.strip('.zip')) and self.force:
@@ -58,7 +59,7 @@ class File:
                     f.write(data)
                     t.update(len(data))
 
-        print("[downloaded %s]" % fname)
+        print("[downloaded %s]" % fname, file=sys.stderr)
 
         # unzip .zip files
         if fname.endswith('.zip'):
@@ -68,7 +69,7 @@ class File:
 
         # convert chunkify training files to bonito
         if fname.endswith('.hdf5'):
-            print("[converting %s]" % fname)
+            print("[converting %s]" % fname, file=sys.stderr)
             args = cargparser().parse_args([
                 self.location(fname),
                 self.location(fname).strip('.hdf5')
@@ -107,15 +108,15 @@ def main(args):
     if args.models or args.all:
         
         if args.show:
-            print("[available models]")
+            print("[available models]", file=sys.stderr)
             for model in models:
-                print(f" - {model}")
+                print(f" - {model}", file=sys.stderr)
         else:
-            print("[downloading models]")
+            print("[downloading models]", file=sys.stderr)
             for model in models.values():
                 File(__models__, model, args.force).download()
     if args.training or args.all:
-        print("[downloading training data]")
+        print("[downloading training data]", file=sys.stderr)
         for train in training:
             File(__data__, train, args.force).download()
 
