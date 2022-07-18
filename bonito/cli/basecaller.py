@@ -12,6 +12,7 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+import bonito.openvino.basecall
 from bonito.aligner import align_map, Aligner
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
@@ -57,6 +58,7 @@ def main(args):
             batchsize=args.batchsize,
             quantize=args.quantize,
             use_koi=True,
+            use_openvino=args.use_openvino,
         )
     except FileNotFoundError:
         sys.stderr.write(f"> error: failed to load {args.model_directory}\n")
@@ -67,7 +69,10 @@ def main(args):
     if args.verbose:
         sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
-    basecall = load_symbol(args.model_directory, "basecall")
+    if args.use_openvino:
+        basecall = bonito.openvino.basecall.basecall
+    else:
+        basecall = load_symbol(args.model_directory, "basecall")
 
     mods_model = None
     if args.modified_base_model is not None or args.modified_bases is not None:
@@ -190,4 +195,5 @@ def argparser():
     parser.add_argument("--max-reads", default=0, type=int)
     parser.add_argument("--alignment-threads", default=8, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument("--use_openvino", action="store_true", default=False)
     return parser

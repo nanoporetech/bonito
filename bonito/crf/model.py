@@ -176,6 +176,7 @@ class SeqdistModel(Module):
     def loss(self, scores, targets, target_lengths, **kwargs):
         return self.seqdist.ctc_loss(scores.to(torch.float32), targets, target_lengths, **kwargs)
 
+
 class Model(SeqdistModel):
 
     def __init__(self, config):

@@ -1,6 +1,6 @@
 # Bonito
 
-[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito) 
+[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
 [![py37](https://img.shields.io/badge/python-3.7-brightgreen.svg)](https://img.shields.io/badge/python-3.7-brightgreen.svg)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
@@ -35,6 +35,12 @@ The default `ont-bonito` package is built against CUDA 10.2 however CUDA 11.1 an
 $ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
 ```
 
+To optimize inference on CPU with Intel OpenVINO use `--use_openvino` flag:
+
+```bash
+$ bonito basecaller dna_r9.4.1 --reference reference.mmi --use_openvino --device=cpu /data/reads > basecalls.sam
+```
+
 ## Modified Bases
 
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
@@ -56,7 +62,7 @@ $ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads 
 $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 ```
 
-In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
+In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.
 
 ```bash
 bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4_e8.1_sup@v3.4 --directory /data/training/ctc-data /data/training/fine-tuned-model
@@ -69,7 +75,7 @@ $ bonito download --training
 $ bonito train /data/training/model-dir
 ```
 
-All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
+All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True.
 
 ## Developer Quickstart
 
@@ -81,6 +87,11 @@ $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
 (venv3) $ pip install -r requirements.txt
 (venv3) $ python setup.py develop
+```
+
+To build with OpenVINO backend:
+```bash
+(venv3) $ pip install develop .[openvino]
 ```
 
 ## Interface

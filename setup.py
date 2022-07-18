@@ -41,6 +41,9 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=requirements,
+    extras_require = {
+        'openvino': ['openvino==2022.1.0'],
+    },
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='Oxford Nanopore Technologies, Ltd',

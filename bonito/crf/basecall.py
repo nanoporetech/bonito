@@ -30,12 +30,13 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
     """
     with torch.inference_mode():
         device = next(model.parameters()).device
-        dtype = torch.float16 if half_supported() else torch.float32
+        dtype = torch.float16 if device != torch.device('cpu') and half_supported() else torch.float32
         scores = model(batch.to(dtype).to(device))
         if reverse:
             scores = model.seqdist.reverse_complement(scores)
+        # beam_search expects scores in FP16 precision
         sequence, qstring, moves = beam_search(
-            scores, beam_width=beam_width, beam_cut=beam_cut,
+            scores.to(torch.float16), beam_width=beam_width, beam_cut=beam_cut,
             scale=scale, offset=offset, blank_score=blank_score
         )
         return {
