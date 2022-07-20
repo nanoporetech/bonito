@@ -50,6 +50,17 @@ def file_md5(filename, nblock=1024):
     return hasher.hexdigest()
 
 
+def save_tensor(directory, name, tensor):
+    """
+    Save a tensor `x` to `fn.tensor` for use with libtorch.
+    """
+    module = torch.nn.Module()
+    param = torch.nn.Parameter(tensor, requires_grad=False)
+    module.register_parameter("0", param)
+    tensors = torch.jit.script(module)
+    tensors.save(f"{directory}/{name}.tensor")
+
+
 def reformat_output_layer(layer_dict):
     n_base, state_len, blank_score = [layer_dict.pop(k) for k in ['n_base', 'state_len', 'blank_score']]
     layer_dict['size'] = (n_base + 1) * n_base**state_len
@@ -106,6 +117,9 @@ def main(args):
         jsn = to_guppy_dict(model)
         jsn["md5sum"] = file_md5(model_file)
         json.dump(jsn, sys.stdout, cls=JsonEncoder)
+    elif args.format == 'dorado':
+        for name, tensor in model.encoder.state_dict().items():
+            save_tensor(args.model, name, tensor)
     elif args.format == 'torchscript':
         tmp_tensor = torch.rand(10, 1, 1000)
         model = model.float()
@@ -125,7 +139,6 @@ def argparser():
         add_help=False
     )
     parser.add_argument('model')
-    parser.add_argument('--format', help='guppy or torchscript', default='guppy')
-    parser.add_argument('--config', default=None,
-                        help='config file to read settings from')
+    parser.add_argument('--format', choices=['guppy', 'dorado', 'torchscript'], default='guppy')
+    parser.add_argument('--config', default=None, help='config file to read settings from')
     return parser
