@@ -157,7 +157,7 @@ def chunk(signal, chunksize, overlap):
     if chunksize == 0:
         chunks = signal[None, :]
     elif T < chunksize:
-        chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
+        chunks = torch.nn.functional.pad(signal, (0, chunksize - T))[None, :]
     else:
         stub = (T - overlap) % (chunksize - overlap)
         chunks = signal[stub:].unfold(0, chunksize, chunksize - overlap)
