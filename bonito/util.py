@@ -251,6 +251,24 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
+def get_last_weights_file(dirname):
+    weight_files = glob(os.path.join(dirname, "weights_*.tar"))
+    if not weight_files:
+        raise FileNotFoundError("no model weights found in '%s'" % dirname)
+    weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+    return os.path.join(dirname, 'weights_%s.tar' % weights)
+
+def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, quantize=False):
+    basecall_params = config.get("basecaller", {})
+    # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
+    # flags override values in config
+    basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
+    basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
+    basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
+    basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
+    config["basecaller"] = basecall_params
+    return config
+
 def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
     Load a model from disk
@@ -259,33 +277,27 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
         dirname = os.path.join(__models__, dirname)
 
     if not weights: # take the latest checkpoint
-        weight_files = glob(os.path.join(dirname, "weights_*.tar"))
-        if not weight_files:
-            raise FileNotFoundError("no model weights found in '%s'" % dirname)
-        weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
+        weights = get_last_weights_file(dirname)
 
-    device = torch.device(device)
     config = toml.load(os.path.join(dirname, 'config.toml'))
-    weights = os.path.join(dirname, 'weights_%s.tar' % weights)
+    config = set_config_defaults(config, chunksize, batchsize, overlap, quantize)
 
-    basecall_params = config.get("basecaller", {})
-    # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
-    # flags override values in config
-    chunksize = basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
-    overlap = basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
-    batchsize = basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
-    quantize = basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
-    config["basecaller"] = basecall_params
+    return _load_model(weights, config, device, half, use_koi)
 
+def _load_model(model_file, config, device, half=None, use_koi=False):
+    device = torch.device(device)
     Model = load_symbol(config, "Model")
     model = Model(config)
 
     if config["model"]["package"] == "bonito.crf" and use_koi:
         model.encoder = koi.lstm.update_graph(
-            model.encoder, batchsize=batchsize, chunksize=chunksize // model.stride, quantize=quantize
+            model.encoder,
+            batchsize=config["basecaller"]["batchsize"],
+            chunksize=config["basecaller"]["chunksize"] // model.stride,
+            quantize=config["basecaller"]["quantize"],
         )
 
-    state_dict = torch.load(weights, map_location=device)
+    state_dict = torch.load(model_file, map_location=device)
     state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
