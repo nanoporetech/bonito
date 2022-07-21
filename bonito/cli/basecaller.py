@@ -51,7 +51,7 @@ def main(args):
         model = load_model(
             args.model_directory,
             args.device,
-            weights=int(args.weights),
+            weights=args.weights if args.weights > 0 else None,
             chunksize=args.chunksize,
             overlap=args.overlap,
             batchsize=args.batchsize,
@@ -175,7 +175,7 @@ def argparser():
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--weights", default="0", type=str)
+    parser.add_argument("--weights", default=0, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)

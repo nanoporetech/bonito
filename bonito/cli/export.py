@@ -17,7 +17,7 @@ from glob import glob
 import base64
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import _load_model, get_last_weights_file, set_config_defaults
+from bonito.util import _load_model, get_last_checkpoint, set_config_defaults
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -101,10 +101,8 @@ def to_guppy_dict(model, include_weights=True, binary_weights=True):
 
 
 def main(args):
-    if os.path.isdir(args.model):
-        model_file = get_last_weights_file(args.model)
-    else:
-        model_file = args.model
+
+    model_file = get_last_checkpoint(args.model) if os.path.isdir(args.model) else args.model
 
     if args.config is None:
         args.config = os.path.join(os.path.dirname(model_file), "config.toml")

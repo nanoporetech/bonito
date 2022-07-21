@@ -251,12 +251,13 @@ def match_names(state_dict, model):
     return OrderedDict([(k, remap[k]) for k in state_dict.keys()])
 
 
-def get_last_weights_file(dirname):
+def get_last_checkpoint(dirname):
     weight_files = glob(os.path.join(dirname, "weights_*.tar"))
     if not weight_files:
         raise FileNotFoundError("no model weights found in '%s'" % dirname)
     weights = max([int(re.sub(".*_([0-9]+).tar", "\\1", w)) for w in weight_files])
     return os.path.join(dirname, 'weights_%s.tar' % weights)
+
 
 def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, quantize=False):
     basecall_params = config.get("basecaller", {})
@@ -269,20 +270,18 @@ def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, qu
     config["basecaller"] = basecall_params
     return config
 
+
 def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
-    Load a model from disk
+    Load a model config and weights off disk from `dirname`.
     """
     if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
         dirname = os.path.join(__models__, dirname)
-
-    if not weights: # take the latest checkpoint
-        weights = get_last_weights_file(dirname)
-
+    weights = get_last_checkpoint(dirname) if weights is None else os.path.join(dirname, 'weights_%s.tar' % weights)
     config = toml.load(os.path.join(dirname, 'config.toml'))
     config = set_config_defaults(config, chunksize, batchsize, overlap, quantize)
-
     return _load_model(weights, config, device, half, use_koi)
+
 
 def _load_model(model_file, config, device, half=None, use_koi=False):
     device = torch.device(device)
