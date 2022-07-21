@@ -69,6 +69,8 @@ class Read:
             f"st:Z:{self.start_time}",
             f"rn:i:{self.read_number}",
             f"f5:Z:{self.filename}",
+            f"me:f:{self.med}",
+            f"ma:f:{self.mad}",
         ]
 
 
@@ -161,9 +163,9 @@ def norm_by_noisiest_section(signal, samples=100, threshold=6.0, return_medmad=F
     else:
         med, mad = med_mad(signal)
 
-    scaled = (signal - med) / max(1.0, mad)
+    mad = max(1.0, mad)
+    scaled = (signal - med) / mad
 
     if return_medmad:
         return scaled, (med, mad)
     return scaled
-

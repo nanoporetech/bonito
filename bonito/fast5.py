@@ -81,10 +81,11 @@ class Read(bonito.reader.Read):
         self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
 
         if len(scaled) > 8000:
-            med, mad = bonito.reader.med_mad(scaled)
-            self.signal = (scaled - med) / max(1.0, mad)
+            self.med, self.mad = bonito.reader.med_mad(scaled)
+            self.mad = max(1.0, self.mad)
+            self.signal = (scaled - self.med) / self.mad
         else:
-            self.signal = bonito.reader.norm_by_noisiest_section(scaled)
+            self.signal, (self.med, self.mad) = bonito.reader.norm_by_noisiest_section(scaled, return_medmad=True)
 
 
 def get_meta_data(filename, read_ids=None, skip=False):

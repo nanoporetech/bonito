@@ -39,7 +39,7 @@ class Read(bonito.reader.Read):
         self.channel = self.pore.channel
         self.read_number = read.read_number
         self.num_samples = read.sample_count
-        
+
         self.context_tags = dict(self.run_info.context_tags)
         self.sample_rate = int(self.context_tags['sample_frequency'])
 
@@ -66,10 +66,11 @@ class Read(bonito.reader.Read):
         self.signal = scaled
 
         if len(scaled) > 8000:
-            med, mad = bonito.reader.med_mad(scaled)
-            self.signal = (scaled - med) / max(1.0, mad)
+            self.med, self.mad = bonito.reader.med_mad(scaled)
+            self.mad = max(1.0, self.mad)
+            self.signal = (scaled - self.med) / self.mad
         else:
-            self.signal = bonito.reader.norm_by_noisiest_section(scaled)
+            self.signal, (self.med, self.mad) = bonito.reader.norm_by_noisiest_section(scaled, return_medmad=True)
 
 
 def pod5_reads(pod5_file, read_ids, skip=False):
