@@ -48,6 +48,9 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 | rn:i:	 | read number                                                |
 | st:Z:	 | read start time                                            |
 | f5:Z:	 | fast5 file name                                            |
+| sm:f:	 | scaling midpoint/mean/median (pA to ~0-mean/1-sd)          |
+| sd:f:	 | scaling dispersion  (pA to ~0-mean/1-sd)                   |
+| sv:Z:	 | scaling version                                            |
 | mv:B:c | sequence to signal move table _(optional)_                 |
 
 #### Modified Base Tags

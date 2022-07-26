@@ -69,8 +69,9 @@ class Read:
             f"st:Z:{self.start_time}",
             f"rn:i:{self.read_number}",
             f"f5:Z:{self.filename}",
-            f"me:f:{self.med}",
-            f"ma:f:{self.mad}",
+            f"sm:f:{self.med}",
+            f"sd:f:{self.mad}",
+            f"sv:Z:med_mad",
         ]
 
 
