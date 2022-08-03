@@ -9,6 +9,7 @@ from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
+from bonito.util import decode_ref
 
 
 def get_stride(m):
@@ -174,6 +175,9 @@ class SeqdistModel(Module):
 
     def decode(self, x):
         return self.decode_batch(x.unsqueeze(1))[0]
+
+    def decode_ref(self, target, alphabet):
+        return decode_ref(target, alphabet)[self.seqdist.state_len:]
 
     def loss(self, scores, targets, target_lengths, **kwargs):
         return self.seqdist.ctc_loss(scores.to(torch.float32), targets, target_lengths, **kwargs)

@@ -165,7 +165,9 @@ class Trainer:
             seqs = self.model.decode_batch(scores)
         else:
             seqs = [self.model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
-        refs = [decode_ref(target, self.model.alphabet) for target in targets]
+
+        decode_ref_fn = getattr(self.model, "decode_ref", decode_ref)
+        refs = [decode_ref_fn(target, self.model.alphabet) for target in targets]
         accs = [
             accuracy(ref, seq, min_coverage=0.5) if len(seq) else 0. for ref, seq in zip(refs, seqs)
         ]
