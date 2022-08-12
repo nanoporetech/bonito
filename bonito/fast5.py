@@ -107,14 +107,12 @@ def get_meta_data(filename, read_ids=None, skip=False):
         return meta_reads
 
 
-def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_read_groups(fast5s, model, read_ids=None, skip=False, n_proc=1, cancel=None):
     """
     Get all the read meta data for a given `directory`.
     """
     groups = set()
     num_reads = 0
-    pattern = "**/*.fast5" if recursive else "*.fast5"
-    fast5s = [Path(x) for x in glob(directory + "/" + pattern, recursive=True)]
     get_filtered_meta_data = partial(get_meta_data, read_ids=read_ids, skip=skip)
 
     with Pool(n_proc) as pool:
@@ -161,15 +159,13 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_reads(fast5s, read_ids=None, skip=False, n_proc=1, cancel=None):
     """
     Get all reads in a given `directory`.
     """
-    pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
-    reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
     with Pool(n_proc) as pool:
-        for job in chain(pool.imap(get_filtered_reads, reads)):
+        for job in chain(pool.imap(get_filtered_reads, fast5s)):
             for read in pool.imap(get_raw_data_for_read, job):
                 yield read
                 if cancel is not None and cancel.is_set():

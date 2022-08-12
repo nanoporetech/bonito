@@ -2,7 +2,8 @@
 Bonito Read Utils
 """
 
-from glob import iglob
+from glob import glob
+from pathlib import Path
 from collections import OrderedDict
 from importlib import import_module
 
@@ -16,26 +17,36 @@ __formats__ = ["fast5", "pod5"]
 
 class Reader:
 
-    def __init__(self, directory, recursive=False):
-        self.fmt = None
-        for fmt in __formats__:
-            pattern = f"**/*.{fmt}" if recursive else f"*.{fmt}"
-            match = next(iglob(directory + "/" + pattern, recursive=True), None)
-            if match is not None:
-                self.fmt = fmt
-                break
+    def __init__(self, reads_loc, recursive=False):
+        self.reads_loc = Path(reads_loc).resolve()
+        if self.reads_loc.is_dir():
+            glob_pat = "**/*" if recursive else "*"
+            for self.fmt in __formats__:
+                self.files = list(map(Path, glob(
+                    f"{self.reads_loc}/{glob_pat}.{self.fmt}", recursive=True
+                )))
+                if len(self.files) > 0:
+                    break
+            else:
+                raise FileNotFoundError("No valid reads found")
         else:
-            raise FileNotFoundError()
+            self.files = [self.reads_loc]
+            if self.reads_loc.parts[-1].endswith("pod5"):
+                self.fmt = "pod5"
+            elif self.reads_loc.parts[-1].endswith("fast5"):
+                self.fmt = "fast5"
+            else:
+                raise RuntimeError(f"Invalid reads file: {self.reads_loc}")
 
         _reader = import_module(f"bonito.{self.fmt}")
         self._get_reads = getattr(_reader, "get_reads")
         self._get_read_groups = getattr(_reader, "get_read_groups")
 
     def get_reads(self, *args, **kwargs):
-        return self._get_reads(*args, **kwargs)
+        return self._get_reads(self.files, *args, **kwargs)
 
     def get_read_groups(self, *args, **kwargs):
-        return self._get_read_groups(*args, **kwargs)
+        return self._get_read_groups(self.files, *args, **kwargs)
 
 
 class Read:
