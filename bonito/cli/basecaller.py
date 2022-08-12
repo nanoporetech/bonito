@@ -26,10 +26,10 @@ def main(args):
     init(args.seed, args.device)
 
     try:
-        reader = Reader(args.reads_location, args.recursive)
-        sys.stderr.write(f"> reading {reader.fmt}\n")
-    except (FileNotFoundError, RuntimeError):
-        sys.stderr.write("> error: no reads files found\n")
+        reader = Reader(args.reads_directory, args.recursive)
+        sys.stderr.write("> reading %s\n" % reader.fmt)
+    except FileNotFoundError:
+        sys.stderr.write("> error: no suitable files found in %s\n" % args.reads_directory)
         exit(1)
 
     fmt = biofmt(aligned=args.reference is not None)
@@ -93,15 +93,18 @@ def main(args):
 
     if fmt.name != 'fastq':
         groups, num_reads = reader.get_read_groups(
-            args.model_directory, n_proc=8, read_ids=column_to_set(args.read_ids),
-            skip=args.skip, cancel=process_cancel()
+            args.reads_directory, args.model_directory,
+            n_proc=8, recursive=args.recursive,
+            read_ids=column_to_set(args.read_ids), skip=args.skip,
+            cancel=process_cancel()
         )
     else:
         groups = []
         num_reads = None
 
     reads = reader.get_reads(
-        n_proc=8, read_ids=column_to_set(args.read_ids), skip=args.skip,
+        args.reads_directory, n_proc=8, recursive=args.recursive,
+        read_ids=column_to_set(args.read_ids), skip=args.skip,
         cancel=process_cancel()
     )
 
@@ -163,7 +166,7 @@ def argparser():
         add_help=False
     )
     parser.add_argument("model_directory")
-    parser.add_argument("reads_location")
+    parser.add_argument("reads_directory")
     parser.add_argument("--reference")
     parser.add_argument("--modified-bases", nargs="+")
     parser.add_argument("--modified-base-model")

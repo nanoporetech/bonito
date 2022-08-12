@@ -87,12 +87,14 @@ def pod5_reads(pod5_file, read_ids, skip=False):
         yield from CombinedReader(pod5_file).reads(preload=["samples"])
 
 
-def get_read_groups(pod5_files, model, read_ids=None, skip=False, n_proc=1, cancel=None):
+def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
     """
-    Get all the read meta data from pod5 files.
+    Get all the read meta data for a given `directory`.
     """
     groups = set()
     num_reads = 0
+    pattern = "**/*.pod5" if recursive else "*.pod5"
+    pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
     for pod5_file in pod5_files:
         for read in tqdm(
@@ -105,10 +107,13 @@ def get_read_groups(pod5_files, model, read_ids=None, skip=False, n_proc=1, canc
     return groups, num_reads
 
 
-def get_reads(pod5_files, read_ids=None, skip=False, n_proc=1, cancel=None):
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
     """
-    Get all reads from pod5 files.
+    Get all reads in a given `directory`.
     """
+    pattern = "**/*.pod5" if recursive else "*.pod5"
+    pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
+
     for pod5_file in pod5_files:
         for read in pod5_reads(pod5_file, read_ids, skip):
             yield Read(read, pod5_file)
