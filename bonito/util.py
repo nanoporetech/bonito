@@ -265,7 +265,7 @@ def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, qu
     # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
     # flags override values in config
     basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
-    basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
+    basecall_params["overlap"] = overlap if overlap is not None else basecall_params.get("overlap", 500)
     basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
     basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
     config["basecaller"] = basecall_params

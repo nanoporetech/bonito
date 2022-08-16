@@ -60,7 +60,12 @@ def main(args):
         )
     except FileNotFoundError:
         train_loader_kwargs, valid_loader_kwargs = load_script(
-            args.directory, **{"config": config, **argsdict}
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.valid_chunks,
+            n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
+            n_post_context_bases=getattr(model, "n_post_context_bases", 0),
         )
 
     loader_kwargs = {

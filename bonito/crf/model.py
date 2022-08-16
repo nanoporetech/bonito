@@ -24,10 +24,12 @@ def get_stride(m):
 
 class CTC_CRF(SequenceDist):
 
-    def __init__(self, state_len, alphabet):
+    def __init__(self, state_len, alphabet, n_pre_context_bases=0, n_post_context_bases=0):
         super().__init__()
         self.alphabet = alphabet
         self.state_len = state_len
+        self.n_pre_context_bases = n_pre_context_bases
+        self.n_post_context_bases = n_post_context_bases
         self.n_base = len(alphabet[1:])
         self.idx = torch.cat([
             torch.arange(self.n_base**(self.state_len))[:, None],
@@ -158,12 +160,17 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
 
 
 class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist):
+    def __init__(self, encoder, seqdist, n_pre_post_context_bases=None):
         super().__init__()
         self.seqdist = seqdist
         self.encoder = encoder
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
+        if n_pre_post_context_bases is None:
+            self.n_pre_context_bases = self.seqdist.state_len - 1
+            self.n_post_context_bases = 1
+        else:
+            self.n_pre_context_bases, self.n_post_context_bases = n_pre_post_context_bases
 
     def forward(self, x):
         return self.encoder(x)
@@ -176,9 +183,6 @@ class SeqdistModel(Module):
     def decode(self, x):
         return self.decode_batch(x.unsqueeze(1))[0]
 
-    def decode_ref(self, target, alphabet):
-        return decode_ref(target, alphabet)[self.seqdist.state_len:]
-
     def loss(self, scores, targets, target_lengths, **kwargs):
         return self.seqdist.ctc_loss(scores.to(torch.float32), targets, target_lengths, **kwargs)
 
@@ -187,11 +191,12 @@ class Model(SeqdistModel):
     def __init__(self, config):
         seqdist = CTC_CRF(
             state_len=config['global_norm']['state_len'],
-            alphabet=config['labels']['labels']
+            alphabet=config['labels']['labels'],
         )
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])
         else: #old-style
             encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
-        super().__init__(encoder, seqdist)
+
+        super().__init__(encoder, seqdist, n_pre_post_context_bases=config['input'].get('n_pre_post_context_bases'))
         self.config = config
