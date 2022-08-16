@@ -91,8 +91,10 @@ class CTC_CRF(SequenceDist):
 
     def viterbi(self, scores):
         traceback = self.posteriors(scores, Max)
-        paths = traceback.argmax(2) % len(self.alphabet)
-        return paths
+        a_traceback = traceback.argmax(2)
+        moves = (a_traceback % len(self.alphabet)) != 0
+        paths = 1 + (torch.div(a_traceback, len(self.alphabet), rounding_mode="floor") % self.n_base)
+        return torch.where(moves, paths, 0)
 
     def path_to_str(self, path):
         alphabet = np.frombuffer(''.join(self.alphabet).encode(), dtype='u1')
