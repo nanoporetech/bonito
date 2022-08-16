@@ -64,6 +64,36 @@ class Reverse(Module):
 
 
 @register
+class BatchNorm(Module):
+
+    def __init__(self, num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True):
+        super().__init__()
+        self.bn = torch.nn.BatchNorm1d(num_features, eps, momentum, affine, track_running_stats)
+
+    def forward(self, x):
+        return self.bn(x)
+
+    def to_dict(self, include_weights=False):
+        res = {
+            "num_features": self.bn.num_features,
+            "eps": self.bn.eps,
+            "momentum": self.bn.momentum,
+            "affine": self.bn.affine,
+            "track_running_stats": self.bn.track_running_stats
+        }
+        if include_weights:
+            params = {}
+            if res["affine"]:
+                params["W"] = self.bn.weight
+                params["b"] = self.bn.bias
+            if res["track_running_stats"]:
+                params["running_mean"] = self.bn.running_mean
+                params["running_var"] = self.bn.running_var
+            res["params"] = params
+        return res
+
+
+@register
 class Convolution(Module):
 
     def __init__(self, insize, size, winlen, stride=1, padding=0, bias=True, activation=None):
