@@ -125,7 +125,7 @@ class Convolution(Module):
             "stride": self.conv.stride[0],
             "padding": self.conv.padding[0],
             "activation": self.activation.name if self.activation else None,
-            "norm": self.norm.to_dict(include_weights)
+            "norm": self.norm.to_dict(include_weights) if self.norm is not None else None
         }
         if include_weights:
             res['params'] = {
