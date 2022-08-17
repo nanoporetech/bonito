@@ -287,7 +287,7 @@ def from_dict(model_dict, layer_types=None):
     return layer
 
 
-def fuse_bn(m):
+def fuse_bn_(m):
     """
     Sets the module m to eval mode and if a Convolution fuses any batchnorm layer.
     """
