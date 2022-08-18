@@ -292,6 +292,6 @@ def fuse_bn_(m):
     Sets the module m to eval mode and if a Convolution fuses any batchnorm layer.
     """
     m.training = False
-    if isinstance(m, Convolution):
+    if isinstance(m, Convolution) and isinstance(m.norm, BatchNorm):
         m.conv = fuse_conv_bn_eval(m.conv, m.norm.bn)
         m.norm = None
