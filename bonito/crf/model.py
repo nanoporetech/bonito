@@ -137,22 +137,22 @@ class CTC_CRF(SequenceDist):
         return viterbi_alignments(stay_scores, move_scores, target_lengths + 1 - self.state_len)
 
 
-def conv(c_in, c_out, ks, stride=1, bias=False, activation=None):
-    return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation)
+def conv(c_in, c_out, ks, stride=1, bias=False, activation=None, norm=None):
+    return Convolution(c_in, c_out, ks, stride=stride, padding=ks//2, bias=bias, activation=activation, norm=norm)
 
 
-def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, expand_blanks=True, num_layers=5):
+def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, expand_blanks=True, num_layers=5, norm=None):
     rnn = layers[rnn_type]
     return Serial([
-            conv(insize, 4, ks=5, bias=True, activation=activation),
-            conv(4, 16, ks=5, bias=True, activation=activation),
-            conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation),
-            Permute([2, 0, 1]),
-            *(rnn(features, features, reverse=(num_layers - i) % 2) for i in range(num_layers)),
-            LinearCRFEncoder(
-                features, n_base, state_len, activation='tanh', scale=scale,
-                blank_score=blank_score, expand_blanks=expand_blanks
-            )
+        conv(insize, 4, ks=5, bias=True, activation=activation, norm=norm),
+        conv(4, 16, ks=5, bias=True, activation=activation, norm=norm),
+        conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation, norm=norm),
+        Permute([2, 0, 1]),
+        *(rnn(features, features, reverse=(num_layers - i) % 2) for i in range(num_layers)),
+        LinearCRFEncoder(
+            features, n_base, state_len, activation='tanh', scale=scale,
+            blank_score=blank_score, expand_blanks=expand_blanks
+        )
     ])
 
 

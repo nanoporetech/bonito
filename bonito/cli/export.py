@@ -17,6 +17,7 @@ from glob import glob
 import base64
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from bonito.nn import fuse_bn_
 from bonito.util import _load_model, get_last_checkpoint, set_config_defaults
 
 
@@ -111,6 +112,11 @@ def main(args):
     config = set_config_defaults(config)
     model = _load_model(model_file, config, device='cpu')
 
+    if args.fuse_bn:
+        # model weights might be saved in half when training and PyTorch's bn fusion
+        # code uses an op (rsqrt) that currently (1.11) only has a float implementation
+        model = model.to(torch.float32).apply(fuse_bn_)
+
     if args.format == 'guppy':
         jsn = to_guppy_dict(model)
         jsn["md5sum"] = file_md5(model_file)
@@ -139,4 +145,5 @@ def argparser():
     parser.add_argument('model')
     parser.add_argument('--format', choices=['guppy', 'dorado', 'torchscript'], default='guppy')
     parser.add_argument('--config', default=None, help='config file to read settings from')
+    parser.add_argument('--fuse-bn', default=True, help='fuse batchnorm layers')
     return parser

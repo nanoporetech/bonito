@@ -5,6 +5,7 @@ Bonito nn modules.
 import torch
 from torch.nn import Module
 from torch.nn.init import orthogonal_
+from torch.nn.utils.fusion import fuse_conv_bn_eval
 
 
 layers = {}
@@ -64,17 +65,56 @@ class Reverse(Module):
 
 
 @register
+class BatchNorm(Module):
+
+    def __init__(self, num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True):
+        super().__init__()
+        self.bn = torch.nn.BatchNorm1d(num_features, eps, momentum, affine, track_running_stats)
+
+    def forward(self, x):
+        return self.bn(x)
+
+    def to_dict(self, include_weights=False):
+        res = {
+            "num_features": self.bn.num_features,
+            "eps": self.bn.eps,
+            "momentum": self.bn.momentum,
+            "affine": self.bn.affine,
+            "track_running_stats": self.bn.track_running_stats
+        }
+        if include_weights:
+            params = {}
+            if res["affine"]:
+                params["W"] = self.bn.weight
+                params["b"] = self.bn.bias
+            if res["track_running_stats"]:
+                params["running_mean"] = self.bn.running_mean
+                params["running_var"] = self.bn.running_var
+            res["params"] = params
+        return res
+
+
+@register
 class Convolution(Module):
 
-    def __init__(self, insize, size, winlen, stride=1, padding=0, bias=True, activation=None):
+    def __init__(self, insize, size, winlen, stride=1, padding=0, bias=True, activation=None, norm=None):
         super().__init__()
         self.conv = torch.nn.Conv1d(insize, size, winlen, stride=stride, padding=padding, bias=bias)
         self.activation = layers.get(activation, lambda: activation)()
+        if isinstance(norm, dict):
+            self.norm = from_dict(norm)
+        elif isinstance(norm, str):
+            self.norm = layers[norm](size)
+        else:
+            self.norm = norm
 
     def forward(self, x):
+        h = self.conv(x)
+        if self.norm is not None:
+            h = self.norm(h)
         if self.activation is not None:
-            return self.activation(self.conv(x))
-        return self.conv(x)
+            h = self.activation(h)
+        return h
 
     def to_dict(self, include_weights=False):
         res = {
@@ -85,6 +125,7 @@ class Convolution(Module):
             "stride": self.conv.stride[0],
             "padding": self.conv.padding[0],
             "activation": self.activation.name if self.activation else None,
+            "norm": self.norm.to_dict(include_weights) if self.norm is not None else None
         }
         if include_weights:
             res['params'] = {
@@ -244,3 +285,13 @@ def from_dict(model_dict, layer_types=None):
     except Exception as e:
         raise Exception(f'Failed to build layer of type {typ} with args {model_dict}') from e
     return layer
+
+
+def fuse_bn_(m):
+    """
+    Sets the module m to eval mode and if a Convolution fuses any batchnorm layer.
+    """
+    m.training = False
+    if isinstance(m, Convolution) and isinstance(m.norm, BatchNorm):
+        m.conv = fuse_conv_bn_eval(m.conv, m.norm.bn)
+        m.norm = None
