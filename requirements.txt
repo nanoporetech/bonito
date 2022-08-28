@@ -9,7 +9,7 @@ parasail==1.2
 pandas>1,<2
 requests==2.25.1
 ont-koi==0.1.1
-onnxruntime==1.11.0
+onnxruntime==1.12.1
 ont-remora==1.1.1
 ont-fast5-api==3.3.0
 pod5-format==0.0.23
@@ -17,4 +17,4 @@ pod5-format-tools==0.0.23
 fast-ctc-decode==0.3.2
 python-dateutil==2.8.2
 # cuda requirements
-torch~=1.11
+torch~=1.12.1 --extra-index-url https://download.pytorch.org/whl/cu113

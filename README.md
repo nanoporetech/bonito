@@ -4,9 +4,8 @@
 [![py37](https://img.shields.io/badge/python-3.7-brightgreen.svg)](https://img.shields.io/badge/python-3.7-brightgreen.svg)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
-[![cu102](https://img.shields.io/badge/cuda-10.2-blue.svg)](https://img.shields.io/badge/cuda-10.2-blue.svg)
-[![cu111](https://img.shields.io/badge/cuda-11.1-blue.svg)](https://img.shields.io/badge/cuda-11.1-blue.svg)
-[![cu113](https://img.shields.io/badge/cuda-11.3-blue.svg)](https://img.shields.io/badge/cuda-11.3-blue.svg)
+[![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
+[![cu113](https://img.shields.io/badge/cuda-11.1-blue.svg)](https://img.shields.io/badge/cuda-11.1-blue.svg)
 
 A PyTorch Basecaller for Oxford Nanopore Reads.
 
@@ -27,12 +26,6 @@ Bonito will download and cache the basecalling model automatically on first use 
 ``` bash
 $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
-```
-
-The default `ont-bonito` package is built against CUDA 10.2 however CUDA 11.1 and 11.3 builds are available.
-
-```bash
-$ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
 ```
 
 ## Modified Bases
