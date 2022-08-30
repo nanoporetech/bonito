@@ -5,6 +5,8 @@ from setuptools.command.install import install
 
 
 __pkg_name__ = 'bonito'
+require_file = 'requirements.txt'
+package_name = "ont-%s" % __pkg_name__
 
 verstrline = open(os.path.join(__pkg_name__, '__init__.py'), 'r').read()
 vsre = r"^__version__ = ['\"]([^'\"]*)['\"]"
@@ -15,21 +17,8 @@ else:
     raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
 
 
-CUDA_VERSION = os.environ.get('CUDA_VERSION')
-assert(CUDA_VERSION in {'111', '113', None})
-
-
-if CUDA_VERSION:
-    print("Building with CUDA %s" % CUDA_VERSION)
-    require_file = 'requirements-cuda%s.txt' % CUDA_VERSION
-    package_name = "ont-%s-cuda%s" % (__pkg_name__, CUDA_VERSION)
-else:
-    print("Building with CUDA 10.2")
-    require_file = 'requirements.txt'
-    package_name = "ont-%s" % __pkg_name__
-
 with open(require_file) as f:
-    requirements = f.read().splitlines()
+    requirements = [r.split()[0] for r in f.read().splitlines()]
 
 with open('README.md', encoding='utf-8') as f:
     long_description = f.read()
@@ -52,6 +41,6 @@ setup(
         ]
     },
     dependency_links=[
-        'https://download.pytorch.org/whl/torch_stable.html',
-    ] if CUDA_VERSION else None
+        'https://download.pytorch.org/whl/cu113',
+    ]
 )
