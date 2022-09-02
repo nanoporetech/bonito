@@ -54,7 +54,7 @@ class Read(bonito.reader.Read):
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
 
         self.offset = int(channel_info['offset'])
-        self.sampling_rate = channel_info['sampling_rate']
+        self.sample_rate = channel_info['sampling_rate']
         self.scaling = channel_info['range'] / channel_info['digitisation']
 
         self.mux = read_attrs['start_mux']
@@ -63,29 +63,23 @@ class Read(bonito.reader.Read):
         if type(self.channel) in (bytes, np.bytes_):
             self.channel = self.channel.decode()
 
-        self.start = read_attrs['start_time'] / self.sampling_rate
-        self.duration = read_attrs['duration'] / self.sampling_rate
+        self.start = read_attrs['start_time'] / self.sample_rate
+        self.duration = read_attrs['duration'] / self.sample_rate
 
         exp_start_dt = parser.parse(self.exp_start_time)
         start_time = exp_start_dt + timedelta(seconds=self.start)
         self.start_time = start_time.replace(microsecond=0).isoformat()
 
         raw = read.handle[read.raw_dataset_name][:]
-        scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
-        self.num_samples = len(scaled)
+        self.scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+        self.num_samples = len(self.scaled)
 
-        trim_start, _ = bonito.reader.trim(scaled[:8000])
-        scaled = scaled[trim_start:]
-        self.trimmed_samples = trim_start
-        self.template_start = self.start + (1 / self.sampling_rate) * trim_start
-        self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
+        self.shift, self.scale = bonito.reader.normalisation(self.scaled)
+        self.trimmed_samples, _ = bonito.reader.trim(self.scaled, self.shift, self.scale)
+        self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
+        self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
-        if len(scaled) > 8000:
-            self.med, self.mad = bonito.reader.med_mad(scaled)
-            self.mad = max(1.0, self.mad)
-            self.signal = (scaled - self.med) / self.mad
-        else:
-            self.signal, (self.med, self.mad) = bonito.reader.norm_by_noisiest_section(scaled, return_medmad=True)
+        self.signal = (self.scaled[self.trimmed_samples:] - self.shift) / self.scale
 
 
 def get_meta_data(filename, read_ids=None, skip=False):
