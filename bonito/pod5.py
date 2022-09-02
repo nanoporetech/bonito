@@ -54,23 +54,15 @@ class Read(bonito.reader.Read):
         self.calibration = read.calibration
         self.scaling = self.calibration.scale
         self.offset = self.calibration.offset
+        self.scaled = self.scaling * (self.raw.astype(np.float32) + self.offset)
 
-        scaled = self.scaling * (self.raw.astype(np.float32) + self.offset)
-        trim_start, _ = bonito.reader.trim(scaled[:8000])
-        scaled = scaled[trim_start:]
-        self.trimmed_samples = trim_start
+        self.shift, self.scale = bonito.reader.normalisation(self.scaled)
+        self.trimmed_samples, _ = bonito.reader.trim(self.scaled, self.shift, self.scale)
 
-        self.template_start = self.start + (trim_start / self.sample_rate)
-        self.template_duration = self.duration - (trim_start / self.sample_rate)
+        self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
+        self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
-        self.signal = scaled
-
-        if len(scaled) > 8000:
-            self.med, self.mad = bonito.reader.med_mad(scaled)
-            self.mad = max(1.0, self.mad)
-            self.signal = (scaled - self.med) / self.mad
-        else:
-            self.signal, (self.med, self.mad) = bonito.reader.norm_by_noisiest_section(scaled, return_medmad=True)
+        self.signal = (scaled[self.trimmed_samples:] - self.shift) / self.scale
 
 
 def pod5_reads(pod5_file, read_ids, skip=False):
