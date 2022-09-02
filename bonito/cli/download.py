@@ -82,14 +82,6 @@ models = {
     "dna_r10.4.1_e8.2_hac@v3.5.1": "per9xu2sqd1qjxqika6el6xh91pcyhd2.zip",
     "dna_r10.4.1_e8.2_sup@v3.5.1": "wpqoxvfa8mrg0kledy08vgmwwqq3m8ba.zip",
 
-    "dna_r10.4_e8.1_sup@v3.4": "q07kb0p2f3qbj8cpnb35l1tcink21k82.zip",
-    "dna_r10.4_e8.1_hac@v3.4": "tlxt45rmp5sv2c0f0p3jy8qf24lsidgv.zip",
-    "dna_r10.4_e8.1_fast@v3.4": "biesc8w0ug1d59gpqpjin1utgcevvhs7.zip",
-
-    "dna_r9.4.1_e8.1_sup@v3.3": "ts3h4rv1hqhjcv7t6wwng1dcfpzujvkg.zip",
-    "dna_r9.4.1_e8.1_hac@v3.3": "25gua32bys32gnvj240hsml2ixnh4drc.zip",
-    "dna_r9.4.1_e8.1_fast@v3.4": "h55evnpfq041ghniapmbklzqkdohkmo5.zip",
-
     "dna_r9.4.1_e8_sup@v3.3": "w10qhiggmg32gjcag6dv1wmwipzmcj84.zip",
     "dna_r9.4.1_e8_hac@v3.3": "5evhvoqb07u6d3y4jfy2oi3bmyrww293.zip",
     "dna_r9.4.1_e8_fast@v3.4": "3bq726s52at88zd9ve53x4px4quf3dpg.zip",
