@@ -394,7 +394,10 @@ class NullWriter(Thread):
 
 class Writer(Thread):
 
-    def __init__(self, mode, iterator, aligner, fd=sys.stdout, duplex=False, ref_fn=None, groups=None, group_key=None):
+    def __init__(
+            self, mode, iterator, aligner, fd=sys.stdout, duplex=False,
+            ref_fn=None, groups=None, group_key=None, min_qscore=0
+    ):
         super().__init__()
         self.fd = fd
         self.log = []
@@ -404,6 +407,7 @@ class Writer(Thread):
         self.iterator = iterator
         self.fastq = mode == 'wfq'
         self.group_key = group_key
+        self.min_qscore = min_qscore
         self.output = AlignmentFile(
             fd, 'w' if self.fastq else self.mode, add_sam_header=not self.fastq,
             reference_filename=ref_fn,
@@ -433,6 +437,11 @@ class Writer(Thread):
                     samples = len(read.signal)
                     read_id = read.read_id
 
+                self.log.append((read_id, samples))
+
+                if mean_qscore < self.min_qscore:
+                    continue
+
                 tags = [
                     f'RG:Z:{read.run_id}_{self.group_key}',
                     f'qs:i:{round(mean_qscore)}',
@@ -459,8 +468,6 @@ class Writer(Thread):
                         summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
                     else:
                         summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
-
-                    self.log.append((read_id, samples))
 
                 else:
                     logger.warn("> skipping empty sequence %s", read_id)

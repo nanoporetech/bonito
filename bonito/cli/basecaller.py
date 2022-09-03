@@ -145,7 +145,7 @@ def main(args):
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False,
                        total=num_reads, smoothing=0, ascii=True, ncols=100),
         aligner=aligner, group_key=args.model_directory,
-        ref_fn=args.reference, groups=groups,
+        ref_fn=args.reference, groups=groups, min_qscore=args.min_qscore
     )
 
     t0 = perf_counter()
@@ -188,6 +188,7 @@ def argparser():
     parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
+    parser.add_argument("--min-qscore", default=0, type=int)
     parser.add_argument("--alignment-threads", default=8, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser
