@@ -62,7 +62,7 @@ class Read(bonito.reader.Read):
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
         self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
-        self.signal = (scaled[self.trimmed_samples:] - self.shift) / self.scale
+        self.signal = (self.scaled[self.trimmed_samples:] - self.shift) / self.scale
 
 
 def pod5_reads(pod5_file, read_ids, skip=False):
