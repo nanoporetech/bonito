@@ -5,6 +5,7 @@
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
 [![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
+[![cu102](https://img.shields.io/badge/cuda-10.2-blue.svg)](https://img.shields.io/badge/cuda-10.2-blue.svg)
 [![cu113](https://img.shields.io/badge/cuda-11.3-blue.svg)](https://img.shields.io/badge/cuda-11.3-blue.svg)
 
 A PyTorch Basecaller for Oxford Nanopore Reads.
@@ -13,6 +14,12 @@ A PyTorch Basecaller for Oxford Nanopore Reads.
 $ pip install --upgrade pip
 $ pip install ont-bonito
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads > basecalls.bam
+```
+
+By default `pip` will install `torch` which is build against CUDA 10.2. For CUDA 11.3 builds run:
+
+```
+$ pip install --extra-index-url https://download.pytorch.org/whl/cu113 ont-bonito
 ```
 
 Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`.
