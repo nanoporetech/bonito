@@ -144,7 +144,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
             mapping.r_st + 1,
             mapping.mapq,
             ''.join(softclip if mapping.strand == +1 else softclip[::-1]),
-            '*', 0, 0,
+            '*', 0, len(sequence),
             sequence if mapping.strand == +1 else mappy.revcomp(sequence),
             qstring,
             'NM:i:%s' % mapping.NM,
@@ -152,7 +152,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
         ]
     else:
         record = [
-            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
+            read_id, 4, '*', 0, 0, '*', '*', 0, len(sequence), sequence, qstring, 'NM:i:0'
         ]
 
     if tags is not None:
