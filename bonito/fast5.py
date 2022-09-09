@@ -75,7 +75,7 @@ class Read(bonito.reader.Read):
         self.num_samples = len(self.scaled)
 
         self.shift, self.scale = bonito.reader.normalisation(self.scaled)
-        self.trimmed_samples, _ = bonito.reader.trim(self.scaled, self.shift, self.scale)
+        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift)
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
         self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
