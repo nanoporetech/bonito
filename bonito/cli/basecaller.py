@@ -105,7 +105,7 @@ def main(args):
     reads = reader.get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
-        cancel=process_cancel()
+        do_trim=not args.no_trim, cancel=process_cancel()
     )
 
     if args.max_reads:
@@ -177,6 +177,7 @@ def argparser():
     parser.add_argument("--seed", default=25, type=int)
     parser.add_argument("--weights", default=0, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
+    parser.add_argument("--no-trim", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)

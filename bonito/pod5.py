@@ -15,7 +15,7 @@ from pod5_format import CombinedReader
 
 class Read(bonito.reader.Read):
 
-    def __init__(self, read, filename, meta=False):
+    def __init__(self, read, filename, meta=False, do_trim=True):
 
         self.meta = meta
 
@@ -57,7 +57,7 @@ class Read(bonito.reader.Read):
         self.scaled = self.scaling * (self.raw.astype(np.float32) + self.offset)
 
         self.shift, self.scale = bonito.reader.normalisation(self.scaled)
-        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift)
+        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift) if do_trim else 0
 
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
         self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
@@ -93,13 +93,13 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
             pod5_reads(pod5_file, read_ids, skip),
             leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
         ):
-            read = Read(read, pod5_file, meta=True)
+            read = Read(read, pod5_file, meta=True, do_trim=False)
             groups.add(read.readgroup(model))
             num_reads += 1
     return groups, num_reads
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, do_trim=True, cancel=None):
     """
     Get all reads in a given `directory`.
     """
@@ -108,6 +108,6 @@ def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, c
 
     for pod5_file in pod5_files:
         for read in pod5_reads(pod5_file, read_ids, skip):
-            yield Read(read, pod5_file)
+            yield Read(read, pod5_file, do_trim=do_trim)
             if cancel is not None and cancel.is_set():
                 return

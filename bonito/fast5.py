@@ -19,7 +19,7 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 
 class Read(bonito.reader.Read):
 
-    def __init__(self, read, filename, meta=False):
+    def __init__(self, read, filename, meta=False, do_trim=True):
 
         self.meta = meta
         self.read_id = read.read_id
@@ -75,7 +75,7 @@ class Read(bonito.reader.Read):
         self.num_samples = len(self.scaled)
 
         self.shift, self.scale = bonito.reader.normalisation(self.scaled)
-        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift)
+        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift) if do_trim else 0
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
         self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
@@ -136,13 +136,13 @@ def get_read_ids(filename, read_ids=None, skip=False):
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
 
 
-def get_raw_data_for_read(info):
+def get_raw_data_for_read(info, do_trim=True):
     """
     Get the raw signal from the fast5 file for a given filename, read_id pair
     """
     filename, read_id = info
     with get_fast5_file(filename, 'r') as f5_fh:
-        return Read(f5_fh.get_read(read_id), filename)
+        return Read(f5_fh.get_read(read_id), filename, do_trim=do_trim)
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
@@ -155,16 +155,17 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None, do_trim=True):
     """
     Get all reads in a given `directory`.
     """
     pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
+    get_raw_data = partial(get_raw_data_for_read, do_trim=do_trim)
     reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
     with Pool(n_proc) as pool:
         for job in chain(pool.imap(get_filtered_reads, reads)):
-            for read in pool.imap(get_raw_data_for_read, job):
+            for read in pool.imap(get_raw_data, job):
                 yield read
                 if cancel is not None and cancel.is_set():
                     return
