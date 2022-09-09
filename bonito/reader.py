@@ -108,27 +108,24 @@ def read_chunks(read, chunksize=4000, overlap=400):
         yield ReadChunk(read, block.numpy(), i+1, blocks.shape[0])
 
 
-def trim(signal, shift, scale, window_size=40, threshold_factor=2.4, min_elements=3):
-
-    min_trim = 10
-    signal = signal[min_trim:]
-
-    threshold = shift + scale * threshold_factor
-    num_windows = len(signal) // window_size
-
+def trim(signal, window_size=40, threshold=2.4, min_trim=10, min_elements=3, max_samples=8000):
     seen_peak = False
 
+    num_windows = min(max_samples, len(signal)) // window_size
+
     for pos in range(num_windows):
-        start = pos * window_size
+        start = pos * window_size + min_trim
         end = start + window_size
         window = signal[start:end]
         if len(window[window > threshold]) > min_elements or seen_peak:
             seen_peak = True
             if window[-1] > threshold:
                 continue
-            return min(end + min_trim, len(signal)), len(signal)
+            if end >= min(max_samples, len(signal)):
+                return min_trim
+            return end
 
-    return min_trim, len(signal)
+    return min_trim
 
 
 def normalisation(sig):
