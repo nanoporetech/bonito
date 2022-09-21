@@ -23,8 +23,12 @@ CODE_TO_OP = OrderedDict(
         ("X", pysam.CDIFF),
     )
 )
-cigar_is_query = [True, True, False, False, True, False, False, True, True]
-cigar_is_ref = [True, False, True, True, False, False, False, True, True]
+CIGAR_IS_QUERY = np.array(
+    [True, True, False, False, True, False, False, True, True]
+)
+CIGAR_IS_REF = np.array(
+    [True, False, True, True, False, False, False, True, True]
+)
 
 
 def compute_consensus(
@@ -45,8 +49,8 @@ def compute_consensus(
 
     c_ops, c_counts = zip(*cigar)
     c_expanded = np.repeat(c_ops, c_counts)
-    c_is_temp = np.array(cigar_is_query)[c_expanded]
-    c_is_comp = np.array(cigar_is_ref)[c_expanded]
+    c_is_temp = np.array(CIGAR_IS_QUERY)[c_expanded]
+    c_is_comp = np.array(CIGAR_IS_REF)[c_expanded]
     c_expanded_temp = mask_expand(as_array(temp_seq), c_is_temp)
     c_expanded_comp = mask_expand(as_array(comp_seq), c_is_comp)
 
@@ -64,7 +68,7 @@ def compute_consensus(
     )
     i = (consensus != ord("-"))
 
-    return consensus[i], np.clip(q[i], 0, 60) + 33
+    return consensus[i].tobytes().decode(), np.clip(q[i], 0, 60) + 33
 
 
 def adj_qscores(qscores, seq, qshift, pool_window=5, avg_hps_gt=3):
@@ -109,8 +113,8 @@ def seq_lens(cigartuples):
     if not len(cigartuples):
         return 0, 0
     ops, counts = np.array(cigartuples).T
-    q_len = counts[cigar_is_query[ops]].sum()
-    r_len = counts[cigar_is_ref[ops]].sum()
+    q_len = counts[CIGAR_IS_QUERY[ops]].sum()
+    r_len = counts[CIGAR_IS_REF[ops]].sum()
     return q_len, r_len
 
 
@@ -181,8 +185,15 @@ def edlib_adj_align(query, ref, num_match=11):
     return cigar
 
 
-def call_basespace_duplex(temp_seq, temp_qscores, comp_seq, comp_qscores):
-    # TODO convert qscores to numpy array
+def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
+    # convert qscores to numpy array
+    temp_qscores = np.frombuffer(
+        temp_qstring.encode("ascii"), dtype=np.uint8
+    ) - 33
+    comp_qscores = np.frombuffer(
+        comp_qstring.encode("ascii"), dtype=np.uint8
+    ) - 33
+
     comp_seq = revcomp(comp_seq)
     comp_qscores = comp_qscores[::-1]
 
@@ -190,7 +201,7 @@ def call_basespace_duplex(temp_seq, temp_qscores, comp_seq, comp_qscores):
     cigar, temp_st, comp_st = trim_while(cigar)
     cigar, temp_en, comp_en = trim_while(cigar, from_end=True)
     if len(cigar) == 0:
-        return
+        return None, None
 
     temp_seq = temp_seq[temp_st:len(temp_seq) - temp_en]
     temp_qscores = temp_qscores[temp_st:len(temp_qscores) - temp_en]
@@ -198,6 +209,9 @@ def call_basespace_duplex(temp_seq, temp_qscores, comp_seq, comp_qscores):
     comp_qscores = comp_qscores[comp_st:len(comp_qscores) - comp_en]
     seq, qstring = compute_consensus(
         cigar,
+        temp_seq,
         adj_qscores(temp_qscores, temp_seq, qshift=1),
-        adj_qscores(comp_qscores, temp_seq, qshift=-1),
+        comp_seq,
+        adj_qscores(comp_qscores, comp_seq, qshift=-1),
     )
+    return seq, qstring
