@@ -10,25 +10,94 @@ from parasail import dnafull, sg_trace_scan_32
 
 
 # Cigar int code ops are: MIDNSHP=X
-CODE_TO_OP = OrderedDict((
-    ("M", pysam.CMATCH),
-    ("I", pysam.CINS),
-    ("D", pysam.CDEL),
-    ("N", pysam.CREF_SKIP),
-    ("S", pysam.CSOFT_CLIP),
-    ("H", pysam.CHARD_CLIP),
-    ("P", pysam.CPAD),
-    ("=", pysam.CEQUAL),
-    ("X", pysam.CDIFF),
-))
+CODE_TO_OP = OrderedDict(
+    (
+        ("M", pysam.CMATCH),
+        ("I", pysam.CINS),
+        ("D", pysam.CDEL),
+        ("N", pysam.CREF_SKIP),
+        ("S", pysam.CSOFT_CLIP),
+        ("H", pysam.CHARD_CLIP),
+        ("P", pysam.CPAD),
+        ("=", pysam.CEQUAL),
+        ("X", pysam.CDIFF),
+    )
+)
 cigar_is_query = [True, True, False, False, True, False, False, True, True]
 cigar_is_ref = [True, False, True, True, False, False, False, True, True]
 
 
+def compute_consensus(
+    cigar,
+    temp_seq,
+    temp_qscores,
+    comp_seq,
+    comp_qscores,
+):
+    """ Compute consensus by comparing qscores """
+    def mask_expand(values, mask):
+        x = np.full(len(mask), fill_value=np.uint8(ord("-")), dtype=values.dtype)
+        x[mask] = values
+        return x
+
+    def as_array(seq):
+        return np.frombuffer(seq.encode("ascii"), dtype=np.uint8)
+
+    c_ops, c_counts = zip(*cigar)
+    c_expanded = np.repeat(c_ops, c_counts)
+    c_is_temp = np.array(cigar_is_query)[c_expanded]
+    c_is_comp = np.array(cigar_is_ref)[c_expanded]
+    c_expanded_temp = mask_expand(as_array(temp_seq), c_is_temp)
+    c_expanded_comp = mask_expand(as_array(comp_seq), c_is_comp)
+
+    qs = np.stack([
+        temp_qscores[np.maximum(np.cumsum(c_is_temp) - 1, 0)],
+        comp_qscores[np.maximum(np.cumsum(c_is_comp) - 1, 0)]
+    ])
+    idx = qs.argmax(axis=0)
+
+    consensus = np.where(idx, c_expanded_temp, c_expanded_comp)
+    q = np.where(
+        c_expanded_temp == c_expanded_comp,
+        qs.sum(axis=0),
+        qs[idx, np.arange(qs.shape[1])]
+    )
+    i = (consensus != ord("-"))
+
+    return consensus[i], np.clip(q[i], 0, 60) + 33
+
+
+def adj_qscores(qscores, seq, qshift, pool_window=5, avg_hps_gt=3):
+    def min_pool(x, kernel_size, padding):
+        x = np.pad(x.astype(np.float32), padding, mode="edge")
+        x = np.lib.stride_tricks.as_strided(
+            x,
+            (len(x) + 1 - kernel_size, kernel_size),
+            strides=(x.dtype.itemsize, x.dtype.itemsize)
+        )
+        return x.min(1)
+
+    def shift(x, n=1):
+        if n > 0:
+            x = np.concatenate([[x[0]] * n, x[:-n]])
+        elif n < 0:
+            x = np.concatenate([x[-n:], [x[-1]] * -n])
+        return x
+
+    def hp_spans():
+        pat = re.compile(r"(.)\1{%s,}" % (avg_hps_gt - 1))
+        return (m.span() for m in pat.finditer(seq))
+
+    qscores = min_pool(shift(qscores, qshift), pool_window, pool_window // 2)
+    # take mean q across hps
+    for st, en in hp_spans():
+        qscores[st:en] = np.mean(qscores[st:en])
+    return qscores
+
+
 def cigartuples_from_string(cigarstring):
-    """ Returns pysam-style list of (op, count) tuples from a cigarstring.
-    """
-    pattern = re.compile(fr"(\d+)([{''.join(CODE_TO_OP.keys())}])")
+    """Returns pysam-style list of (op, count) tuples from a cigarstring."""
+    pattern = re.compile(rf"(\d+)([{''.join(CODE_TO_OP.keys())}])")
     return [
         (CODE_TO_OP[m.group(2)], int(m.group(1)))
         for m in re.finditer(pattern, cigarstring)
@@ -36,7 +105,7 @@ def cigartuples_from_string(cigarstring):
 
 
 def seq_lens(cigartuples):
-    """ Length of query and reference sequences from cigar tuples.  """
+    """Length of query and reference sequences from cigar tuples."""
     if not len(cigartuples):
         return 0, 0
     ops, counts = np.array(cigartuples).T
@@ -46,21 +115,19 @@ def seq_lens(cigartuples):
 
 
 def trim_while(cigar, from_end=False):
-    """ Trim cigartuples until predicate is not satisfied.
-    """
+    """Trim cigartuples until predicate is not satisfied."""
+
     def trim_func(c_op_len, num_match=11):
         return (c_op_len[1] < num_match) or (c_op_len[0] != pysam.CEQUAL)
 
     cigar_trim = (
         list(takewhile(trim_func, reversed(cigar)))[::-1]
-        if from_end else
-        list(takewhile(trim_func, cigar))
+        if from_end
+        else list(takewhile(trim_func, cigar))
     )
     if len(cigar_trim):
         cigar = (
-            cigar[:-len(cigar_trim)]
-            if from_end else
-            cigar[len(cigar_trim):]
+            cigar[: -len(cigar_trim)] if from_end else cigar[len(cigar_trim):]
         )
     q_trim, r_trim = seq_lens(cigar_trim)
     return cigar, q_trim, r_trim
@@ -97,10 +164,9 @@ def edlib_adj_align(query, ref, num_match=11):
     if flm_idx is None:
         return parasail_align(query, ref)
     if flm_idx > 0:
-        q_start, r_start = seq_lens(cigar[:flm_idx + 1])
+        q_start, r_start = seq_lens(cigar[: flm_idx + 1])
         cigar = concat(
-            parasail_align(query[:q_start], ref[:r_start]),
-            cigar[flm_idx + 1:]
+            parasail_align(query[:q_start], ref[:r_start]), cigar[flm_idx + 1:]
         )
     llm_idx = find_first(long_match, reversed(cigar))
     if llm_idx is None:
@@ -108,30 +174,30 @@ def edlib_adj_align(query, ref, num_match=11):
     if llm_idx > 0:
         q_end, r_end = seq_lens(cigar[-(llm_idx + 1):])
         cigar = concat(
-            cigar[:-(llm_idx + 1)],
-            parasail_align(query[-q_end:], ref[-r_end:])
+            cigar[: -(llm_idx + 1)],
+            parasail_align(query[-q_end:], ref[-r_end:]),
         )
 
     return cigar
 
 
-def trimmed_alignment(seq1, seq2):
-    cigar = edlib_adj_align(seq1, seq2, num_match=11)
-    cigar, s1, s2 = trim_while(cigar)
-    cigar, e1, e2 = trim_while(cigar, from_end=True)
+def call_basespace_duplex(temp_seq, temp_qscores, comp_seq, comp_qscores):
+    # TODO convert qscores to numpy array
+    comp_seq = revcomp(comp_seq)
+    comp_qscores = comp_qscores[::-1]
 
+    cigar = edlib_adj_align(temp_seq, comp_seq)
+    cigar, temp_st, comp_st = trim_while(cigar)
+    cigar, temp_en, comp_en = trim_while(cigar, from_end=True)
     if len(cigar) == 0:
-        return None
-    cigar_ops, cigar_counts = zip(*cigar)
-    return {
-        "cigar_ops": cigar_ops,
-        "cigar_counts": cigar_counts,
-        "trimmed_bases_query": np.array([s1, e1], dtype=np.uint32),
-        "trimmed_bases_ref": np.array([s2, e2], dtype=np.uint32),
-    }
+        return
 
-
-def call_basespace_duplex(seq1, seq2, qscores1, qscores2):
-    seq2 = revcomp(seq2)
-    res = trimmed_alignment(seq1, seq2)
-    res
+    temp_seq = temp_seq[temp_st:len(temp_seq) - temp_en]
+    temp_qscores = temp_qscores[temp_st:len(temp_qscores) - temp_en]
+    comp_seq = comp_seq[comp_st:len(comp_seq) - comp_en]
+    comp_qscores = comp_qscores[comp_st:len(comp_qscores) - comp_en]
+    seq, qstring = compute_consensus(
+        cigar,
+        adj_qscores(temp_qscores, temp_seq, qshift=1),
+        adj_qscores(comp_qscores, temp_seq, qshift=-1),
+    )
