@@ -46,7 +46,7 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 | mx:i:	 | read mux                                                   |
 | ch:i:  | read channel                                               |
 | rn:i:	 | read number                                                |
-| st:Z:	 | read start time                                            |
+| st:Z:	 | read start time (in UTC)                                   |
 | f5:Z:	 | fast5 file name                                            |
 | sm:f:	 | scaling midpoint/mean/median (pA to ~0-mean/1-sd)          |
 | sd:f:	 | scaling dispersion  (pA to ~0-mean/1-sd)                   |

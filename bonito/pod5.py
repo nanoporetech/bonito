@@ -5,7 +5,7 @@ Bonito POD5 Utils
 from glob import glob
 from uuid import UUID
 from pathlib import Path
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 import numpy as np
 import bonito.reader
@@ -47,7 +47,7 @@ class Read(bonito.reader.Read):
         self.duration = self.num_samples / self.sample_rate
 
         start_time = self.acquisition_start_time + timedelta(seconds=self.start)
-        self.start_time = start_time.replace(microsecond=0).isoformat()
+        self.start_time = start_time.astimezone(timezone.utc).isoformat(timespec="milliseconds")
 
         self.raw = read.signal
 
