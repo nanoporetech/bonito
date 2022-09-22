@@ -60,40 +60,43 @@ def compute_consensus(
     ])
     idx = qs.argmax(axis=0)
 
-    consensus = np.where(idx, c_expanded_temp, c_expanded_comp)
+    consensus = np.where(idx, c_expanded_comp, c_expanded_temp)
     q = np.where(
-        c_expanded_temp == c_expanded_comp,
+        c_expanded_comp == c_expanded_temp,
         qs.sum(axis=0),
         qs[idx, np.arange(qs.shape[1])]
     )
     i = (consensus != ord("-"))
 
-    return consensus[i].tobytes().decode(), np.clip(q[i], 0, 60) + 33
+    cons_seq = consensus[i].tobytes().decode()
+    cons_qstring = np.round(
+        np.clip(q[i], 0, 60) + 33
+    ).astype(np.uint8).tobytes().decode('ascii')
+
+    return cons_seq, cons_qstring
 
 
-def adj_qscores(qscores, seq, qshift, pool_window=5, avg_hps_gt=3):
-    def min_pool(x, kernel_size, padding):
-        x = np.pad(x.astype(np.float32), padding, mode="edge")
-        x = np.lib.stride_tricks.as_strided(
-            x,
-            (len(x) + 1 - kernel_size, kernel_size),
-            strides=(x.dtype.itemsize, x.dtype.itemsize)
-        )
-        return x.min(1)
-
+def adj_qscores(qscores, seq, qshift, pool_window=5, avg_hps_gt=2):
     def shift(x, n=1):
         if n > 0:
             x = np.concatenate([[x[0]] * n, x[:-n]])
         elif n < 0:
-            x = np.concatenate([x[-n:], [x[-1]] * -n])
+            x = np.concatenate([x[-n:], [x[-1]] * (-n)])
         return x
+
+    def min_pool(x):
+        x = np.pad(x.astype(np.float32), pool_window // 2, mode='edge')
+        return np.lib.stride_tricks.as_strided(
+            x,
+            (len(x) + 1 - pool_window, pool_window),
+            strides=(x.dtype.itemsize, x.dtype.itemsize)
+        ).min(1)
 
     def hp_spans():
         pat = re.compile(r"(.)\1{%s,}" % (avg_hps_gt - 1))
         return (m.span() for m in pat.finditer(seq))
 
-    qscores = min_pool(shift(qscores, qshift), pool_window, pool_window // 2)
-    # take mean q across hps
+    qscores = min_pool(shift(qscores, qshift))
     for st, en in hp_spans():
         qscores[st:en] = np.mean(qscores[st:en])
     return qscores
@@ -194,6 +197,9 @@ def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
         comp_qstring.encode("ascii"), dtype=np.uint8
     ) - 33
 
+    temp_qscores = adj_qscores(temp_qscores, temp_seq, qshift=1)
+    comp_qscores = adj_qscores(comp_qscores, comp_seq, qshift=-1)
+
     comp_seq = revcomp(comp_seq)
     comp_qscores = comp_qscores[::-1]
 
@@ -210,8 +216,8 @@ def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
     seq, qstring = compute_consensus(
         cigar,
         temp_seq,
-        adj_qscores(temp_qscores, temp_seq, qshift=1),
+        temp_qscores,
         comp_seq,
-        adj_qscores(comp_qscores, comp_seq, qshift=-1),
+        comp_qscores,
     )
     return seq, qstring
