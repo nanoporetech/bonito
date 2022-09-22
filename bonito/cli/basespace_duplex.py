@@ -297,19 +297,19 @@ def extract_and_call_duplex(read_pair, read_ids_bam):
     return temp_read_id, cons_seq, cons_qstring
 
 
-def run_all_basespace_duplex(in_fp, out_fp, duplex_pairs_fp, num_workers):
-    read_idx_bam = ReadIndexedBam(in_fp)
+def main(args):
+    read_idx_bam = ReadIndexedBam(args.in_bam)
     duplex_pairs = []
-    with open(duplex_pairs_fp) as duplex_pairs_fh:
+    with open(args.duplex_pairs_file) as duplex_pairs_fh:
         for line in duplex_pairs_fh:
             temp_read, comp_read = line.split()
             duplex_pairs.append((temp_read, comp_read))
     duplex_calls = ProcessMap(
         partial(extract_and_call_duplex, read_ids_bam=read_ids_bam),
         duplex_pairs,
-        num_workers,
+        args.workers,
     )
-    with open(out_fp, "w") as out_fh:
+    with open(args.out_fastq, "w") as out_fh:
         for read_id, seq, qstring in tqdm(
             duplex_calls,
             smoothing=0,
@@ -317,3 +317,15 @@ def run_all_basespace_duplex(in_fp, out_fp, duplex_pairs_fp, num_workers):
             desc="Calling Duplex Reads"
         ):
             out_fh.write(f"@{read_id}\n{seq}\n+\n{qstring}\n")
+
+
+def argparser():
+    parser = ArgumentParser(
+        formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False
+    )
+    parser.add_argument("in_bam")
+    parser.add_argument("duplex_pairs_file")
+    parser.add_argument("out_fastq")
+    parser.add_argument("--workers", default=8, type=int)
+    return parser
