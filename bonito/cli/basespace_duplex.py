@@ -1,6 +1,7 @@
 import re
 from itertools import takewhile
 from collections import OrderedDict
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import pysam
 import numpy as np
@@ -65,7 +66,7 @@ class ReadIndexedBam:
             except StopIteration:
                 break
             if self.skip_non_primary:
-                if not read_is_primary(read) or read.query_name in self.bam_idx):
+                if not read_is_primary(read) or read.query_name in self.bam_idx:
                     continue
                 self.bam_idx[read.query_name] = [read_ptr]
             else:
