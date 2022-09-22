@@ -8,6 +8,8 @@ from mappy import revcomp
 from edlib import align as edlib_align
 from parasail import dnafull, sg_trace_scan_32
 
+from bonito.multiprocessing import ProcessMap
+
 
 # Cigar int code ops are: MIDNSHP=X
 CODE_TO_OP = OrderedDict(
@@ -29,6 +31,65 @@ CIGAR_IS_QUERY = np.array(
 CIGAR_IS_REF = np.array(
     [True, False, True, True, False, False, False, True, True]
 )
+
+
+class ReadIndexedBam:
+    def __init__(bam_fp, skip_non_primary=True):
+        self.bam_fp = bam_fp
+        self.skip_non_primary = skip_non_primary
+        self.bam_fh = None
+        self.bam_idx = None
+
+    def open_bam(self):
+        # hid warnings for no index when using unmapped or unsorted files
+        self.pysam_save = pysam.set_verbosity(0)
+        self.bam_fh = pysam.AlignmentFile(self.bam_fp, mode="rb", check_sq=False)
+
+    def close_bam(self):
+        self.bam_fh.close()
+        self.bam_fh = None
+        pysam.set_verbosity(self.pysam_save)
+
+    def compute_read_index(self):
+        def read_is_primary(read):
+            return not (read.is_supplementary or read.is_secondary)
+
+        self.bam_idx = {} if self.skip_non_primary else defaultdict(list)
+        self.open_bam()
+        pbar = tqdm(smoothing=0, unit=" Reads", desc="Indexing BAM by read id")
+        # iterating over file handle gives incorrect pointers
+        while True:
+            read_ptr = bam_fh.tell()
+            try:
+                read = next(bam_fh)
+            except StopIteration:
+                break
+            if self.skip_non_primary:
+                if not read_is_primary(read) or read.query_name in self.bam_idx):
+                    continue
+                self.bam_idx[read.query_name] = [read_ptr]
+            else:
+                self.bam_idx[read.query_name].append(read_ptr)
+            pbar.update()
+        self.close_bam()
+        if not self.skip_non_primary:
+            self.bam_idx = dict(self.bam_idx)
+
+    def get_alignments(self, read_id):
+        if self.bam_idx is None:
+            raise RuntimeError("Bam index not yet computed")
+        if self.bam_fh is None:
+            self.open_bam()
+        try:
+            read_ptrs = self.bam_idx[read_id]
+        except KeyError:
+            raise RuntimeError(f"Could not find {read_id} in {self.bam_fp}")
+        for read_ptr in read_ptrs:
+            self.bam_fh.seek(read_ptr)
+            yield next(self.bam_fh)
+
+    def get_first_alignment(self, read_id):
+        return next(self.get_alignments(read_id))
 
 
 def compute_consensus(
@@ -221,3 +282,38 @@ def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
         comp_qscores,
     )
     return seq, qstring
+
+
+def extract_and_call_duplex(read_pair, read_ids_bam):
+    temp_read_id, comp_read_id = read_pair
+    temp_read = read_ids_bam.get_first_alignment(temp_read_id)
+    comp_read = read_ids_bam.get_first_alignment(comp_read_id)
+    cons_seq, cons_qstring = call_basespace_duplex(
+        temp_read.query_sequence,
+        temp_read.qstring,
+        comp_read.query_sequence,
+        comp_read.qstring,
+    )
+    return temp_read_id, cons_seq, cons_qstring
+
+
+def run_all_basespace_duplex(in_fp, out_fp, duplex_pairs_fp, num_workers):
+    read_idx_bam = ReadIndexedBam(in_fp)
+    duplex_pairs = []
+    with open(duplex_pairs_fp) as duplex_pairs_fh:
+        for line in duplex_pairs_fh:
+            temp_read, comp_read = line.split()
+            duplex_pairs.append((temp_read, comp_read))
+    duplex_calls = ProcessMap(
+        partial(extract_and_call_duplex, read_ids_bam=read_ids_bam),
+        duplex_pairs,
+        num_workers,
+    )
+    with open(out_fp, "w") as out_fh:
+        for read_id, seq, qstring in tqdm(
+            duplex_calls,
+            smoothing=0,
+            total=len(duplex_pairs),
+            desc="Calling Duplex Reads"
+        ):
+            out_fh.write(f"@{read_id}\n{seq}\n+\n{qstring}\n")
