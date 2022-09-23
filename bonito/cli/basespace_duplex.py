@@ -1,10 +1,12 @@
 import re
+from functools import partial
 from itertools import takewhile
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import pysam
 import numpy as np
+from tqdm import tqdm
 from mappy import revcomp
 from edlib import align as edlib_align
 from parasail import dnafull, sg_trace_scan_32
@@ -35,11 +37,12 @@ CIGAR_IS_REF = np.array(
 
 
 class ReadIndexedBam:
-    def __init__(bam_fp, skip_non_primary=True):
+    def __init__(self, bam_fp, skip_non_primary=True):
         self.bam_fp = bam_fp
         self.skip_non_primary = skip_non_primary
         self.bam_fh = None
         self.bam_idx = None
+        self.compute_read_index()
 
     def open_bam(self):
         # hid warnings for no index when using unmapped or unsorted files
@@ -60,9 +63,9 @@ class ReadIndexedBam:
         pbar = tqdm(smoothing=0, unit=" Reads", desc="Indexing BAM by read id")
         # iterating over file handle gives incorrect pointers
         while True:
-            read_ptr = bam_fh.tell()
+            read_ptr = self.bam_fh.tell()
             try:
-                read = next(bam_fh)
+                read = next(self.bam_fh)
             except StopIteration:
                 break
             if self.skip_non_primary:
@@ -252,12 +255,8 @@ def edlib_adj_align(query, ref, num_match=11):
 
 def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
     # convert qscores to numpy array
-    temp_qscores = np.frombuffer(
-        temp_qstring.encode("ascii"), dtype=np.uint8
-    ) - 33
-    comp_qscores = np.frombuffer(
-        comp_qstring.encode("ascii"), dtype=np.uint8
-    ) - 33
+    temp_qscores = np.frombuffer(temp_qstring, dtype=np.uint8)
+    comp_qscores = np.frombuffer(comp_qstring, dtype=np.uint8)
 
     temp_qscores = adj_qscores(temp_qscores, temp_seq, qshift=1)
     comp_qscores = adj_qscores(comp_qscores, comp_seq, qshift=-1)
@@ -286,38 +285,40 @@ def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
 
 
 def extract_and_call_duplex(read_pair, read_ids_bam):
-    temp_read_id, comp_read_id = read_pair
-    temp_read = read_ids_bam.get_first_alignment(temp_read_id)
-    comp_read = read_ids_bam.get_first_alignment(comp_read_id)
+    temp_rid, comp_rid = read_pair
+    temp_read = read_ids_bam.get_first_alignment(temp_rid)
+    comp_read = read_ids_bam.get_first_alignment(comp_rid)
     cons_seq, cons_qstring = call_basespace_duplex(
         temp_read.query_sequence,
-        temp_read.qstring,
+        temp_read.query_qualities,
         comp_read.query_sequence,
-        comp_read.qstring,
+        comp_read.query_qualities,
     )
-    return temp_read_id, cons_seq, cons_qstring
+    return cons_seq, cons_qstring
 
 
 def main(args):
     read_idx_bam = ReadIndexedBam(args.in_bam)
     duplex_pairs = []
     with open(args.duplex_pairs_file) as duplex_pairs_fh:
+        if not args.no_header:
+            duplex_pairs_fh.readline()
         for line in duplex_pairs_fh:
-            temp_read, comp_read = line.split()
-            duplex_pairs.append((temp_read, comp_read))
+            temp_rid, comp_rid = line.split()
+            duplex_pairs.append((temp_rid, (temp_rid, comp_rid)))
     duplex_calls = ProcessMap(
-        partial(extract_and_call_duplex, read_ids_bam=read_ids_bam),
+        partial(extract_and_call_duplex, read_ids_bam=read_idx_bam),
         duplex_pairs,
         args.workers,
     )
-    with open(args.out_fastq, "w") as out_fh:
-        for read_id, seq, qstring in tqdm(
+    with open(args.out_fastq, "w", buffering=512) as out_fh:
+        for read_id, (cons_seq, cons_qstring) in tqdm(
             duplex_calls,
             smoothing=0,
             total=len(duplex_pairs),
             desc="Calling Duplex Reads"
         ):
-            out_fh.write(f"@{read_id}\n{seq}\n+\n{qstring}\n")
+            out_fh.write(f"@{read_id}\n{cons_seq}\n+\n{cons_qstring}\n")
 
 
 def argparser():
@@ -329,4 +330,5 @@ def argparser():
     parser.add_argument("duplex_pairs_file")
     parser.add_argument("out_fastq")
     parser.add_argument("--workers", default=8, type=int)
+    parser.add_argument("--no-header", action="store_true")
     return parser
