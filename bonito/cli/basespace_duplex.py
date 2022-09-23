@@ -47,7 +47,9 @@ class ReadIndexedBam:
     def open_bam(self):
         # hid warnings for no index when using unmapped or unsorted files
         self.pysam_save = pysam.set_verbosity(0)
-        self.bam_fh = pysam.AlignmentFile(self.bam_fp, mode="rb", check_sq=False)
+        self.bam_fh = pysam.AlignmentFile(
+            self.bam_fp, mode="rb", check_sq=False
+        )
 
     def close_bam(self):
         self.bam_fh.close()
@@ -105,7 +107,11 @@ def compute_consensus(
 ):
     """ Compute consensus by comparing qscores """
     def mask_expand(values, mask):
-        x = np.full(len(mask), fill_value=np.uint8(ord("-")), dtype=values.dtype)
+        x = np.full(
+            len(mask),
+            fill_value=np.uint8(ord("-")),
+            dtype=values.dtype
+        )
         x[mask] = values
         return x
 
