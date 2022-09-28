@@ -51,7 +51,7 @@ def main(args):
         model = load_model(
             args.model_directory,
             args.device,
-            weights=int(args.weights),
+            weights=args.weights if args.weights > 0 else None,
             chunksize=args.chunksize,
             overlap=args.overlap,
             batchsize=args.batchsize,
@@ -73,7 +73,8 @@ def main(args):
     if args.modified_base_model is not None or args.modified_bases is not None:
         sys.stderr.write("> loading modified base model\n")
         mods_model = load_mods_model(
-            args.modified_bases, args.model_directory, args.modified_base_model
+            args.modified_bases, args.model_directory, args.modified_base_model,
+            device=args.modified_device,
         )
         sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
@@ -91,7 +92,7 @@ def main(args):
         exit(1)
 
     if fmt.name != 'fastq':
-        groups = reader.get_read_groups(
+        groups, num_reads = reader.get_read_groups(
             args.reads_directory, args.model_directory,
             n_proc=8, recursive=args.recursive,
             read_ids=column_to_set(args.read_ids), skip=args.skip,
@@ -99,11 +100,12 @@ def main(args):
         )
     else:
         groups = []
+        num_reads = None
 
     reads = reader.get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
-        cancel=process_cancel()
+        do_trim=not args.no_trim, cancel=process_cancel()
     )
 
     if args.max_reads:
@@ -130,16 +132,20 @@ def main(args):
     )
 
     if mods_model is not None:
-        results = process_itemmap(
-            partial(call_mods, mods_model), results, n_proc=args.modified_procs
-        )
+        if args.modified_device:
+            results = ((k, call_mods(mods_model, k, v)) for k, v in results)
+        else:
+            results = process_itemmap(
+                partial(call_mods, mods_model), results, n_proc=args.modified_procs
+            )
     if aligner:
         results = align_map(aligner, results, n_thread=args.alignment_threads)
 
     writer = ResultsWriter(
-        fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False),
+        fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False,
+                       total=num_reads, smoothing=0, ascii=True, ncols=100),
         aligner=aligner, group_key=args.model_directory,
-        ref_fn=args.reference, groups=groups,
+        ref_fn=args.reference, groups=groups, min_qscore=args.min_qscore
     )
 
     t0 = perf_counter()
@@ -165,11 +171,13 @@ def argparser():
     parser.add_argument("--modified-bases", nargs="+")
     parser.add_argument("--modified-base-model")
     parser.add_argument("--modified-procs", default=8, type=int)
+    parser.add_argument("--modified-device", default=None)
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
-    parser.add_argument("--weights", default="0", type=str)
+    parser.add_argument("--weights", default=0, type=int)
     parser.add_argument("--skip", action="store_true", default=False)
+    parser.add_argument("--no-trim", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
@@ -181,6 +189,7 @@ def argparser():
     parser.add_argument("--chunksize", default=None, type=int)
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
+    parser.add_argument("--min-qscore", default=0, type=int)
     parser.add_argument("--alignment-threads", default=8, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser

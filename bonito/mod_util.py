@@ -31,7 +31,7 @@ log.CONSOLE.setLevel(logging.WARNING)
 log.CONSOLE.setFormatter(CustomFormatter())
 
 
-def load_mods_model(mod_bases, bc_model_str, model_path):
+def load_mods_model(mod_bases, bc_model_str, model_path, device=None):
     if mod_bases is not None:
         try:
             bc_model_type, model_version = bc_model_str.split('@')
@@ -50,8 +50,9 @@ def load_mods_model(mod_bases, bc_model_str, model_path):
             basecall_model_version=model_version,
             modified_bases=mod_bases,
             quiet=True,
+            device=device,
         )
-    return load_model(model_path, quiet=True)
+    return load_model(model_path, quiet=True, device=device)
 
 
 def mods_tags_to_str(mods_tags):

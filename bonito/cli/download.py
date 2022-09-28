@@ -4,6 +4,7 @@ Bonito Download
 
 import os
 import re
+import sys
 from shutil import rmtree
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -45,7 +46,7 @@ class File:
 
         # skip download if local file is found
         if self.exists(fname.strip('.zip')) and not self.force:
-            print("[skipping %s]" % fname)
+            print("[skipping %s]" % fname, file=sys.stderr)
             return
 
         if self.exists(fname.strip('.zip')) and self.force:
@@ -58,7 +59,7 @@ class File:
                     f.write(data)
                     t.update(len(data))
 
-        print("[downloaded %s]" % fname)
+        print("[downloaded %s]" % fname, file=sys.stderr)
 
         # unzip .zip files
         if fname.endswith('.zip'):
@@ -68,7 +69,7 @@ class File:
 
         # convert chunkify training files to bonito
         if fname.endswith('.hdf5'):
-            print("[converting %s]" % fname)
+            print("[converting %s]" % fname, file=sys.stderr)
             args = cargparser().parse_args([
                 self.location(fname),
                 self.location(fname).strip('.hdf5')
@@ -77,17 +78,13 @@ class File:
 
 
 models = {
-    "dna_r10.4.1_e8.2_fast@v3.5.1": "czyxdmbm56mt7lcgsinre7le70vqxtnf.zip",
-    "dna_r10.4.1_e8.2_hac@v3.5.1": "per9xu2sqd1qjxqika6el6xh91pcyhd2.zip",
-    "dna_r10.4.1_e8.2_sup@v3.5.1": "wpqoxvfa8mrg0kledy08vgmwwqq3m8ba.zip",
+    "dna_r10.4.1_e8.2_260bps_fast@v3.5.2": "7662ke4ccxp2s9645b9mdp68c6i26ait.zip",
+    "dna_r10.4.1_e8.2_260bps_hac@v3.5.2": "k2p23nmw4k86lb5b4rlbapo8v3fidypn.zip",
+    "dna_r10.4.1_e8.2_260bps_sup@v3.5.2": "wibs7gs3uu0vyf9dkjtvuez1zb9kvcpf.zip",
 
-    "dna_r10.4_e8.1_sup@v3.4": "q07kb0p2f3qbj8cpnb35l1tcink21k82.zip",
-    "dna_r10.4_e8.1_hac@v3.4": "tlxt45rmp5sv2c0f0p3jy8qf24lsidgv.zip",
-    "dna_r10.4_e8.1_fast@v3.4": "biesc8w0ug1d59gpqpjin1utgcevvhs7.zip",
-
-    "dna_r9.4.1_e8.1_sup@v3.3": "ts3h4rv1hqhjcv7t6wwng1dcfpzujvkg.zip",
-    "dna_r9.4.1_e8.1_hac@v3.3": "25gua32bys32gnvj240hsml2ixnh4drc.zip",
-    "dna_r9.4.1_e8.1_fast@v3.4": "h55evnpfq041ghniapmbklzqkdohkmo5.zip",
+    "dna_r10.4.1_e8.2_400bps_fast@v3.5.2": "w16vta4ni8m6ghiwpk6biddy82if9bhn.zip",
+    "dna_r10.4.1_e8.2_400bps_hac@v3.5.2": "plb3ggru65gs1la1n8fh23nxtx82q2sa.zip",
+    "dna_r10.4.1_e8.2_400bps_sup@v3.5.2": "yv0csfduthkl3803hy0azhoz1oy3ko4m.zip",
 
     "dna_r9.4.1_e8_sup@v3.3": "w10qhiggmg32gjcag6dv1wmwipzmcj84.zip",
     "dna_r9.4.1_e8_hac@v3.3": "5evhvoqb07u6d3y4jfy2oi3bmyrww293.zip",
@@ -107,15 +104,15 @@ def main(args):
     if args.models or args.all:
         
         if args.show:
-            print("[available models]")
+            print("[available models]", file=sys.stderr)
             for model in models:
-                print(f" - {model}")
+                print(f" - {model}", file=sys.stderr)
         else:
-            print("[downloading models]")
+            print("[downloading models]", file=sys.stderr)
             for model in models.values():
                 File(__models__, model, args.force).download()
     if args.training or args.all:
-        print("[downloading training data]")
+        print("[downloading training data]", file=sys.stderr)
         for train in training:
             File(__data__, train, args.force).download()
 

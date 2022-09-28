@@ -4,8 +4,8 @@
 [![py37](https://img.shields.io/badge/python-3.7-brightgreen.svg)](https://img.shields.io/badge/python-3.7-brightgreen.svg)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
+[![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
 [![cu102](https://img.shields.io/badge/cuda-10.2-blue.svg)](https://img.shields.io/badge/cuda-10.2-blue.svg)
-[![cu111](https://img.shields.io/badge/cuda-11.1-blue.svg)](https://img.shields.io/badge/cuda-11.1-blue.svg)
 [![cu113](https://img.shields.io/badge/cuda-11.3-blue.svg)](https://img.shields.io/badge/cuda-11.3-blue.svg)
 
 A PyTorch Basecaller for Oxford Nanopore Reads.
@@ -14,6 +14,12 @@ A PyTorch Basecaller for Oxford Nanopore Reads.
 $ pip install --upgrade pip
 $ pip install ont-bonito
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads > basecalls.bam
+```
+
+By default `pip` will install `torch` which is build against CUDA 10.2. For CUDA 11.3 builds run:
+
+```
+$ pip install --extra-index-url https://download.pytorch.org/whl/cu113 ont-bonito
 ```
 
 Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`.
@@ -29,12 +35,6 @@ $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
 
-The default `ont-bonito` package is built against CUDA 10.2 however CUDA 11.1 and 11.3 builds are available.
-
-```bash
-$ pip install -f https://download.pytorch.org/whl/torch_stable.html ont-bonito-cuda111
-```
-
 ## Modified Bases
 
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
@@ -42,6 +42,8 @@ Modified base calling is handled by [Remora](https://github.com/nanoporetech/rem
 ```bash
 $ bonito basecaller dna_r10.4_e8.1_sup@v3.4 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
 ```
+
+To use the GPU-powered modified bases inference the `onnxruntime-gpu` package is required. 
 
 See available modified base models with the ``remora model list_pretrained`` command.
 

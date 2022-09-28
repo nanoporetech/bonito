@@ -2,12 +2,13 @@
 Bonito Fast5 Utils
 """
 
+import sys
 from glob import glob
 from pathlib import Path
 from itertools import chain
 from functools import partial
 from multiprocessing import Pool
-from datetime import datetime, timedelta
+from datetime import timedelta, timezone
 
 import numpy as np
 import bonito.reader
@@ -18,7 +19,7 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 
 class Read(bonito.reader.Read):
 
-    def __init__(self, read, filename, meta=False):
+    def __init__(self, read, filename, meta=False, do_trim=True):
 
         self.meta = meta
         self.read_id = read.read_id
@@ -53,7 +54,7 @@ class Read(bonito.reader.Read):
         channel_info = read.handle[read.global_key + 'channel_id'].attrs
 
         self.offset = int(channel_info['offset'])
-        self.sampling_rate = channel_info['sampling_rate']
+        self.sample_rate = channel_info['sampling_rate']
         self.scaling = channel_info['range'] / channel_info['digitisation']
 
         self.mux = read_attrs['start_mux']
@@ -62,28 +63,23 @@ class Read(bonito.reader.Read):
         if type(self.channel) in (bytes, np.bytes_):
             self.channel = self.channel.decode()
 
-        self.start = read_attrs['start_time'] / self.sampling_rate
-        self.duration = read_attrs['duration'] / self.sampling_rate
+        self.start = read_attrs['start_time'] / self.sample_rate
+        self.duration = read_attrs['duration'] / self.sample_rate
 
         exp_start_dt = parser.parse(self.exp_start_time)
         start_time = exp_start_dt + timedelta(seconds=self.start)
-        self.start_time = start_time.replace(microsecond=0).isoformat()
+        self.start_time = start_time.astimezone(timezone.utc).isoformat(timespec="milliseconds")
 
         raw = read.handle[read.raw_dataset_name][:]
-        scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
-        self.num_samples = len(scaled)
+        self.scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
+        self.num_samples = len(self.scaled)
 
-        trim_start, _ = bonito.reader.trim(scaled[:8000])
-        scaled = scaled[trim_start:]
-        self.trimmed_samples = trim_start
-        self.template_start = self.start + (1 / self.sampling_rate) * trim_start
-        self.template_duration = self.duration - (1 / self.sampling_rate) * trim_start
+        self.shift, self.scale = bonito.reader.normalisation(self.scaled)
+        self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift) if do_trim else 0
+        self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
+        self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
 
-        if len(scaled) > 8000:
-            med, mad = bonito.reader.med_mad(scaled)
-            self.signal = (scaled - med) / max(1.0, mad)
-        else:
-            self.signal = bonito.reader.norm_by_noisiest_section(scaled)
+        self.signal = (self.scaled[self.trimmed_samples:] - self.shift) / self.scale
 
 
 def get_meta_data(filename, read_ids=None, skip=False):
@@ -92,7 +88,12 @@ def get_meta_data(filename, read_ids=None, skip=False):
     """
     meta_reads = []
     with get_fast5_file(filename, 'r') as f5_fh:
-        for read_id in f5_fh.get_read_ids():
+        try:
+            read_ids = f5_fh.get_read_ids()
+        except RuntimeError as e:
+            sys.stderr.write(f"> warning: f{filename} - {e}\n")
+            return meta_reads
+        for read_id in read_ids:
             if read_ids is None or (read_id in read_ids) ^ skip:
                 meta_reads.append(
                     Read(f5_fh.get_read(read_id), filename, meta=True)
@@ -105,6 +106,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     Get all the read meta data for a given `directory`.
     """
     groups = set()
+    num_reads = 0
     pattern = "**/*.fast5" if recursive else "*.fast5"
     fast5s = [Path(x) for x in glob(directory + "/" + pattern, recursive=True)]
     get_filtered_meta_data = partial(get_meta_data, read_ids=read_ids, skip=skip)
@@ -115,7 +117,8 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
                 desc="> preprocessing reads", unit=" fast5s", ascii=True, ncols=100
         ):
             groups.update({read.readgroup(model) for read in reads})
-        return groups
+            num_reads += len(reads)
+        return groups, num_reads
 
 
 def get_read_ids(filename, read_ids=None, skip=False):
@@ -123,19 +126,23 @@ def get_read_ids(filename, read_ids=None, skip=False):
     Get all the read_ids from the file `filename`.
     """
     with get_fast5_file(filename, 'r') as f5_fh:
-        ids = [(filename, rid) for rid in f5_fh.get_read_ids()]
+        try:
+            ids = [(filename, rid) for rid in f5_fh.get_read_ids()]
+        except RuntimeError as e:
+            sys.stderr.write(f"> warning: f{filename} - {e}\n")
+            return []
         if read_ids is None:
             return ids
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
 
 
-def get_raw_data_for_read(info):
+def get_raw_data_for_read(info, do_trim=True):
     """
     Get the raw signal from the fast5 file for a given filename, read_id pair
     """
     filename, read_id = info
     with get_fast5_file(filename, 'r') as f5_fh:
-        return Read(f5_fh.get_read(read_id), filename)
+        return Read(f5_fh.get_read(read_id), filename, do_trim=do_trim)
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
@@ -148,16 +155,17 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None, do_trim=True):
     """
     Get all reads in a given `directory`.
     """
     pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
+    get_raw_data = partial(get_raw_data_for_read, do_trim=do_trim)
     reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
     with Pool(n_proc) as pool:
         for job in chain(pool.imap(get_filtered_reads, reads)):
-            for read in pool.imap(get_raw_data_for_read, job):
+            for read in pool.imap(get_raw_data, job):
                 yield read
                 if cancel is not None and cancel.is_set():
                     return

@@ -69,6 +69,9 @@ class Read:
             f"st:Z:{self.start_time}",
             f"rn:i:{self.read_number}",
             f"f5:Z:{self.filename}",
+            f"sm:f:{self.shift}",
+            f"sd:f:{self.scale}",
+            f"sv:Z:quantile",
         ]
 
 
@@ -105,65 +108,31 @@ def read_chunks(read, chunksize=4000, overlap=400):
         yield ReadChunk(read, block.numpy(), i+1, blocks.shape[0])
 
 
-def trim(signal, window_size=40, threshold_factor=2.4, min_elements=3):
-
-    min_trim = 10
-    signal = signal[min_trim:]
-
-    med, mad = med_mad(signal[-(window_size*100):])
-
-    threshold = med + mad * threshold_factor
-    num_windows = len(signal) // window_size
+def trim(signal, window_size=40, threshold=2.4, min_trim=10, min_elements=3, max_samples=8000, max_trim=0.3):
 
     seen_peak = False
+    num_windows = min(max_samples, len(signal)) // window_size
 
     for pos in range(num_windows):
-        start = pos * window_size
+        start = pos * window_size + min_trim
         end = start + window_size
         window = signal[start:end]
         if len(window[window > threshold]) > min_elements or seen_peak:
             seen_peak = True
             if window[-1] > threshold:
                 continue
-            return min(end + min_trim, len(signal)), len(signal)
+            if end >= min(max_samples, len(signal)) or end / len(signal) > max_trim:
+                return min_trim
+            return end
 
-    return min_trim, len(signal)
+    return min_trim
 
 
-def med_mad(x, factor=1.4826):
+def normalisation(sig):
     """
-    Calculate signal median and median absolute deviation
+    Calculate signal shift and scale factors for normalisation..
     """
-    med = np.median(x)
-    mad = np.median(np.absolute(x - med)) * factor + np.finfo(np.float32).eps
-    return med, mad
-
-
-def norm_by_noisiest_section(signal, samples=100, threshold=6.0, return_medmad=False):
-    """
-    Normalise using the medmad from the longest continuous region where the
-    noise is above some threshold relative to the std of the full signal.
-    """
-    threshold = signal.std() / threshold
-    noise = np.ones(signal.shape)
-
-    for idx in np.arange(signal.shape[0] // samples):
-        window = slice(idx * samples, (idx + 1) * samples)
-        noise[window] = np.where(signal[window].std() > threshold, 1, 0)
-
-    # start and end low for peak finding
-    noise[0] = 0; noise[-1] = 0
-    peaks, info = find_peaks(noise, width=(None, None))
-
-    if len(peaks):
-        widest = np.argmax(info['widths'])
-        med, mad = med_mad(signal[info['left_bases'][widest]: info['right_bases'][widest]])
-    else:
-        med, mad = med_mad(signal)
-
-    scaled = (signal - med) / max(1.0, mad)
-
-    if return_medmad:
-        return scaled, (med, mad)
-    return scaled
-
+    q20, q90 = np.quantile(sig, [0.2, 0.9])
+    shift = max(10, 0.51 * (q20 + q90))
+    scale = max(1.0, 0.53 * (q90 - q20))
+    return shift, scale

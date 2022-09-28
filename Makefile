@@ -8,7 +8,6 @@ VERSION   = $(MAJOR).$(MINOR).$(SUB)-$(PATCH)
 
 INSTALL_DIR  := /opt/ont/bonito
 INSTALL_VENV := $(INSTALL_DIR)/venv/
-TORCH_VERSION = 1.1.0
 
 define DEB_CONTROL
 Package: $(PACKAGE)
@@ -42,7 +41,6 @@ deb: clean
         # setup virtualenv
 	python3 -m venv --copies tmp$(INSTALL_VENV)
 	. tmp$(INSTALL_VENV)bin/activate; pip install --upgrade pip
-	. tmp$(INSTALL_VENV)bin/activate; pip install torch==$(TORCH_VERSION)
 	. tmp$(INSTALL_VENV)bin/activate; pip install -r requirements.txt
         # install bonito
 	python3 setup.py sdist
