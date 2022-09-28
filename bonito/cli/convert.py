@@ -73,7 +73,7 @@ def chunk_dataset(reads, chunk_len, num_chunks=None):
 
 
 def validation_split(reads, num_valid=1000):
-    reads = np.random.permutation(sorted(reads.items()))
+    reads = np.random.permutation(np.array(list(reads.items()), dtype=object))
     return OrderedDict(reads[:-num_valid]), OrderedDict(reads[-num_valid:])
 
 
