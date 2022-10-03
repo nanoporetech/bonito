@@ -71,6 +71,7 @@ class Read:
             f"f5:Z:{self.filename}",
             f"sm:f:{self.shift}",
             f"sd:f:{self.scale}",
+            f"du:f:{self.duration}"
             f"sv:Z:quantile",
         ]
 

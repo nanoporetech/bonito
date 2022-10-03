@@ -38,7 +38,7 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 #### Read Tags
 
 |        |                                                            |
-| ------ | -----------------------------------------------------------|
+|--------|------------------------------------------------------------|
 | RG:Z:  | `<runid>_<basecalling_model>`                              |
 | qs:i:  | mean basecall qscore rounded to the nearest integer        |
 | ns:i:  | the number of samples in the signal prior to trimming      |
@@ -47,6 +47,7 @@ $ bonito basecaller $model $data --reference ref.fasta > aligned.cram
 | ch:i:  | read channel                                               |
 | rn:i:	 | read number                                                |
 | st:Z:	 | read start time (in UTC)                                   |
+| du:f:	 | duration of the read (in seconds)                          |
 | f5:Z:	 | fast5 file name                                            |
 | sm:f:	 | scaling midpoint/mean/median (pA to ~0-mean/1-sd)          |
 | sd:f:	 | scaling dispersion  (pA to ~0-mean/1-sd)                   |
