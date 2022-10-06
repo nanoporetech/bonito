@@ -12,7 +12,7 @@ sre-test:
       --request POST \
       --data '{
           "key": "'${MLHUB_TRIGGER_KEY}'",
-          "job_name": "Bonito SRE: '${CI_COMMIT_REF_NAME}' - '${CI_COMMIT_TITLE}' ",
+          "job_name": "Bonito SRE: '${CI_COMMIT_REF_NAME}' - '"$CI_COMMIT_TITLE"' ",
           "script_parameters": {
               "bonito_version":"'${CI_COMMIT_SHA}'",
               "sre_output":"'${SRE_OUTPUT_ROOT}'/'${CI_COMMIT_SHA}'/",
