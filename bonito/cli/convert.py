@@ -110,13 +110,13 @@ def main(args):
     training, validation = validation_split(reads, args.validation_reads)
 
     print("> preparing training chunks\n")
-    training_chunks = chunk_dataset(training, args.chunksize)
+    training_chunks = chunk_dataset(training, args.chunksize, len(training))
     training_indices = typical_indices(training_chunks.lengths)
     training_chunks = filter_chunks(training_chunks, np.random.permutation(training_indices))
     save_chunks(training_chunks, args.output_directory)
 
     print("\n> preparing validation chunks\n")
-    validation_chunks = chunk_dataset(validation, args.chunksize)
+    validation_chunks = chunk_dataset(validation, args.chunksize, len(validation))
     validation_indices = typical_indices(validation_chunks.lengths)
     validation_chunks = filter_chunks(validation_chunks, validation_indices)
     save_chunks(validation_chunks, os.path.join(args.output_directory, "validation"))
