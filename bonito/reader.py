@@ -67,6 +67,7 @@ class Read:
             f"mx:i:{self.mux}",
             f"ch:i:{self.channel}",
             f"st:Z:{self.start_time}",
+            f"du:f:{self.duration}",
             f"rn:i:{self.read_number}",
             f"f5:Z:{self.filename}",
             f"sm:f:{self.shift}",

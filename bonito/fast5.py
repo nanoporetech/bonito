@@ -8,7 +8,7 @@ from pathlib import Path
 from itertools import chain
 from functools import partial
 from multiprocessing import Pool
-from datetime import datetime, timedelta
+from datetime import timedelta, timezone
 
 import numpy as np
 import bonito.reader
@@ -68,7 +68,7 @@ class Read(bonito.reader.Read):
 
         exp_start_dt = parser.parse(self.exp_start_time)
         start_time = exp_start_dt + timedelta(seconds=self.start)
-        self.start_time = start_time.replace(microsecond=0).isoformat()
+        self.start_time = start_time.astimezone(timezone.utc).isoformat(timespec="milliseconds")
 
         raw = read.handle[read.raw_dataset_name][:]
         self.scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
