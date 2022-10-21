@@ -66,6 +66,8 @@ def main(args):
             valid_chunks=args.valid_chunks,
             n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
             n_post_context_bases=getattr(model, "n_post_context_bases", 0),
+            scale_noise=args.scale_noise,
+            offset_noise=args.offset_noise,
         )
 
     loader_kwargs = {
@@ -91,7 +93,7 @@ def main(args):
         lr_scheduler_fn=lr_scheduler_fn,
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
-        grad_accum_split=args.grad_accum_split
+        grad_accum_split=args.grad_accum_split,
     )
 
     if (',' in args.lr):
@@ -123,4 +125,6 @@ def argparser():
     parser.add_argument("--nondeterministic", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
+    parser.add_argument("--scale-noise", default=None, type=float)
+    parser.add_argument("--offset-noise", default=None, type=float)
     return parser
