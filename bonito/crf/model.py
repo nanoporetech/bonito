@@ -1,6 +1,7 @@
 """
 Bonito CTC-CRF Model.
 """
+import math
 
 import torch
 import numpy as np
@@ -13,13 +14,18 @@ from bonito.util import decode_ref
 
 
 def get_stride(m):
-    if hasattr(m, 'stride'):
-        return m.stride if isinstance(m.stride, int) else m.stride[0]
-    if isinstance(m, Convolution):
-        return get_stride(m.conv)
-    if isinstance(m, Serial):
-        return int(np.prod([get_stride(x) for x in m]))
-    return 1
+    children = list(m.children())
+    if len(children) == 0:
+        if hasattr(m, "stride"):
+            stride = m.stride
+            if isinstance(stride, int):
+                return stride
+            return math.prod(stride)
+        return 1
+    stride = 1
+    for c in children:
+        stride *= get_stride(c)
+    return stride
 
 
 class CTC_CRF(SequenceDist):
