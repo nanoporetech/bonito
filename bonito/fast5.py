@@ -89,11 +89,11 @@ def get_meta_data(filename, read_ids=None, skip=False):
     meta_reads = []
     with get_fast5_file(filename, 'r') as f5_fh:
         try:
-            read_ids = f5_fh.get_read_ids()
+            all_read_ids = f5_fh.get_read_ids()
         except RuntimeError as e:
             sys.stderr.write(f"> warning: f{filename} - {e}\n")
             return meta_reads
-        for read_id in read_ids:
+        for read_id in all_read_ids:
             if read_ids is None or (read_id in read_ids) ^ skip:
                 meta_reads.append(
                     Read(f5_fh.get_read(read_id), filename, meta=True)
