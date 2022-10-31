@@ -32,25 +32,6 @@ def main(args):
     init(args.seed, args.device, (not args.nondeterministic))
     device = torch.device(args.device)
 
-    print("[loading data]")
-    try:
-        train_loader_kwargs, valid_loader_kwargs = load_numpy(
-            args.chunks, args.directory
-        )
-    except FileNotFoundError:
-        train_loader_kwargs, valid_loader_kwargs = load_script(
-            args.directory,
-            seed=args.seed,
-            chunks=args.chunks,
-            valid_chunks=args.valid_chunks
-        )
-
-    loader_kwargs = {
-        "batch_size": args.batch, "num_workers": 4, "pin_memory": True
-    }
-    train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
-    valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
-
     if not args.pretrained:
         config = toml.load(args.config)
     else:
@@ -65,15 +46,38 @@ def main(args):
 
     argsdict = dict(training=vars(args))
 
-    os.makedirs(workdir, exist_ok=True)
-    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
-
     print("[loading model]")
     if args.pretrained:
         print("[using pretrained model {}]".format(args.pretrained))
         model = load_model(args.pretrained, device, half=False)
     else:
         model = load_symbol(config, 'Model')(config)
+
+    print("[loading data]")
+    try:
+        train_loader_kwargs, valid_loader_kwargs = load_numpy(
+            args.chunks, args.directory
+        )
+    except FileNotFoundError:
+        train_loader_kwargs, valid_loader_kwargs = load_script(
+            args.directory,
+            seed=args.seed,
+            chunks=args.chunks,
+            valid_chunks=args.valid_chunks,
+            n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
+            n_post_context_bases=getattr(model, "n_post_context_bases", 0),
+            scale_noise=args.scale_noise,
+            offset_noise=args.offset_noise,
+        )
+
+    loader_kwargs = {
+        "batch_size": args.batch, "num_workers": 4, "pin_memory": True
+    }
+    train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
+    valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
+
+    os.makedirs(workdir, exist_ok=True)
+    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     if config.get("lr_scheduler"):
         sched_config = config["lr_scheduler"]
@@ -89,7 +93,7 @@ def main(args):
         lr_scheduler_fn=lr_scheduler_fn,
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
-        grad_accum_split=args.grad_accum_split
+        grad_accum_split=args.grad_accum_split,
     )
 
     if (',' in args.lr):
@@ -121,4 +125,6 @@ def argparser():
     parser.add_argument("--nondeterministic", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
+    parser.add_argument("--scale-noise", default=None, type=float)
+    parser.add_argument("--offset-noise", default=None, type=float)
     return parser

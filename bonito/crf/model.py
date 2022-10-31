@@ -1,6 +1,7 @@
 """
 Bonito CTC-CRF Model.
 """
+import math
 
 import torch
 import numpy as np
@@ -9,24 +10,32 @@ from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
+from bonito.util import decode_ref
 
 
 def get_stride(m):
-    if hasattr(m, 'stride'):
-        return m.stride if isinstance(m.stride, int) else m.stride[0]
-    if isinstance(m, Convolution):
-        return get_stride(m.conv)
-    if isinstance(m, Serial):
-        return int(np.prod([get_stride(x) for x in m]))
-    return 1
+    children = list(m.children())
+    if len(children) == 0:
+        if hasattr(m, "stride"):
+            stride = m.stride
+            if isinstance(stride, int):
+                return stride
+            return math.prod(stride)
+        return 1
+    stride = 1
+    for c in children:
+        stride *= get_stride(c)
+    return stride
 
 
 class CTC_CRF(SequenceDist):
 
-    def __init__(self, state_len, alphabet):
+    def __init__(self, state_len, alphabet, n_pre_context_bases=0, n_post_context_bases=0):
         super().__init__()
         self.alphabet = alphabet
         self.state_len = state_len
+        self.n_pre_context_bases = n_pre_context_bases
+        self.n_post_context_bases = n_post_context_bases
         self.n_base = len(alphabet[1:])
         self.idx = torch.cat([
             torch.arange(self.n_base**(self.state_len))[:, None],
@@ -157,12 +166,17 @@ def rnn_encoder(n_base, state_len, insize=1, first_conv_size=4, second_conv_size
 
 
 class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist):
+    def __init__(self, encoder, seqdist, n_pre_post_context_bases=None):
         super().__init__()
         self.seqdist = seqdist
         self.encoder = encoder
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
+        if n_pre_post_context_bases is None:
+            self.n_pre_context_bases = self.seqdist.state_len - 1
+            self.n_post_context_bases = 1
+        else:
+            self.n_pre_context_bases, self.n_post_context_bases = n_pre_post_context_bases
 
     def forward(self, x):
         return self.encoder(x)
@@ -183,11 +197,12 @@ class Model(SeqdistModel):
     def __init__(self, config):
         seqdist = CTC_CRF(
             state_len=config['global_norm']['state_len'],
-            alphabet=config['labels']['labels']
+            alphabet=config['labels']['labels'],
         )
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])
         else: #old-style
             encoder = rnn_encoder(seqdist.n_base, seqdist.state_len, insize=config['input']['features'], **config['encoder'])
-        super().__init__(encoder, seqdist)
+
+        super().__init__(encoder, seqdist, n_pre_post_context_bases=config['input'].get('n_pre_post_context_bases'))
         self.config = config

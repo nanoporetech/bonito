@@ -279,7 +279,7 @@ def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, qu
     # use `value or dict.get(key)` rather than `dict.get(key, value)` to make
     # flags override values in config
     basecall_params["chunksize"] = chunksize or basecall_params.get("chunksize", 4000)
-    basecall_params["overlap"] = overlap or basecall_params.get("overlap", 500)
+    basecall_params["overlap"] = overlap if overlap is not None else basecall_params.get("overlap", 500)
     basecall_params["batchsize"] = batchsize or basecall_params.get("batchsize", 64)
     basecall_params["quantize"] = basecall_params.get("quantize") if quantize is None else quantize
     config["basecaller"] = basecall_params
@@ -303,13 +303,34 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
     Model = load_symbol(config, "Model")
     model = Model(config)
 
-    if config["model"]["package"] == "bonito.crf" and use_koi:
-        model.encoder = koi.lstm.update_graph(
-            model.encoder,
-            batchsize=config["basecaller"]["batchsize"],
-            chunksize=config["basecaller"]["chunksize"] // model.stride,
-            quantize=config["basecaller"]["quantize"],
-        )
+    if use_koi:
+        # use_koi: switches LSTM implementation (output dimension order differs to
+        # PyTorch!) and modifies the LinearCRFLayer settings
+        if config["model"]["package"] == "bonito.crf":
+            model.encoder = koi.lstm.update_graph(
+                model.encoder,
+                batchsize=config["basecaller"]["batchsize"],
+                chunksize=config["basecaller"]["chunksize"] // model.stride,
+                quantize=config["basecaller"]["quantize"],
+            )
+        if config["model"]["package"] == "bonito_extras.attn_decoder":
+            class MakeContiguous(torch.nn.Module):
+                def __init__(self):
+                    super().__init__()
+
+                def forward(self, x):
+                    return x.contiguous()
+
+            from bonito.crf.model import get_stride
+            from bonito.nn import Serial, Permute
+            model.encoder.base_encoder[-1].expand_blanks = False
+            model.encoder.base_encoder = Serial([
+                model.encoder.base_encoder,
+                Permute([1, 0, 2]),
+                MakeContiguous(),
+            ])
+            if get_stride(model.encoder) == 1:
+                raise ValueError("found stride of 1 - this is obviously wrong!")
 
     state_dict = torch.load(model_file, map_location=device)
     state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
