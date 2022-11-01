@@ -289,6 +289,10 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
     Model = load_symbol(config, "Model")
     model = Model(config)
 
+    config["basecaller"]["chunksize"] -= config["basecaller"]["chunksize"] % model.stride
+    # overlap must be even multiple of stride for correct stitching
+    config["basecaller"]["overlap"] -= config["basecaller"]["overlap"] % (model.stride * 2)
+
     if config["model"]["package"] == "bonito.crf" and use_koi:
         model.encoder = koi.lstm.update_graph(
             model.encoder,
