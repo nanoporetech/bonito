@@ -91,7 +91,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     for pod5_file in pod5_files:
         for read in tqdm(
             pod5_reads(pod5_file, read_ids, skip),
-            leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
+            leave=False, desc="> preprocessing reads", unit=" reads", ascii=True, ncols=100
         ):
             read = Read(read, pod5_file, meta=True, do_trim=False)
             groups.add(read.readgroup(model))
