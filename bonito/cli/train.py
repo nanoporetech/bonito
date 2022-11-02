@@ -66,8 +66,6 @@ def main(args):
             valid_chunks=args.valid_chunks,
             n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
             n_post_context_bases=getattr(model, "n_post_context_bases", 0),
-            scale_noise=args.scale_noise,
-            offset_noise=args.offset_noise,
         )
 
     loader_kwargs = {
