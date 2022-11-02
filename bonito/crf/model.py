@@ -10,7 +10,6 @@ from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
-from bonito.util import decode_ref
 
 
 def get_stride(m):
@@ -22,10 +21,7 @@ def get_stride(m):
                 return stride
             return math.prod(stride)
         return 1
-    stride = 1
-    for c in children:
-        stride *= get_stride(c)
-    return stride
+    return math.prod(get_stride(c) for c in children)
 
 
 class CTC_CRF(SequenceDist):
@@ -197,7 +193,7 @@ class Model(SeqdistModel):
     def __init__(self, config):
         seqdist = CTC_CRF(
             state_len=config['global_norm']['state_len'],
-            alphabet=config['labels']['labels'],
+            alphabet=config['labels']['labels']
         )
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])

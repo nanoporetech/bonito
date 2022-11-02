@@ -303,7 +303,7 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
                 chunksize=config["basecaller"]["chunksize"] // model.stride,
                 quantize=config["basecaller"]["quantize"],
             )
-        if config["model"]["package"] == "bonito_extras.attn_decoder":
+        elif config["model"]["package"] == "bonito_extras.attn_decoder":
             class MakeContiguous(torch.nn.Module):
                 def __init__(self):
                     super().__init__()
@@ -321,6 +321,8 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
             ])
             if get_stride(model.encoder) == 1:
                 raise ValueError("found stride of 1 - this is obviously wrong!")
+        else:
+            raise ValueError("`use_koi=True` failed, unknown package")
 
     state_dict = torch.load(model_file, map_location=device)
     state_dict = {k2: state_dict[k1] for k1, k2 in match_names(state_dict, model).items()}
