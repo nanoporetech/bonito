@@ -10,7 +10,7 @@ from datetime import timedelta, timezone
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
-from pod5_format import CombinedReader
+from pod5_format import Reader
 
 
 class Read(bonito.reader.Read):
@@ -70,13 +70,13 @@ def pod5_reads(pod5_file, read_ids, skip=False):
     Get all the reads from the `pod5_file`.
     """
     if read_ids is not None:
-        yield from CombinedReader(pod5_file).reads(selection=[UUID(rid) for rid in read_ids], missing_ok=True, preload=["samples"])
+        yield from Reader(pod5_file).reads(selection=[UUID(rid) for rid in read_ids], missing_ok=True, preload=["samples"])
     elif skip:
-        for read in CombinedReader(pod5_file).reads(preload=["samples"]):
+        for read in Reader(pod5_file).reads(preload=["samples"]):
             if str(read.read_id) not in read_ids:
                 yield read
     else:
-        yield from CombinedReader(pod5_file).reads(preload=["samples"])
+        yield from Reader(pod5_file).reads(preload=["samples"])
 
 
 def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
@@ -91,7 +91,7 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     for pod5_file in pod5_files:
         for read in tqdm(
             pod5_reads(pod5_file, read_ids, skip),
-            leave=False, desc="> preprocessing reads", unit=" reads/s", ascii=True, ncols=100
+            leave=False, desc="> preprocessing reads", unit=" reads", ascii=True, ncols=100
         ):
             read = Read(read, pod5_file, meta=True, do_trim=False)
             groups.add(read.readgroup(model))
