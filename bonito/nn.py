@@ -22,6 +22,34 @@ register(torch.nn.Tanh)
 
 
 @register
+class Linear(Module):
+    def __init__(self, in_features, out_features, bias=True):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.bias = bias
+        self.linear = torch.nn.Linear(
+            in_features=in_features, out_features=out_features, bias=bias
+        )
+
+    def forward(self, x):
+        return self.linear(x)
+
+    def to_dict(self, include_weights=False):
+        res = {
+            "in_features": self.in_features,
+            "out_features": self.out_features,
+            "bias": self.bias,
+        }
+        if include_weights:
+            res['params'] = {
+                'W': self.linear.weight,
+                'b': self.linear.bias if self.bias is not None else []
+            }
+        return res
+
+
+@register
 class Swish(torch.nn.SiLU):
     pass
 
@@ -245,7 +273,7 @@ class RNNWrapper(Module):
 class LSTM(RNNWrapper):
 
     def __init__(self, size, insize, bias=True, reverse=False):
-        super().__init__(torch.nn.LSTM, size, insize, bias=bias, reverse=reverse)
+        super().__init__(torch.nn.LSTM, insize, size, bias=bias, reverse=reverse)
 
     def to_dict(self, include_weights=False):
         res = {

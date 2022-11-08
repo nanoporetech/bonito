@@ -29,7 +29,7 @@ def load_script(directory, name="dataset", suffix=".py", **kwargs):
     spec = importlib.util.spec_from_file_location(name, filepath)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    loader = module.Loader()
+    loader = module.Loader(**kwargs)
     return loader.train_loader_kwargs(**kwargs), loader.valid_loader_kwargs(**kwargs)
 
 
