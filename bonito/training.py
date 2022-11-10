@@ -166,6 +166,12 @@ class Trainer:
         else:
             seqs = [self.model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
         refs = [decode_ref(target, self.model.alphabet) for target in targets]
+
+        n_pre = getattr(self.model, "n_pre_context_bases", 0)
+        n_post = getattr(self.model, "n_post_context_bases", 0)
+        if n_pre > 0 or n_post > 0:
+            refs = [ref[n_pre:len(ref)-n_post] for ref in refs]
+
         accs = [
             accuracy(ref, seq, min_coverage=0.5) if len(seq) else 0. for ref, seq in zip(refs, seqs)
         ]
