@@ -1,8 +1,8 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from bonito.cli import basecaller, train, evaluate, view, convert, download, export, basespace_duplex
+from bonito.cli import basecaller, train, evaluate, view, convert, download, export, duplex
 
 modules = [
-    'basecaller', 'train', 'evaluate', 'view', 'convert', 'download', 'export', 'basespace_duplex'
+    'basecaller', 'train', 'evaluate', 'view', 'convert', 'download', 'export', 'duplex'
 ]
 
 __version__ = '0.6.1'
