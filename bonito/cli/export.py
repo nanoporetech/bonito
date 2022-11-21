@@ -69,7 +69,7 @@ def reformat_output_layer(layer_dict, v4=True):
 
     if blank_score is not None:
         if v4:
-            layer_dict['type'] = 'feed-forward'
+            layer_dict['type'] = 'GlobalNormTransducer'
             params = layer_dict['params']
             params['W'] = torch.nn.functional.pad(
                 params['W'].reshape([n_base**state_len, n_base, -1]),
@@ -78,13 +78,18 @@ def reformat_output_layer(layer_dict, v4=True):
             ).reshape((n_base + 1) * n_base**state_len, -1)
 
             if layer_dict['bias'] is False:
-                params['b'] = torch.zeros(n_base**state_len * n_base)
+                params['b'] = torch.zeros(n_base**state_len * (n_base + 1))
+                params['b'][0::5] = np.arctanh(blank_score / 5.0)
+                print("size", params['b'].size(), file=sys.stderr)
             else:
-                params['b'] = torch.nn.functional.pad(
+                paramps['b'] = torch.nn.functional.pad(
                     params['b'].reshape(n_base**state_len, n_base),
                     (1, 0),
                     value=0.
                 ).reshape(-1)
+            layer_dict['activation'] = 'identity'
+            layer_dict['scale'] = 1.0
+            layer_dict['stay_score'] = blank_score
         else:
             layer_dict['type'] = 'GlobalNormTransducer'
             assert layer_dict['activation'] == 'tanh'
@@ -104,12 +109,22 @@ def reformat_output_layer(layer_dict, v4=True):
     return layer_dict
 
 
+def toff(layer):
+    layer['type'] = 'feed-forward'
+    layer['insize'] = layer['in_features']
+    layer['size'] = layer['out_features']
+    layer['activation'] = 'identity'
+    del layer['in_features']
+    del layer['out_features']
+    return layer
+
+
 def to_guppy_dict(model, include_weights=True, binary_weights=True):
     guppy_dict = bonito.nn.to_dict(model.encoder, include_weights=include_weights)
     guppy_dict['sublayers'] = [x for x in guppy_dict['sublayers'] if x['type'] != 'permute']
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'] = [dict(x, type='feed-forward') if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
+    guppy_dict['sublayers'] = [toff(x) if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'][-1] = reformat_output_layer(guppy_dict['sublayers'][-1])
 
     if binary_weights:
