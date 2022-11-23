@@ -125,12 +125,12 @@ def main(args):
         ResultsWriter = Writer
 
     results = basecall(
-        model, reads, reverse=args.revcomp,
+        model, reads, reverse=args.revcomp, rna=args.rna,
         batchsize=model.config["basecaller"]["batchsize"],
         chunksize=model.config["basecaller"]["chunksize"],
         overlap=model.config["basecaller"]["overlap"]
     )
-
+    
     if mods_model is not None:
         if args.modified_device:
             results = ((k, call_mods(mods_model, k, v)) for k, v in results)
@@ -141,12 +141,19 @@ def main(args):
     if aligner:
         results = align_map(aligner, results, n_thread=args.alignment_threads)
 
+    writer_kwargs = {'aligner': aligner,
+                     'group_key': args.model_directory,
+                     'ref_fn': args.reference,
+                     'groups': groups,
+                     'min_qscore': args.min_qscore}
+    if args.save_ctc:
+        writer_kwargs['rna'] = args.rna
+        writer_kwargs['min_accuracy'] = args.min_accuracy_save_ctc
+        
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False,
                        total=num_reads, smoothing=0, ascii=True, ncols=100),
-        aligner=aligner, group_key=args.model_directory,
-        ref_fn=args.reference, groups=groups, min_qscore=args.min_qscore
-    )
+        **writer_kwargs)
 
     t0 = perf_counter()
     writer.start()
@@ -180,6 +187,7 @@ def argparser():
     parser.add_argument("--no-trim", action="store_true", default=False)
     parser.add_argument("--save-ctc", action="store_true", default=False)
     parser.add_argument("--revcomp", action="store_true", default=False)
+    parser.add_argument("--rna", action="store_true", default=False)
     parser.add_argument("--recursive", action="store_true", default=False)
     quant_parser = parser.add_mutually_exclusive_group(required=False)
     quant_parser.add_argument("--quantize", dest="quantize", action="store_true")
@@ -190,6 +198,7 @@ def argparser():
     parser.add_argument("--batchsize", default=None, type=int)
     parser.add_argument("--max-reads", default=0, type=int)
     parser.add_argument("--min-qscore", default=0, type=int)
+    parser.add_argument("--min-accuracy-save-ctc", default=0.99, type=float)
     parser.add_argument("--alignment-threads", default=8, type=int)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser

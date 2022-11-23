@@ -8,7 +8,7 @@ import csv
 import pandas as pd
 from threading import Thread
 from logging import getLogger
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
 
@@ -473,13 +473,23 @@ class Writer(Thread):
                     logger.warn("> skipping empty sequence %s", read_id)
 
 
+
+class RejectCounter(dict):
+    """Used to count reasons for rejection"""
+    def __call__(self, reject_condition, condition_name):
+        if reject_condition:
+            self[condition_name] = self.get(condition_name, 0) + 1
+        return reject_condition
+
+
 class CTCWriter(Thread):
     """
     CTC writer process that writes output numpy training data.
     """
     def __init__(
             self, mode, iterator, aligner, fd=sys.stdout, min_coverage=0.90,
-            min_accuracy=0.99, ref_fn=None, groups=None, group_key=None, min_qscore=None
+            min_accuracy=0.99, ref_fn=None, groups=None, group_key=None,
+            min_qscore=None, rna=False
     ):
         super().__init__()
         self.fd = fd
@@ -490,6 +500,8 @@ class CTCWriter(Thread):
         self.group_key = group_key
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
+        self.min_qscore = min_qscore
+        self.rna = rna
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
             reference_filename=ref_fn,
@@ -504,8 +516,9 @@ class CTCWriter(Thread):
 
         chunks = []
         targets = []
-        lengths = []
-
+        lengths = []            
+        reject_counter = RejectCounter()
+        
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, ctc_data in self.iterator:
 
@@ -515,16 +528,17 @@ class CTCWriter(Thread):
                 mapping = ctc_data.get('mapping', False)
 
                 self.log.append((read.read_id, len(read.signal)))
-
-                if len(seq) == 0 or mapping is None:
-                    continue
+                if reject_counter(mean_qscore < self.min_qscore, 'low_qscore'): continue
+                if reject_counter(len(seq)==0, 'zerolen_sequence'): continue
+                if reject_counter(mapping is None, 'no_mapping'): continue
 
                 cov = (mapping.q_en - mapping.q_st) / len(seq)
                 acc = mapping.mlen / mapping.blen
                 refseq = self.aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
 
-                if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
-                    continue
+                if reject_counter(acc < self.min_accuracy, f'low_accuracy{self.min_accuracy:.2f}'): continue
+                if reject_counter(cov < self.min_coverage, f'low_coverage{self.min_coverage:.2f}'): continue
+                if reject_counter('N' in refseq, 'N_in_sequence'): continue
 
                 self.output.write(
                     AlignedSegment.fromstring(
@@ -538,7 +552,8 @@ class CTCWriter(Thread):
                     refseq = mappy.revcomp(refseq)
 
                 target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
-                targets.append(target)
+                # RNA basecall already reversed. Flip back to signal-oriented for training.
+                targets.append(target[::-1] if self.rna else target)
                 chunks.append(read.signal)
                 lengths.append(len(target))
 
@@ -564,7 +579,10 @@ class CTCWriter(Thread):
         np.save(os.path.join(output_directory, "references.npy"), targets_)
         np.save(os.path.join(output_directory, "reference_lengths.npy"), lengths)
 
-        sys.stderr.write("> written ctc training data\n")
+        sys.stderr.write("> Chunks rejected from training data:\n")
+        for condition_name,count in reject_counter.items():
+            sys.stderr.write(f" - {condition_name}: {count}\n")
+        sys.stderr.write(f"> written ctc training data to {output_directory}\n")
         sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, chunks.shape)))
         sys.stderr.write("  - references.npy with shape (%s)\n" % ','.join(map(str, targets_.shape)))
         sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, lengths.shape)))

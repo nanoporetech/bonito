@@ -45,16 +45,18 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
         }
 
 
-def fmt(stride, attrs):
+def fmt(stride, attrs, rna=False):
+    fliprna = (lambda x:x[::-1]) if rna else (lambda x:x)
     return {
         'stride': stride,
         'moves': attrs['moves'].numpy(),
-        'qstring': to_str(attrs['qstring']),
-        'sequence': to_str(attrs['sequence']),
+        'qstring': fliprna(to_str(attrs['qstring'])),
+        'sequence': fliprna(to_str(attrs['sequence'])),
     }
 
 
-def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=False):
+def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32,
+             reverse=False, rna=False):
     """
     Basecalls a set of reads.
     """
@@ -75,6 +77,6 @@ def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32, reverse=Fa
     )
 
     return thread_iter(
-        (read, fmt(model.stride, attrs))
+        (read, fmt(model.stride, attrs, rna))
         for read, attrs in results
     )
