@@ -6,6 +6,7 @@ import math
 import torch
 import numpy as np
 
+import koi
 from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
@@ -192,6 +193,15 @@ class SeqdistModel(Module):
     def loss(self, scores, targets, target_lengths, **kwargs):
         return self.seqdist.ctc_loss(scores.to(torch.float32), targets, target_lengths, **kwargs)
 
+    def use_koi(self, **kwargs):
+        self.encoder = koi.lstm.update_graph(
+            self.encoder,
+            batchsize=kwargs["batchsize"],
+            chunksize=kwargs["chunksize"] // self.stride,
+            quantize=kwargs["quantize"],
+        )
+
+    
 class Model(SeqdistModel):
 
     def __init__(self, config):
