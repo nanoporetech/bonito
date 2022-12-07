@@ -69,11 +69,29 @@ def load_state(dirname, device, model, optim=None):
     return epoch
 
 
+class ClipGrad:
+    def __init__(self, quantile=0.5, factor=2.0, buffer_size=100):
+        self.buffer = np.full(buffer_size, fill_value=1e6)
+        self.quantile = quantile
+        self.factor = factor
+        self.i = 0
+
+    def append(self, grad_norm):
+        self.buffer[self.i] = grad_norm
+        self.i = (self.i + 1) % len(self.buffer)
+
+    def __call__(self, parameters):
+        max_norm = self.factor * np.quantile(self.buffer, self.quantile)
+        grad_norm = torch.nn.utils.clip_grad_norm_(parameters, max_norm=max_norm).item()
+        self.append(grad_norm)
+        return grad_norm
+
+
 class Trainer:
     def __init__(
         self, model, device, train_loader, valid_loader, criterion=None,
         use_amp=True, lr_scheduler_fn=None, restore_optim=False,
-        save_optim_every=10, grad_accum_split=1
+        save_optim_every=10, grad_accum_split=1, quantile_grad_clip=False
     ):
         self.model = model.to(device)
         self.device = device
@@ -87,6 +105,10 @@ class Trainer:
         self.grad_accum_split = grad_accum_split
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
+        if quantile_grad_clip:
+            self.clip_grad = ClipGrad()
+        else:
+            self.clip_grad = lambda parameters: torch.nn.utils.clip_grad_norm_(parameters, max_norm=2.0).item()
 
     def train_one_step(self, batch):
         self.optimizer.zero_grad()
@@ -109,7 +131,7 @@ class Trainer:
                 }
 
         self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+        grad_norm = self.clip_grad(self.model.parameters())
         self.scaler.step(self.optimizer)
         self.scaler.update()
 

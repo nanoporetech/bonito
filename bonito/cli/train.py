@@ -85,6 +85,7 @@ def main(args):
     else:
         lr_scheduler_fn = None
 
+    quantile_grad_clip = int(os.environ.get("BONITO_QUANTILE_GRAD_CLIP", 0))
     trainer = Trainer(
         model, device, train_loader, valid_loader,
         use_amp=half_supported() and not args.no_amp,
@@ -92,6 +93,7 @@ def main(args):
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
         grad_accum_split=args.grad_accum_split
+        quantile_grad_clip=quantile_grad_clip
     )
 
     if (',' in args.lr):
