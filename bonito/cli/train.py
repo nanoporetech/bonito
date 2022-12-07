@@ -92,7 +92,7 @@ def main(args):
         lr_scheduler_fn=lr_scheduler_fn,
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
-        grad_accum_split=args.grad_accum_split
+        grad_accum_split=args.grad_accum_split,
         quantile_grad_clip=quantile_grad_clip
     )
 
