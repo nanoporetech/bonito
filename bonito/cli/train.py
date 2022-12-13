@@ -85,7 +85,6 @@ def main(args):
     else:
         lr_scheduler_fn = None
 
-    quantile_grad_clip = int(os.environ.get("BONITO_QUANTILE_GRAD_CLIP", 0))
     trainer = Trainer(
         model, device, train_loader, valid_loader,
         use_amp=half_supported() and not args.no_amp,
@@ -93,7 +92,7 @@ def main(args):
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
         grad_accum_split=args.grad_accum_split,
-        quantile_grad_clip=quantile_grad_clip
+        quantile_grad_clip=args.quantile_grad_clip
     )
 
     if (',' in args.lr):
@@ -125,4 +124,5 @@ def argparser():
     parser.add_argument("--nondeterministic", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
+    parser.add_argument("--quantile-grad-clip", action="store_true", default=False)
     return parser
