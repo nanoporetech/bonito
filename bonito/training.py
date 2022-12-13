@@ -115,9 +115,12 @@ class Trainer:
 
         losses = None
         with amp.autocast(enabled=self.use_amp):
-            for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
-                data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
-                scores_ = self.model(data_)
+            for batch_ in zip(
+                *map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)
+            ):
+                data_, targets_, lengths_, *args = (x.to(self.device) for x in batch_)
+
+                scores_ = self.model(data_, *args)
                 losses_ = self.criterion(scores_, targets_, lengths_)
 
                 if not isinstance(losses_, dict): losses_ = {'loss': losses_}
@@ -178,9 +181,8 @@ class Trainer:
         return smoothed_loss, perf_counter() - t0
 
     def validate_one_step(self, batch):
-        data, targets, lengths = batch
-
-        scores = self.model(data.to(self.device))
+        data, targets, lengths, *args = batch
+        scores = self.model(data.to(self.device), *(x.to(self.device) for x in args))
         losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
         if hasattr(self.model, 'decode_batch'):
