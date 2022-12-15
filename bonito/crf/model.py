@@ -174,7 +174,7 @@ class SeqdistModel(Module):
         else:
             self.n_pre_context_bases, self.n_post_context_bases = n_pre_post_context_bases
 
-    def forward(self, x):
+    def forward(self, x, *args):
         return self.encoder(x)
 
     def decode_batch(self, x):
