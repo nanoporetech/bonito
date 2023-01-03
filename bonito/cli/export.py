@@ -80,7 +80,6 @@ def reformat_output_layer(layer_dict, v4=True):
             if layer_dict['bias'] is False:
                 params['b'] = torch.zeros(n_base**state_len * (n_base + 1))
                 params['b'][0::5] = np.arctanh(blank_score / 5.0)
-                print("size", params['b'].size(), file=sys.stderr)
             else:
                 paramps['b'] = torch.nn.functional.pad(
                     params['b'].reshape(n_base**state_len, n_base),
@@ -125,7 +124,8 @@ def to_guppy_dict(model, include_weights=True, binary_weights=True):
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [toff(x) if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'][-1] = reformat_output_layer(guppy_dict['sublayers'][-1])
+    idx = -1 if guppy_dict['sublayers'][-1]['type'] == 'linearcrfencoder' else -2
+    guppy_dict['sublayers'][idx] = reformat_output_layer(guppy_dict['sublayers'][idx])
 
     if binary_weights:
         for layer_dict in guppy_dict['sublayers']:
