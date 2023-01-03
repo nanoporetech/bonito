@@ -70,6 +70,7 @@ class Clamp(Module):
             'max': self.max
         }
 
+
 @register
 class Serial(torch.nn.Sequential):
 
