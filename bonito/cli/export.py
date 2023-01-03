@@ -108,7 +108,7 @@ def reformat_output_layer(layer_dict, v4=True):
     return layer_dict
 
 
-def toff(layer):
+def to_guppy_feed_forward(layer):
     layer['type'] = 'feed-forward'
     layer['insize'] = layer['in_features']
     layer['size'] = layer['out_features']
@@ -123,7 +123,7 @@ def to_guppy_dict(model, include_weights=True, binary_weights=True):
     guppy_dict['sublayers'] = [x for x in guppy_dict['sublayers'] if x['type'] != 'permute']
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'] = [toff(x) if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
+    guppy_dict['sublayers'] = [to_guppy_feed_forward(x) if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
     idx = -1 if guppy_dict['sublayers'][-1]['type'] == 'linearcrfencoder' else -2
     guppy_dict['sublayers'][idx] = reformat_output_layer(guppy_dict['sublayers'][idx])
 
