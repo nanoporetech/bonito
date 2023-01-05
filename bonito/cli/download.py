@@ -78,6 +78,14 @@ class File:
 
 
 models = {
+    "dna_r10.4.1_e8.2_260bps_fast@v4.0.0": "xsif8wbis1uyzsycopiql19p5mbd814n.zip",
+    "dna_r10.4.1_e8.2_260bps_hac@v4.0.0": "cugqp8h9jrpfdgo696tzx5y3pxbjaqfl.zip",
+    "dna_r10.4.1_e8.2_260bps_sup@v4.0.0": "fdxzet0grsp204a76mur3uiaeyx3i1x0.zip",
+
+    "dna_r10.4.1_e8.2_400bps_fast@v4.0.0": "kf25wfgmmcda0457yx8u4f0t9vb2yozb.zip",
+    "dna_r10.4.1_e8.2_400bps_hac@v4.0.0": "q5ecqe8c1u1pq4lrnyx9ypq070x1gbb8.zip",
+    "dna_r10.4.1_e8.2_400bps_sup@v4.0.0": "ah2iqb80gfg7xncbwle7sgr2kq8l9437.zip",
+
     "dna_r10.4.1_e8.2_260bps_fast@v3.5.2": "7662ke4ccxp2s9645b9mdp68c6i26ait.zip",
     "dna_r10.4.1_e8.2_260bps_hac@v3.5.2": "k2p23nmw4k86lb5b4rlbapo8v3fidypn.zip",
     "dna_r10.4.1_e8.2_260bps_sup@v3.5.2": "wibs7gs3uu0vyf9dkjtvuez1zb9kvcpf.zip",
