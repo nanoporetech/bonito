@@ -5,6 +5,7 @@ Bonito POD5 Utils
 from glob import glob
 from uuid import UUID
 from pathlib import Path
+from collections import OrderedDict
 from datetime import timedelta, timezone
 
 import numpy as np
@@ -81,7 +82,7 @@ def pod5_reads(pod5_file, read_ids, skip=False):
 
 def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None):
     """
-    Get all the read meta data for a given `directory`.
+    Get all the read meta data for a given `directory` using the pod5 run info table
     """
     groups = set()
     num_reads = 0
@@ -89,13 +90,22 @@ def get_read_groups(directory, model, read_ids=None, skip=False, n_proc=1, recur
     pod5_files = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
 
     for pod5_file in pod5_files:
-        for read in tqdm(
-            pod5_reads(pod5_file, read_ids, skip),
-            leave=False, desc="> preprocessing reads", unit=" reads", ascii=True, ncols=100
-        ):
-            read = Read(read, pod5_file, meta=True, do_trim=False)
-            groups.add(read.readgroup(model))
-            num_reads += 1
+        with Reader(pod5_file) as pod5_fh:
+            num_reads += sum(batch.num_reads for batch in pod5_fh.read_batches())
+            for run_info_row in pod5_fh.run_info_table.read_pandas().itertuples():
+                tracking = dict(run_info_row.tracking_id)
+                groupdict = OrderedDict([
+                    ('ID', f"{tracking['run_id']}_{model}"),
+                    ('PL', "ONT"),
+                    ('DT', f"{tracking['exp_start_time']}"),
+                    ('PU', f"{run_info_row.flow_cell_id}"),
+                    ('PM', f"{run_info_row.system_name}"),
+                    ('LB', f"{run_info_row.sample_id}"),
+                    ('SM', f"{run_info_row.sample_id}"),
+                    ('DS', f"run_id={tracking['run_id']} "
+                     f"basecall_model={model}")
+                ])
+                groups.add('\t'.join(["@RG", *[f"{k}:{v}" for k, v in groupdict.items()]]))
     return groups, num_reads
 
 
