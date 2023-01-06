@@ -2,6 +2,7 @@
 Bonito train
 """
 
+import math
 import os
 import re
 from glob import glob
@@ -83,7 +84,8 @@ class ClipGrad:
     def __call__(self, parameters):
         max_norm = self.factor * np.quantile(self.buffer, self.quantile)
         grad_norm = torch.nn.utils.clip_grad_norm_(parameters, max_norm=max_norm).item()
-        self.append(grad_norm)
+        if not math.isnan(grad_norm):
+            self.append(grad_norm)
         return grad_norm
 
 
