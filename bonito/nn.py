@@ -64,6 +64,12 @@ class Clamp(Module):
     def forward(self, x):
         return torch.clamp(x, min=self.min, max=self.max)
 
+    def to_dict(self, include_weights=False):
+        return {
+            'min': self.min,
+            'max': self.max
+        }
+
 
 @register
 class Serial(torch.nn.Sequential):

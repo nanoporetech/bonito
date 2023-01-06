@@ -296,7 +296,7 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
     if use_koi:
         model.use_koi(
             batchsize=config["basecaller"]["batchsize"],
-            chunksize=config["basecaller"]["chunksize"] // model.stride,
+            chunksize=config["basecaller"]["chunksize"],
             quantize=config["basecaller"]["quantize"],
         )
 
