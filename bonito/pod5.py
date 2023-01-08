@@ -10,7 +10,7 @@ from datetime import timedelta, timezone
 import numpy as np
 import bonito.reader
 from tqdm import tqdm
-from pod5_format import Reader
+from pod5 import Reader
 
 
 class Read(bonito.reader.Read):
