@@ -1,7 +1,6 @@
 """
 Bonito CTC-CRF Model.
 """
-import math
 
 import torch
 import numpy as np
@@ -20,9 +19,9 @@ def get_stride(m):
             stride = m.stride
             if isinstance(stride, int):
                 return stride
-            return math.prod(stride)
+            return np.prod(stride)
         return 1
-    return math.prod(get_stride(c) for c in children)
+    return np.prod([get_stride(c) for c in children])
 
 
 class CTC_CRF(SequenceDist):
