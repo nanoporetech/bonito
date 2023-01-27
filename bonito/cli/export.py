@@ -81,7 +81,7 @@ def reformat_output_layer(layer_dict, v4=True):
                 params['b'] = torch.zeros(n_base**state_len * (n_base + 1))
                 params['b'][0::5] = np.arctanh(blank_score / 5.0)
             else:
-                paramps['b'] = torch.nn.functional.pad(
+                params['b'] = torch.nn.functional.pad(
                     params['b'].reshape(n_base**state_len, n_base),
                     (1, 0),
                     value=0.
