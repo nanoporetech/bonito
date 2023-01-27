@@ -225,6 +225,10 @@ class LinearCRFEncoder(Module):
             }
         return res
 
+    def extra_repr(self):
+        return 'n_base={}, state_len={}, scale={}, blank_score={}, expand_blanks={}'.format(
+            self.n_base, self.state_len, self.scale, self.blank_score, self.expand_blanks
+        )
 
 @register
 class Permute(Module):
@@ -238,6 +242,9 @@ class Permute(Module):
 
     def to_dict(self, include_weights=False):
         return {'dims': self.dims}
+
+    def extra_repr(self):
+        return 'dims={}'.format(self.dims)
 
 
 def truncated_normal(size, dtype=torch.float32, device=None, num_resample=5):
@@ -284,6 +291,9 @@ class RNNWrapper(Module):
             if 'bias_hh' in name:
                 x.requires_grad = False
                 x.zero_()
+
+    def extra_repr(self):
+        return 'reverse={}'.format(bool(self.reverse))
 
 
 @register
