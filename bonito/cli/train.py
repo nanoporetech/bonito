@@ -56,7 +56,7 @@ def main(args):
     print("[loading data]")
     try:
         train_loader_kwargs, valid_loader_kwargs = load_numpy(
-            args.chunks, args.directory
+            args.chunks, args.directory, valid_chunks = args.valid_chunks
         )
     except FileNotFoundError:
         train_loader_kwargs, valid_loader_kwargs = load_script(
