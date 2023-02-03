@@ -54,7 +54,7 @@ class Model(Module):
         return {'total_loss': loss + label_smoothing_loss, 'loss': loss, 'label_smooth_loss': label_smoothing_loss}
 
     def loss(self, log_probs, targets, lengths):
-        return self.ctc_label_smoothing_loss(self, log_probs, targets, lengths)
+        return self.ctc_label_smoothing_loss(log_probs, targets, lengths)
 
 class Encoder(Module):
     """
