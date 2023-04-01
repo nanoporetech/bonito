@@ -105,7 +105,8 @@ def main(args):
     reads = reader.get_reads(
         args.reads_directory, n_proc=8, recursive=args.recursive,
         read_ids=column_to_set(args.read_ids), skip=args.skip,
-        do_trim=not args.no_trim, cancel=process_cancel()
+        do_trim=not args.no_trim, norm_params=model.config.get('normalisation'),
+        cancel=process_cancel()
     )
 
     if args.max_reads:
