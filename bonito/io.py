@@ -395,14 +395,13 @@ class NullWriter(Thread):
 class Writer(Thread):
 
     def __init__(
-            self, mode, iterator, aligner, fd=sys.stdout, duplex=False,
+            self, mode, iterator, aligner, fd=sys.stdout,
             ref_fn=None, groups=None, group_key=None, min_qscore=0
     ):
         super().__init__()
         self.fd = fd
         self.log = []
         self.mode = mode
-        self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
         self.fastq = mode == 'wfq'
@@ -430,12 +429,8 @@ class Writer(Thread):
                 mapping = res.get('mapping', False)
                 mods_tags = res.get('mods', [])
 
-                if self.duplex:
-                    samples = len(read[0].signal) + len(read[1].signal)
-                    read_id = '%s;%s' % (read[0].read_id, read[1].read_id)
-                else:
-                    samples = len(read.signal)
-                    read_id = read.read_id
+                samples = len(read.signal)
+                read_id = read.read_id
 
                 self.log.append((read_id, samples))
 
@@ -464,14 +459,42 @@ class Writer(Thread):
                                 self.output.header
                             )
                         )
-                    if self.duplex:
-                        summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
-                    else:
-                        summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
-
+                    summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
                 else:
                     logger.warn("> skipping empty sequence %s", read_id)
 
+
+class DuplexWriter(Writer, Thread):
+
+    def run(self):
+        for read, res in self.iterator:
+
+            read_id = '%s;%s' % (read[0], read[1])
+
+            seq = res['sequence']
+            qstring = res.get('qstring', '*')
+            mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
+            mapping = res.get('mapping', False)
+
+            self.log.append((read_id, len(seq)))
+
+            if mean_qscore < self.min_qscore:
+                continue
+
+            tags = [
+                f'qs:i:{round(mean_qscore)}',
+            ]
+
+            if len(seq):
+                if self.mode == 'wfq':
+                    write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags)
+                else:
+                    self.output.write(
+                        AlignedSegment.fromstring(
+                            sam_record(read_id, seq, qstring, mapping, tags=tags),
+                            self.output.header
+                        )
+                    )
 
 
 class RejectCounter(dict):
