@@ -1,31 +1,24 @@
 # Bonito
 
 [![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito) 
-[![py37](https://img.shields.io/badge/python-3.7-brightgreen.svg)](https://img.shields.io/badge/python-3.7-brightgreen.svg)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
 [![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
-[![cu102](https://img.shields.io/badge/cuda-10.2-blue.svg)](https://img.shields.io/badge/cuda-10.2-blue.svg)
-[![cu113](https://img.shields.io/badge/cuda-11.3-blue.svg)](https://img.shields.io/badge/cuda-11.3-blue.svg)
+[![py311](https://img.shields.io/badge/python-3.11-brightgreen.svg)](https://img.shields.io/badge/python-3.11-brightgreen.svg)
+[![cu117](https://img.shields.io/badge/cuda-11.7-blue.svg)](https://img.shields.io/badge/cuda-11.7-blue.svg)
 
 A PyTorch Basecaller for Oxford Nanopore Reads.
 
 ```bash
 $ pip install --upgrade pip
 $ pip install ont-bonito
-$ bonito basecaller dna_r10.4_e8.1_sup@v4.0.0 /data/reads > basecalls.bam
-```
-
-By default `pip` will install `torch` which is build against CUDA 10.2. For CUDA 11.3 builds run:
-
-```
-$ pip install --extra-index-url https://download.pytorch.org/whl/cu113 ont-bonito
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 /data/reads > basecalls.bam
 ```
 
 Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`.
 
 ```bash
-$ bonito basecaller dna_r10.4_e8.1_sup@v4.0.0 --reference reference.mmi /data/reads > basecalls.bam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --reference reference.mmi /data/reads > basecalls.bam
 ```
 
 Bonito will download and cache the basecalling model automatically on first use but all models can be downloaded with -
@@ -40,10 +33,8 @@ $ bonito download --models         # download all available models
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
 
 ```bash
-$ bonito basecaller dna_r10.4_e8.1_sup@v4.0.0 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
 ```
-
-To use the GPU-powered modified bases inference the `onnxruntime-gpu` package is required. 
 
 See available modified base models with the ``remora model list_pretrained`` command.
 
@@ -59,7 +50,7 @@ $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
 
 ```bash
-bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4_e8.1_sup@v4.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
+bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
