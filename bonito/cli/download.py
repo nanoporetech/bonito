@@ -17,17 +17,17 @@ import requests
 from tqdm import tqdm
 
 
-
 class File:
     """
     Small class for downloading models and training assets.
     """
-    __url__ = "https://nanoporetech.box.com/shared/static/"
+    __url__ = "https://cdn.oxfordnanoportal.com/software/analysis/bonito/"
 
     def __init__(self, path, url_frag, force=False):
         self.path = path
         self.force = force
-        self.url = os.path.join(self.__url__, url_frag)
+        self.filename = url_frag
+        self.url = os.path.join(self.__url__, "%s.zip" % url_frag)
 
     def location(self, filename):
         return os.path.join(self.path, filename)
@@ -42,7 +42,7 @@ class File:
         # create the requests for the file
         req = requests.get(self.url, stream=True)
         total = int(req.headers.get('content-length', 0))
-        fname = re.findall('filename="([^"]+)', req.headers['content-disposition'])[0]
+        fname = "%s.zip" % self.filename
 
         # skip download if local file is found
         if self.exists(fname.strip('.zip')) and not self.force:
@@ -77,31 +77,32 @@ class File:
             convert(args)
 
 
-models = {
-    "dna_r10.4.1_e8.2_260bps_fast@v4.0.0": "xsif8wbis1uyzsycopiql19p5mbd814n.zip",
-    "dna_r10.4.1_e8.2_260bps_hac@v4.0.0": "cugqp8h9jrpfdgo696tzx5y3pxbjaqfl.zip",
-    "dna_r10.4.1_e8.2_260bps_sup@v4.0.0": "fdxzet0grsp204a76mur3uiaeyx3i1x0.zip",
+models = [
+    "dna_r10.4.1_e8.2_260bps_fast@v4.0.0",
+    "dna_r10.4.1_e8.2_260bps_hac@v4.0.0",
+    "dna_r10.4.1_e8.2_260bps_sup@v4.0.0",
 
-    "dna_r10.4.1_e8.2_400bps_fast@v4.0.0": "kf25wfgmmcda0457yx8u4f0t9vb2yozb.zip",
-    "dna_r10.4.1_e8.2_400bps_hac@v4.0.0": "q5ecqe8c1u1pq4lrnyx9ypq070x1gbb8.zip",
-    "dna_r10.4.1_e8.2_400bps_sup@v4.0.0": "ah2iqb80gfg7xncbwle7sgr2kq8l9437.zip",
+    "dna_r10.4.1_e8.2_400bps_fast@v4.0.0",
+    "dna_r10.4.1_e8.2_400bps_hac@v4.0.0",
+    "dna_r10.4.1_e8.2_400bps_sup@v4.0.0",
 
-    "dna_r10.4.1_e8.2_260bps_fast@v3.5.2": "7662ke4ccxp2s9645b9mdp68c6i26ait.zip",
-    "dna_r10.4.1_e8.2_260bps_hac@v3.5.2": "k2p23nmw4k86lb5b4rlbapo8v3fidypn.zip",
-    "dna_r10.4.1_e8.2_260bps_sup@v3.5.2": "wibs7gs3uu0vyf9dkjtvuez1zb9kvcpf.zip",
+    "dna_r10.4.1_e8.2_260bps_fast@v3.5.2",
+    "dna_r10.4.1_e8.2_260bps_hac@v3.5.2",
+    "dna_r10.4.1_e8.2_260bps_sup@v3.5.2",
 
-    "dna_r10.4.1_e8.2_400bps_fast@v3.5.2": "w16vta4ni8m6ghiwpk6biddy82if9bhn.zip",
-    "dna_r10.4.1_e8.2_400bps_hac@v3.5.2": "plb3ggru65gs1la1n8fh23nxtx82q2sa.zip",
-    "dna_r10.4.1_e8.2_400bps_sup@v3.5.2": "yv0csfduthkl3803hy0azhoz1oy3ko4m.zip",
+    "dna_r10.4.1_e8.2_400bps_fast@v3.5.2",
 
-    "dna_r9.4.1_e8_sup@v3.3": "w10qhiggmg32gjcag6dv1wmwipzmcj84.zip",
-    "dna_r9.4.1_e8_hac@v3.3": "5evhvoqb07u6d3y4jfy2oi3bmyrww293.zip",
-    "dna_r9.4.1_e8_fast@v3.4": "3bq726s52at88zd9ve53x4px4quf3dpg.zip",
-}
+    "dna_r10.4.1_e8.2_400bps_hac@v3.5.2",
+    "dna_r10.4.1_e8.2_400bps_sup@v3.5.2",
+
+    "dna_r9.4.1_e8_sup@v3.3",
+    "dna_r9.4.1_e8_hac@v3.3",
+    "dna_r9.4.1_e8_fast@v3.4",
+]
 
 
 training = [
-    "cmh91cxupa0are1kc3z9aok425m75vrb.hdf5",
+    "dna_r9.4.1.hdf5",
 ]
 
 
@@ -117,7 +118,7 @@ def main(args):
                 print(f" - {model}", file=sys.stderr)
         else:
             print("[downloading models]", file=sys.stderr)
-            for model in models.values():
+            for model in models:
                 File(__models__, model, args.force).download()
     if args.training or args.all:
         print("[downloading training data]", file=sys.stderr)
