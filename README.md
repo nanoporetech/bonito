@@ -7,7 +7,9 @@
 [![py311](https://img.shields.io/badge/python-3.11-brightgreen.svg)](https://img.shields.io/badge/python-3.11-brightgreen.svg)
 [![cu117](https://img.shields.io/badge/cuda-11.7-blue.svg)](https://img.shields.io/badge/cuda-11.7-blue.svg)
 
-A PyTorch Basecaller for Oxford Nanopore Reads.
+Bonito is an open source research basecaller for Oxford Nanopore reads.
+
+For anything other than basecaller training or method development please use [dorado](https://github.com/nanoporetech/dorado).
 
 ```bash
 $ pip install --upgrade pip
