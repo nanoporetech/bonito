@@ -34,10 +34,11 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
         scores = model(batch.to(dtype).to(device))
         if reverse:
             scores = model.seqdist.reverse_complement(scores)
-        sequence, qstring, moves = beam_search(
-            scores, beam_width=beam_width, beam_cut=beam_cut,
-            scale=scale, offset=offset, blank_score=blank_score
-        )
+        with torch.cuda.device(scores.device):
+            sequence, qstring, moves = beam_search(
+                scores, beam_width=beam_width, beam_cut=beam_cut,
+                scale=scale, offset=offset, blank_score=blank_score
+            )
         return {
             'moves': moves,
             'qstring': qstring,
