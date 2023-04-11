@@ -2,6 +2,7 @@
 Bonito train
 """
 
+import math
 import os
 import re
 from glob import glob
@@ -69,11 +70,30 @@ def load_state(dirname, device, model, optim=None):
     return epoch
 
 
+class ClipGrad:
+    def __init__(self, quantile=0.5, factor=2.0, buffer_size=100):
+        self.buffer = np.full(buffer_size, fill_value=1e6)
+        self.quantile = quantile
+        self.factor = factor
+        self.i = 0
+
+    def append(self, grad_norm):
+        self.buffer[self.i] = grad_norm
+        self.i = (self.i + 1) % len(self.buffer)
+
+    def __call__(self, parameters):
+        max_norm = self.factor * np.quantile(self.buffer, self.quantile)
+        grad_norm = torch.nn.utils.clip_grad_norm_(parameters, max_norm=max_norm).item()
+        if not math.isnan(grad_norm):
+            self.append(grad_norm)
+        return grad_norm
+
+
 class Trainer:
     def __init__(
         self, model, device, train_loader, valid_loader, criterion=None,
         use_amp=True, lr_scheduler_fn=None, restore_optim=False,
-        save_optim_every=10, grad_accum_split=1
+        save_optim_every=10, grad_accum_split=1, quantile_grad_clip=False
     ):
         self.model = model.to(device)
         self.device = device
@@ -87,15 +107,22 @@ class Trainer:
         self.grad_accum_split = grad_accum_split
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.optimizer = None
+        if quantile_grad_clip:
+            self.clip_grad = ClipGrad()
+        else:
+            self.clip_grad = lambda parameters: torch.nn.utils.clip_grad_norm_(parameters, max_norm=2.0).item()
 
     def train_one_step(self, batch):
         self.optimizer.zero_grad()
 
         losses = None
         with amp.autocast(enabled=self.use_amp):
-            for data_, targets_, lengths_ in zip(*map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)):
-                data_, targets_, lengths_ = data_.to(self.device), targets_.to(self.device), lengths_.to(self.device)
-                scores_ = self.model(data_)
+            for batch_ in zip(
+                *map(lambda t: t.chunk(self.grad_accum_split, dim=0), batch)
+            ):
+                data_, targets_, lengths_, *args = (x.to(self.device) for x in batch_)
+
+                scores_ = self.model(data_, *args)
                 losses_ = self.criterion(scores_, targets_, lengths_)
 
                 if not isinstance(losses_, dict): losses_ = {'loss': losses_}
@@ -109,7 +136,7 @@ class Trainer:
                 }
 
         self.scaler.unscale_(self.optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0).item()
+        grad_norm = self.clip_grad(self.model.parameters())
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
@@ -156,9 +183,8 @@ class Trainer:
         return smoothed_loss, perf_counter() - t0
 
     def validate_one_step(self, batch):
-        data, targets, lengths = batch
-
-        scores = self.model(data.to(self.device))
+        data, targets, lengths, *args = batch
+        scores = self.model(data.to(self.device), *(x.to(self.device) for x in args))
         losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
         if hasattr(self.model, 'decode_batch'):
