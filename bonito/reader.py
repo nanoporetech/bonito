@@ -136,7 +136,7 @@ def trim(signal, window_size=40, threshold=2.4, min_trim=10, min_elements=3, max
     return min_trim
 
 
-def normalisation(sig, norm_params):
+def normalisation(sig, norm_params=None):
     """
     Calculate signal shift and scale factors for normalisation..
     """
