@@ -21,12 +21,9 @@ def get_stride(m):
             stride = m.stride
             if isinstance(stride, int):
                 return stride
-            return math.prod(stride)
+            return np.prod(stride)
         return 1
-    stride = 1
-    for c in children:
-        stride *= get_stride(c)
-    return stride
+    return np.prod([get_stride(c) for c in children])
 
 
 class CTC_CRF(SequenceDist):
@@ -179,7 +176,7 @@ class SeqdistModel(Module):
         else:
             self.n_pre_context_bases, self.n_post_context_bases = n_pre_post_context_bases
 
-    def forward(self, x):
+    def forward(self, x, *args):
         return self.encoder(x)
 
     def decode_batch(self, x):
@@ -200,8 +197,7 @@ class SeqdistModel(Module):
             chunksize=kwargs["chunksize"] // self.stride,
             quantize=kwargs["quantize"],
         )
-
-    
+        
 class Model(SeqdistModel):
 
     def __init__(self, config):

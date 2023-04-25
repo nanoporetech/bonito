@@ -19,7 +19,7 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 
 class Read(bonito.reader.Read):
 
-    def __init__(self, read, filename, meta=False, do_trim=True):
+    def __init__(self, read, filename, meta=False, do_trim=True, norm_params=None):
 
         self.meta = meta
         self.read_id = read.read_id
@@ -74,7 +74,7 @@ class Read(bonito.reader.Read):
         self.scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
         self.num_samples = len(self.scaled)
 
-        self.shift, self.scale = bonito.reader.normalisation(self.scaled)
+        self.shift, self.scale = bonito.reader.normalisation(self.scaled, norm_params)
         self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift) if do_trim else 0
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
         self.template_duration = self.duration - (self.trimmed_samples / self.sample_rate)
@@ -89,11 +89,11 @@ def get_meta_data(filename, read_ids=None, skip=False):
     meta_reads = []
     with get_fast5_file(filename, 'r') as f5_fh:
         try:
-            read_ids = f5_fh.get_read_ids()
+            all_read_ids = f5_fh.get_read_ids()
         except RuntimeError as e:
             sys.stderr.write(f"> warning: f{filename} - {e}\n")
             return meta_reads
-        for read_id in read_ids:
+        for read_id in all_read_ids:
             if read_ids is None or (read_id in read_ids) ^ skip:
                 meta_reads.append(
                     Read(f5_fh.get_read(read_id), filename, meta=True)
@@ -136,13 +136,13 @@ def get_read_ids(filename, read_ids=None, skip=False):
         return [rid for rid in ids if (rid[1] in read_ids) ^ skip]
 
 
-def get_raw_data_for_read(info, do_trim=True):
+def get_raw_data_for_read(info, do_trim=True, norm_params=None):
     """
     Get the raw signal from the fast5 file for a given filename, read_id pair
     """
     filename, read_id = info
     with get_fast5_file(filename, 'r') as f5_fh:
-        return Read(f5_fh.get_read(read_id), filename, do_trim=do_trim)
+        return Read(f5_fh.get_read(read_id), filename, do_trim=do_trim, norm_params=norm_params)
 
 
 def get_raw_data(filename, read_ids=None, skip=False):
@@ -155,13 +155,13 @@ def get_raw_data(filename, read_ids=None, skip=False):
                 yield Read(f5_fh.get_read(read_id), filename)
 
 
-def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None, do_trim=True):
+def get_reads(directory, read_ids=None, skip=False, n_proc=1, recursive=False, cancel=None, do_trim=True, norm_params=None):
     """
     Get all reads in a given `directory`.
     """
     pattern = "**/*.fast5" if recursive else "*.fast5"
     get_filtered_reads = partial(get_read_ids, read_ids=read_ids, skip=skip)
-    get_raw_data = partial(get_raw_data_for_read, do_trim=do_trim)
+    get_raw_data = partial(get_raw_data_for_read, do_trim=do_trim, norm_params=norm_params)
     reads = (Path(x) for x in glob(directory + "/" + pattern, recursive=True))
     with Pool(n_proc) as pool:
         for job in chain(pool.imap(get_filtered_reads, reads)):
