@@ -78,9 +78,9 @@ class File:
 
 
 models = [
-    "dna_r10.4.1_e8.2_5khz_400bps_fast@v4.2.0",
-    "dna_r10.4.1_e8.2_5khz_400bps_hac@v4.2.0",
-    "dna_r10.4.1_e8.2_5khz_400bps_sup@v4.2.0",
+    "dna_r10.4.1_e8.2_400bps_fast@v4.2.0",
+    "dna_r10.4.1_e8.2_400bps_hac@v4.2.0",
+    "dna_r10.4.1_e8.2_400bps_sup@v4.2.0",
 
     "dna_r10.4.1_e8.2_260bps_fast@v4.1.0",
     "dna_r10.4.1_e8.2_260bps_hac@v4.1.0",
