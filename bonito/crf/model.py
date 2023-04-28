@@ -1,7 +1,6 @@
 """
 Bonito CTC-CRF Model.
 """
-import math
 
 import torch
 import numpy as np
@@ -11,7 +10,6 @@ from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
-from bonito.util import decode_ref
 
 
 def get_stride(m):
@@ -151,9 +149,9 @@ def conv(c_in, c_out, ks, stride=1, bias=False, activation=None, norm=None):
 def rnn_encoder(n_base, state_len, insize=1, first_conv_size=4, second_conv_size=16, stride=5, winlen=19, activation='swish', rnn_type='lstm', features=768, scale=5.0, blank_score=None, expand_blanks=True, num_layers=5, norm=None):
     rnn = layers[rnn_type]
     return Serial([
-        conv(insize, first_conv_size, ks=5, bias=True, activation=activation, norm=norm),
-        conv(first_conv_size, second_conv_size, ks=5, bias=True, activation=activation, norm=norm),
-        conv(second_conv_size, features, ks=winlen, stride=stride, bias=True, activation=activation, norm=norm),
+        conv(insize, 4, ks=5, bias=True, activation=activation, norm=norm),
+        conv(4, 16, ks=5, bias=True, activation=activation, norm=norm),
+        conv(16, features, ks=winlen, stride=stride, bias=True, activation=activation, norm=norm),
         Permute([2, 0, 1]),
         *(rnn(features, features, reverse=(num_layers - i) % 2) for i in range(num_layers)),
         LinearCRFEncoder(
@@ -161,8 +159,6 @@ def rnn_encoder(n_base, state_len, insize=1, first_conv_size=4, second_conv_size
             blank_score=blank_score, expand_blanks=expand_blanks
         )
     ])
-
-
 class SeqdistModel(Module):
     def __init__(self, encoder, seqdist, n_pre_post_context_bases=None):
         super().__init__()
@@ -197,13 +193,14 @@ class SeqdistModel(Module):
             chunksize=kwargs["chunksize"] // self.stride,
             quantize=kwargs["quantize"],
         )
+
         
 class Model(SeqdistModel):
 
     def __init__(self, config):
         seqdist = CTC_CRF(
             state_len=config['global_norm']['state_len'],
-            alphabet=config['labels']['labels'],
+            alphabet=config['labels']['labels']
         )
         if 'type' in config['encoder']: #new-style config
             encoder = from_dict(config['encoder'])

@@ -191,7 +191,6 @@ class Trainer:
             seqs = self.model.decode_batch(scores)
         else:
             seqs = [self.model.decode(x) for x in permute(scores, 'TNC', 'NTC')]
-
         refs = [decode_ref(target, self.model.alphabet) for target in targets]
 
         n_pre = getattr(self.model, "n_pre_context_bases", 0)

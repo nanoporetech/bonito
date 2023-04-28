@@ -53,15 +53,6 @@ class Linear(Module):
 class Swish(torch.nn.SiLU):
     pass
 
-@register
-class Clamp(Module):
-    def __init__(self, min, max):
-        super().__init__()
-        self.min = min
-        self.max = max
-
-    def forward(self, x):
-        return torch.clamp(x, min=self.min, max=self.max)
 
 @register
 class Clamp(Module):
