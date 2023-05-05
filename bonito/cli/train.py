@@ -117,7 +117,7 @@ def argparser():
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch", default=64, type=int)
     parser.add_argument("--chunks", default=0, type=int)
-    parser.add_argument("--valid-chunks", default=0, type=int)
+    parser.add_argument("--valid-chunks", default=None, type=int)
     parser.add_argument("--no-amp", action="store_true", default=False)
     parser.add_argument("-f", "--force", action="store_true", default=False)
     parser.add_argument("--restore-optim", action="store_true", default=False)
