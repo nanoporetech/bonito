@@ -44,7 +44,7 @@ def main(args):
 
     if args.model_directory in models and args.model_directory not in os.listdir(__models__):
         sys.stderr.write("> downloading model\n")
-        File(__models__, models[args.model_directory]).download()
+        File(__models__, args.model_directory).download()
 
     sys.stderr.write(f"> loading model {args.model_directory}\n")
     try:
