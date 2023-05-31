@@ -30,7 +30,10 @@ class Read(bonito.reader.Read):
 
         tracking_id = read.handle[read.global_key + 'tracking_id'].attrs
 
-        self.sample_id = tracking_id['sample_id']
+        try:
+            self.sample_id = tracking_id['sample_id']
+        except KeyError:
+            self.sample_id = 'unset'
         if type(self.sample_id) in (bytes, np.bytes_):
             self.sample_id = self.sample_id.decode()
 
