@@ -27,7 +27,12 @@ class File:
         self.path = path
         self.force = force
         self.filename = url_frag
-        self.url = os.path.join(self.__url__, "%s.zip" % url_frag)
+        if url_frag.endswith('.hdf5'):
+            self.url = os.path.join(self.__url__, url_frag)
+            self.fname = self.filename
+        else:
+            self.url = os.path.join(self.__url__, "%s.zip" % url_frag)
+            self.fname = "%s.zip" % self.filename
 
     def location(self, filename):
         return os.path.join(self.path, filename)
@@ -42,7 +47,7 @@ class File:
         # create the requests for the file
         req = requests.get(self.url, stream=True)
         total = int(req.headers.get('content-length', 0))
-        fname = "%s.zip" % self.filename
+        fname = self.fname
 
         # skip download if local file is found
         if self.exists(fname.strip('.zip')) and not self.force:
