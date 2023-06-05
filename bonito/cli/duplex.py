@@ -1,428 +1,394 @@
-"""
-Bonito Duplex consensus decoding.
-
-https://www.biorxiv.org/content/10.1101/2020.02.25.956771v1
-"""
-
-import os
+import re
 import sys
-import json
-from glob import glob
-from pathlib import Path
-from os.path import basename
-from functools import partial
 from time import perf_counter
+from functools import partial
 from datetime import timedelta
-from multiprocessing import Pool
-from itertools import islice, groupby
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Process, Queue, Lock, cpu_count
+from itertools import takewhile
+from collections import OrderedDict, defaultdict
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-import spoa
-import torch
-import parasail
+import pysam
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
-from fast_ctc_decode import crf_beam_search, crf_beam_search_duplex
+from mappy import revcomp
+from edlib import align as edlib_align
+from parasail import dnafull, sg_trace_scan_32
 
-#from genomeworks import cuda
-#from genomeworks.cudapoa import CudaPoaBatch, status_to_str
-
-try:
-    from claragenomics.bindings import cuda
-    from claragenomics.bindings.cudapoa import CudaPoaBatch
-except ImportError:
-    pass
+from bonito.io import DuplexWriter, biofmt
+from bonito.aligner import align_map, Aligner
+from bonito.multiprocessing import ProcessMap
 
 
-import bonito
-from bonito.io import Writer, devnull
-from bonito.aligner import Aligner, align_map
-from bonito.util import load_model, half_supported
-from bonito.crf.basecall import basecall #transfer, split_read, stitch
-from bonito.fast5 import get_raw_data_for_read, get_fast5_file
-from bonito.util import unbatchify, batchify, chunk, concat, accuracy
-from bonito.multiprocessing import thread_map, process_map, process_cancel
-
-
-def poagen(groups, gpu_percent=0.8):
-    free, total = cuda.cuda_get_mem_info(cuda.cuda_get_device())
-    gpu_mem_per_batch = gpu_percent * free
-
-    max_seq_sz = 0
-    max_sequences_per_poa = 0
-
-    for group in groups:
-        longest_seq = len(max(group, key=len))
-        max_seq_sz = longest_seq if longest_seq > max_seq_sz else max_seq_sz
-        seq_in_poa = len(group)
-        max_sequences_per_poa = seq_in_poa if seq_in_poa > max_sequences_per_poa else max_sequences_per_poa
-
-    batch = CudaPoaBatch(
-        max_sequences_per_poa,
-        max_seq_sz,
-        gpu_mem_per_batch,
-        output_type="consensus",
-        cuda_banded_alignment=True,
-        alignment_band_width=256,
+# Cigar int code ops are: MIDNSHP=X
+CODE_TO_OP = OrderedDict(
+    (
+        ("M", pysam.CMATCH),
+        ("I", pysam.CINS),
+        ("D", pysam.CDEL),
+        ("N", pysam.CREF_SKIP),
+        ("S", pysam.CSOFT_CLIP),
+        ("H", pysam.CHARD_CLIP),
+        ("P", pysam.CPAD),
+        ("=", pysam.CEQUAL),
+        ("X", pysam.CDIFF),
     )
-
-    poa_index = 0
-    initial_count = 0
-
-    while poa_index < len(groups):
-
-        group = groups[poa_index]
-        group_status, seq_status = batch.add_poa_group(group)
-
-        # If group was added and more space is left in batch, continue onto next group.
-        if group_status == 0:
-            for seq_index, status in enumerate(seq_status):
-                if status != 0:
-                    print("Could not add sequence {} to POA {} - error {}".format(seq_index, poa_index, status_to_str(status)), file=sys.stderr)
-            poa_index += 1
-
-        # Once batch is full or no groups are left, run POA processing.
-        if ((group_status == 1) or ((group_status == 0) and (poa_index == len(groups)))):
-            batch.generate_poa()
-            consensus, coverage, con_status = batch.get_consensus()
-            for p, status in enumerate(con_status):
-                if status != 0:
-                    print("Could not get consensus for POA group {} - {}".format(initial_count + p, status_to_str(status)), file=sys.stderr)
-            yield from consensus
-            initial_count = poa_index
-            batch.reset()
-
-        # In the case where POA group wasn't processed correctly.
-        elif group_status != 0:
-            print("Could not add POA group {} to batch - {}".format(poa_index, status_to_str(group_status)), file=sys.stderr)
-            poa_index += 1
+)
+CIGAR_IS_QUERY = np.array(
+    [True, True, False, False, True, False, False, True, True]
+)
+CIGAR_IS_REF = np.array(
+    [True, False, True, True, False, False, False, True, True]
+)
 
 
-def get_read(readdir, summary, idx):
+class ReadIndexedBam:
+
+    def __init__(self, bam_fp, skip_non_primary=True):
+        self.bam_fp = bam_fp
+        self.skip_non_primary = skip_non_primary
+        self.bam_fh = None
+        self.bam_idx = None
+        self.compute_read_index()
+
+    def open_bam(self):
+        # hid warnings for no index when using unmapped or unsorted files
+        self.pysam_save = pysam.set_verbosity(0)
+        self.bam_fh = pysam.AlignmentFile(
+            self.bam_fp, mode="rb", check_sq=False
+        )
+
+    def close_bam(self):
+        self.bam_fh.close()
+        self.bam_fh = None
+        pysam.set_verbosity(self.pysam_save)
+
+    def compute_read_index(self):
+        def read_is_primary(read):
+            return not (read.is_supplementary or read.is_secondary)
+
+        self.bam_idx = {} if self.skip_non_primary else defaultdict(list)
+        self.open_bam()
+        pbar = tqdm(smoothing=0, unit=" Reads", desc="> indexing BAM by read id", leave=False)
+        # iterating over file handle gives incorrect pointers
+        while True:
+            read_ptr = self.bam_fh.tell()
+            try:
+                read = next(self.bam_fh)
+            except StopIteration:
+                break
+            if self.skip_non_primary:
+                if not read_is_primary(read) or read.query_name in self.bam_idx:
+                    continue
+                self.bam_idx[read.query_name] = [read_ptr]
+            else:
+                self.bam_idx[read.query_name].append(read_ptr)
+            pbar.update()
+        self.close_bam()
+        if not self.skip_non_primary:
+            self.bam_idx = dict(self.bam_idx)
+
+    def get_alignments(self, read_id):
+        if self.bam_idx is None:
+            raise RuntimeError("Bam index not yet computed")
+        if self.bam_fh is None:
+            self.open_bam()
+        try:
+            read_ptrs = self.bam_idx[read_id]
+        except KeyError:
+            raise RuntimeError(f"Could not find {read_id} in {self.bam_fp}")
+        for read_ptr in read_ptrs:
+            self.bam_fh.seek(read_ptr)
+            yield next(self.bam_fh)
+
+    def get_first_alignment(self, read_id):
+        return next(self.get_alignments(read_id))
+
+
+def compute_consensus(cigar, temp_seq, temp_qscores, comp_seq, comp_qscores):
     """
-    Get a single read from row `idx` in the `summary` dataframe.
+    Compute consensus by comparing qscores
     """
-    return get_raw_data_for_read(
-        (readdir / summary.iloc[idx].filename_fast5, summary.iloc[idx].read_id)
-    )
+    def mask_expand(values, mask):
+        x = np.full(
+            len(mask),
+            fill_value=np.uint8(ord("-")),
+            dtype=values.dtype
+        )
+        x[mask] = values
+        return x
 
+    def as_array(seq):
+        return np.frombuffer(seq.encode("ascii"), dtype=np.uint8)
 
-def read_gen(directory, summary, n_proc=1, cancel=None):
-    """
-    Generate reads from the given `directory` listed in the `summary` dataframe.
-    """
-    with Pool(n_proc) as pool:
-        for read in pool.imap(partial(get_read, Path(directory), summary), range(len(summary))):
-            yield read
-            if cancel is not None and cancel.is_set():
-                return
+    c_ops, c_counts = zip(*cigar)
+    c_expanded = np.repeat(c_ops, c_counts)
+    c_is_temp = np.array(CIGAR_IS_QUERY)[c_expanded]
+    c_is_comp = np.array(CIGAR_IS_REF)[c_expanded]
+    c_expanded_temp = mask_expand(as_array(temp_seq), c_is_temp)
+    c_expanded_comp = mask_expand(as_array(comp_seq), c_is_comp)
 
-
-def get_read_ids(filename):
-    """
-    Return a dictionary of read_id -> filename mappings.
-    """
-    with get_fast5_file(filename, 'r') as f5:
-        return {
-            read.read_id: basename(filename) for read in f5.get_reads()
-        }
-
-
-def build_index(files, n_proc=1):
-    """
-    Build an index of read ids to filename mappings
-    """
-    index = {}
-    with ProcessPoolExecutor(max_workers=n_proc) as pool:
-        for res in tqdm(pool.map(get_read_ids, files), leave=False):
-            index.update(res)
-    return index
-
-
-def build_envelope(len1, seq1, path1, len2, seq2, path2, padding=15):
-
-    # needleman-wunsch alignment with constant gap penalty.
-    aln = parasail.nw_trace_striped_32(seq2, seq1, 2, 2, parasail.dnafull)
-
-    # pair up positions
-    alignment = np.column_stack([
-        np.cumsum([x != '-' for x in aln.traceback.ref]) - 1,
-        np.cumsum([x != '-' for x in aln.traceback.query]) - 1
+    qs = np.stack([
+        temp_qscores[np.maximum(np.cumsum(c_is_temp) - 1, 0)],
+        comp_qscores[np.maximum(np.cumsum(c_is_comp) - 1, 0)]
     ])
+    idx = qs.argmax(axis=0)
 
-    path_range1 = np.column_stack([path1, path1[1:] + [len1]])
-    path_range2 = np.column_stack([path2, path2[1:] + [len2]])
-
-    envelope = np.full((len1, 2), -1, dtype=int)
-
-    for idx1, idx2 in alignment.clip(0):
-
-        st_1, en_1 = path_range1[idx1]
-        st_2, en_2 = path_range2[idx2]
-
-        for idx in range(st_1, en_1):
-            if st_2 < envelope[idx, 0] or envelope[idx, 0] < 0:
-                envelope[idx, 0] = st_2
-            if en_2 > envelope[idx, 1] or envelope[idx, 1] < 0:
-                envelope[idx, 1] = en_2
-
-    # add a little padding to ensure some overlap
-    envelope[:, 0] = envelope[:, 0] - padding
-    envelope[:, 1] = envelope[:, 1] + padding
-    envelope = np.clip(envelope, 0, len2)
-
-    prev_end = 0
-    for i in range(envelope.shape[0]):
-
-        if envelope[i, 0] > envelope[i, 1]:
-            envelope[i, 0] = 0
-
-        if envelope[i, 0] > prev_end:
-            envelope[i, 0] = prev_end
-
-        prev_end = envelope[i, 1]
-
-    return envelope.astype(np.uint64)
-
-
-def find_follow_on(df, gap=5, distance=51, cov=0.85, min_len=100):
-    """
-    Find follow on reads from a sequencing summary file.
-    """
-    df = df[
-        df.alignment_coverage.astype('float32').gt(cov) &
-        df.sequence_length_template.astype('int32').gt(min_len)
-    ]
-    df = df.sort_values(['run_id', 'channel', 'mux', 'start_time'])
-
-    genome_start = np.array(df.alignment_genome_start, dtype=np.int32)
-    genome_end = np.array(df.alignment_genome_end, dtype=np.int32)
-    direction = np.array(df.alignment_direction)
-    start_time = np.array(df.start_time, dtype=np.float32)
-    end_time = np.array(df.start_time + df.duration, dtype=np.float32)
-    channel = np.array(df.channel, dtype=np.int32)
-    mux = np.array(df.mux, dtype=np.int32)
-
-    filt = (
-        (channel[1:] == channel[:-1]) &
-        (mux[1:] == mux[:-1]) &
-        (np.abs(genome_start[1:] - genome_start[:-1]) < distance) &
-        (np.abs(genome_end[1:] - genome_end[:-1]) < distance) &
-        (direction[1:] != direction[:-1]) &
-        (start_time[1:] - end_time[:-1] < gap)
+    consensus = np.where(idx, c_expanded_comp, c_expanded_temp)
+    q = np.where(
+        c_expanded_comp == c_expanded_temp,
+        qs.sum(axis=0),
+        qs[idx, np.arange(qs.shape[1])]
     )
-    mask = np.full(len(filt) + 1, False)
-    mask[:-1] = mask[:-1] | filt
-    mask[1:] = mask[1:] | filt
+    i = (consensus != ord("-"))
 
-    return df[mask]
+    cons_seq = consensus[i].tobytes().decode()
+    cons_qstring = np.round(
+        np.clip(q[i], 0, 60) + 33
+    ).astype(np.uint8).tobytes().decode('ascii')
+
+    return cons_seq, cons_qstring
 
 
-def compute_scores(model, batch, reverse=False):
-    with torch.no_grad():
-        device = next(model.parameters()).device
-        dtype = torch.float16 if half_supported() else torch.float32
-        scores = model.encoder(batch.to(dtype).to(device))
-        if reverse: scores = model.seqdist.reverse_complement(scores)
-        betas = model.seqdist.backward_scores(scores.to(torch.float32))
-        trans, init = model.seqdist.compute_transition_probs(scores, betas)
+def adj_qscores(qscores, seq, qshift, pool_window=5, avg_hps_gt=2):
+    def shift(x, n=1):
+        if n > 0:
+            x = np.concatenate([[x[0]] * n, x[:-n]])
+        elif n < 0:
+            x = np.concatenate([x[-n:], [x[-1]] * (-n)])
+        return x
+
+    def min_pool(x):
+        x = np.pad(x.astype(np.float32), pool_window // 2, mode='edge')
+        return np.lib.stride_tricks.as_strided(
+            x,
+            (len(x) + 1 - pool_window, pool_window),
+            strides=(x.dtype.itemsize, x.dtype.itemsize)
+        ).min(1)
+
+    def hp_spans():
+        pat = re.compile(r"(.)\1{%s,}" % (avg_hps_gt - 1))
+        return (m.span() for m in pat.finditer(seq))
+
+    qscores = min_pool(shift(qscores, qshift))
+    for st, en in hp_spans():
+        qscores[st:en] = np.mean(qscores[st:en])
+    return qscores
+
+
+def cigartuples_from_string(cigarstring):
+    """
+    Returns pysam-style list of (op, count) tuples from a cigarstring.
+    """
+    pattern = re.compile(rf"(\d+)([{''.join(CODE_TO_OP.keys())}])")
+    return [
+        (CODE_TO_OP[m.group(2)], int(m.group(1)))
+        for m in re.finditer(pattern, cigarstring)
+    ]
+
+
+def seq_lens(cigartuples):
+    """
+    Length of query and reference sequences from cigar tuples.
+    """
+    if not len(cigartuples):
+        return 0, 0
+    ops, counts = np.array(cigartuples).T
+    q_len = counts[CIGAR_IS_QUERY[ops]].sum()
+    r_len = counts[CIGAR_IS_REF[ops]].sum()
+    return q_len, r_len
+
+
+def trim_while(cigar, from_end=False):
+    """
+    Trim cigartuples until predicate is not satisfied.
+    """
+
+    def trim_func(c_op_len, num_match=11):
+        return (c_op_len[1] < num_match) or (c_op_len[0] != pysam.CEQUAL)
+
+    cigar_trim = (
+        list(takewhile(trim_func, reversed(cigar)))[::-1]
+        if from_end
+        else list(takewhile(trim_func, cigar))
+    )
+    if len(cigar_trim):
+        cigar = (
+            cigar[: -len(cigar_trim)] if from_end else cigar[len(cigar_trim):]
+        )
+    q_trim, r_trim = seq_lens(cigar_trim)
+    return cigar, q_trim, r_trim
+
+
+def edlib_adj_align(query, ref, num_match=11):
+    def find_first(predicate, seq):
+        return next((i for i, x in enumerate(seq) if predicate(x)), None)
+
+    def long_match(c_op_len, num_match=11):
+        return (c_op_len[0] == pysam.CEQUAL) and (c_op_len[1] >= num_match)
+
+    def concat(*cigars):
+        cigars = [c for c in cigars if len(c)]
+        for c1, c2 in zip(cigars[:-1], cigars[1:]):
+            (o1, n1), (o2, n2) = c1[-1], c2[0]
+            if o1 == o2:
+                c1[-1] = (o1, 0)
+                c2[0] = (o2, n1 + n2)
+        return [(o, n) for c in cigars for (o, n) in c if n]
+
+    def parasail_align(query, ref):
+        return cigartuples_from_string(
+            sg_trace_scan_32(query, ref, 10, 2, dnafull).cigar.decode.decode()
+        )
+
+    # compute full read cigar with edlib
+    cigar = cigartuples_from_string(
+        edlib_align(query, ref, task="path")["cigar"]
+    )
+
+    # find first and last long matches and fix up alignments with parasail
+    flm_idx = find_first(long_match, cigar)
+    if flm_idx is None:
+        return parasail_align(query, ref)
+    if flm_idx > 0:
+        q_start, r_start = seq_lens(cigar[: flm_idx + 1])
+        cigar = concat(
+            parasail_align(query[:q_start], ref[:r_start]), cigar[flm_idx + 1:]
+        )
+    llm_idx = find_first(long_match, reversed(cigar))
+    if llm_idx is None:
+        return parasail_align(query, ref)
+    if llm_idx > 0:
+        q_end, r_end = seq_lens(cigar[-(llm_idx + 1):])
+        cigar = concat(
+            cigar[: -(llm_idx + 1)],
+            parasail_align(query[-q_end:], ref[-r_end:]),
+        )
+
+    return cigar
+
+
+def call_basespace_duplex(temp_seq, temp_qstring, comp_seq, comp_qstring):
+    # convert qscores to numpy array
+    temp_qscores = np.frombuffer(temp_qstring, dtype=np.uint8)
+    comp_qscores = np.frombuffer(comp_qstring, dtype=np.uint8)
+
+    temp_qscores = adj_qscores(temp_qscores, temp_seq, qshift=1)
+    comp_qscores = adj_qscores(comp_qscores, comp_seq, qshift=-1)
+
+    comp_seq = revcomp(comp_seq)
+    comp_qscores = comp_qscores[::-1]
+
+    cigar = edlib_adj_align(temp_seq, comp_seq)
+    cigar, temp_st, comp_st = trim_while(cigar)
+    cigar, temp_en, comp_en = trim_while(cigar, from_end=True)
+    if len(cigar) == 0:
+        return "", ""
+
+    temp_seq = temp_seq[temp_st:len(temp_seq) - temp_en]
+    temp_qscores = temp_qscores[temp_st:len(temp_qscores) - temp_en]
+    comp_seq = comp_seq[comp_st:len(comp_seq) - comp_en]
+    comp_qscores = comp_qscores[comp_st:len(comp_qscores) - comp_en]
+    seq, qstring = compute_consensus(
+        cigar,
+        temp_seq,
+        temp_qscores,
+        comp_seq,
+        comp_qscores,
+    )
+    return seq, qstring
+
+
+def extract_and_call_duplex(read_pair, read_ids_bam):
+    temp_rid, comp_rid = read_pair
+    try:
+        temp_read = read_ids_bam.get_first_alignment(temp_rid)
+        comp_read = read_ids_bam.get_first_alignment(comp_rid)
+    except RuntimeError:
+        return {
+            "sequence": "",
+            "qstring": ""
+        }
+    cons_seq, cons_qstring = call_basespace_duplex(
+        temp_read.query_sequence,
+        temp_read.query_qualities,
+        comp_read.query_sequence,
+        comp_read.query_qualities,
+    )
     return {
-        'trans': trans.to(dtype).transpose(0, 1),
-        'init': init.to(dtype).unsqueeze(1),
+        "sequence": cons_seq,
+        "qstring": cons_qstring
     }
 
 
-#def basecall(model, reads, chunksize=4000, overlap=500, batchsize=32, reverse=False):
-#    reads = (
-#        read_chunk for read in reads
-#        for read_chunk in split_read(read, chunksize * batchsize)[::-1 if reverse else 1]
-#    )
-#    chunks = (
-#        ((read, start, end),
-#        chunk(torch.from_numpy(read.signal[start:end]), chunksize, overlap))
-#        for (read, start, end) in reads
-#    )
-#    batches = (
-#        (k, compute_scores(model, batch, reverse=reverse))
-#        for k, batch in batchify(chunks, batchsize=batchsize)
-#    )
-#    stitched = (
-#        (read, stitch(x, chunksize, overlap, end - start, model.stride, reverse=reverse))
-#        for ((read, start, end), x) in unbatchify(batches)
-#    )
-#    transferred = thread_map(transfer, stitched, n_thread=1)
-#
-#    return (
-#        (read, concat([part for k, part in parts]))
-#        for read, parts in groupby(transferred, lambda x: x[0])
-#    )
+def main(args):
 
+    duplex_pairs = []
+    read_idx_bam = ReadIndexedBam(args.in_bam)
+    fmt = biofmt(aligned=False)
 
-def beam_search_duplex(seq1, path1, t1, b1, seq2, path2, t2, b2, alphabet='NACGT', beamsize=5, pad=40, T=0.01):
-    env = build_envelope(t1.shape[0], seq1, path1, t2.shape[0], seq2, path2, padding=pad)
-    return crf_beam_search_duplex(
-        t1, b1, t2, b2,
-        alphabet=alphabet,
-        beam_size=beamsize,
-        beam_cut_threshold=T,
-        envelope=env,
-    )
-
-
-def decode(res, beamsize_1=5, pad_1=40, cut_1=0.01, beamsize_2=5, pad_2=40, cut_2=0.01, match=80, alphabet="NACGT"):
-
-    temp_probs, init1 = res[0]['trans'].astype(np.float32), res[0]['init'][0].astype(np.float32)
-    comp_probs, init2 = res[1]['trans'].astype(np.float32), res[1]['init'][0].astype(np.float32)
-
-    simplex1, path1 = crf_beam_search(temp_probs, init1, alphabet, beam_size=5, beam_cut_threshold=0.01)
-    simplex2, path2 = crf_beam_search(comp_probs, init2, alphabet, beam_size=5, beam_cut_threshold=0.01)
-
-    if len(simplex1) < 10 or len(simplex2) < 10:
-        return [simplex1, simplex2]
-
-    if accuracy(simplex1, simplex2) < match:
-        return [simplex1, simplex2]
-
-    duplex1 = beam_search_duplex(
-        simplex1, path1, temp_probs, init1, simplex2, path2, comp_probs, init2, pad=pad_1, beamsize=5, T=cut_1
-    )
-    duplex2 = beam_search_duplex(
-        simplex2, path2, comp_probs, init2, simplex1, path1, temp_probs, init1, pad=pad_2, beamsize=5, T=cut_2
-    )
-    return [duplex1, duplex2, simplex1, simplex2]
-
-
-def poa(seqs, allseq=False):
-    con, msa = spoa.poa(seqs, genmsa=False)
-    if allseq: return (con, *seqs)
-    return (con, )
-
-
-def call(model, reads_directory, templates, complements, aligner=None, cudapoa=True):
-
-    temp_reads = read_gen(reads_directory, templates, n_proc=8, cancel=process_cancel())
-    comp_reads = read_gen(reads_directory, complements, n_proc=8, cancel=process_cancel())
-
-    temp_scores = basecall(model, temp_reads, reverse=False)
-    comp_scores = basecall(model, comp_reads, reverse=True)
-
-    scores = (((r1, r2), (s1, s2)) for (r1, s1), (r2, s2) in zip(temp_scores, comp_scores))
-    calls = thread_map(decode, scores, n_thread=12)
-
-    if cudapoa:
-        sequences = ((reads, [seqs, ]) for reads, seqs in calls if len(seqs) > 2)
-        consensus = (zip(reads, poagen(calls)) for reads, calls in batchify(sequences, 100))
-        res = ((reads[0], {'sequence': seq}) for seqs in consensus for reads, seq in seqs)
+    if args.reference and args.reference.endswith(".mmi") and fmt.name == "cram":
+        sys.stderr.write("> error: reference cannot be a .mmi when outputting cram\n")
+        exit(1)
+    elif args.reference and fmt.name == "fastq":
+        sys.stderr.write(f"> warning: did you really want {fmt.aligned} {fmt.name}?\n")
     else:
-        sequences = ((reads, seqs) for reads, seqs in calls if len(seqs) > 2)
-        consensus = process_map(poa, sequences, n_proc=4)
-        res = ((reads, {'sequence': seq}) for reads, seqs in consensus for seq in seqs)
+        sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
 
-    if aligner is None: return res
-    return align_map(aligner, res)
-
-def argparser():
-    parser = ArgumentParser(
-        formatter_class=ArgumentDefaultsHelpFormatter,
-        add_help=False
-    )
-    parser.add_argument("model")
-    parser.add_argument("reads_directory")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--summary", default=None)
-    group.add_argument("--pairs", default=None)
-    parser.add_argument("--sep", default=' ')
-    parser.add_argument("--index", default=None)
-    parser.add_argument("--save-index", action="store_true", default=False)
-    parser.add_argument("--reference")
-    parser.add_argument("--device", default="cuda")
-    parser.add_argument("--max-reads", default=0, type=int)
-    return parser
-
-#def main(args):
-if __name__ == "__main__":
-
-    args = argparser().parse_args()
-    
-    sys.stderr.write("> loading model\n")
-    model = load_model(args.model, args.device)
+    with open(args.duplex_pairs_file) as duplex_pairs_fh:
+        if not args.no_header:
+            duplex_pairs_fh.readline()
+        for line in duplex_pairs_fh:
+            temp_rid, comp_rid = line.split()
+            duplex_pairs.append(
+                ((temp_rid, comp_rid), (temp_rid, comp_rid))
+            )
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset='map-ont')
+        aligner = Aligner(args.reference, preset='map-ont', best_n=1)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
     else:
         aligner = None
 
-    if args.summary:
-        sys.stderr.write("> finding follow on strands\n")
-        pairs = pd.read_csv(args.summary, '\t', low_memory=False)
-        pairs = pairs[pairs.sequence_length_template.gt(0)]
-        if 'filename' in pairs.columns:
-            pairs = pairs.rename(columns={'filename': 'filename_fast5'})
-        if 'alignment_strand_coverage' in pairs.columns:
-            pairs = pairs.rename(columns={'alignment_strand_coverage': 'alignment_coverage'})
-        valid_fast5s = [
-            f for f in pairs.filename_fast5.unique()
-            if ((args.reads_directory / Path(f)).exists())
-        ]
-        pairs = pairs[pairs.filename_fast5.isin(valid_fast5s)]
-        pairs = find_follow_on(pairs)
-        sys.stderr.write("> found %s follow strands in summary\n" % (len(pairs) // 2))
+    results = ProcessMap(
+        partial(extract_and_call_duplex, read_ids_bam=read_idx_bam),
+        duplex_pairs,
+        args.threads,
+    )
 
-        if args.max_reads > 0: pairs = pairs.head(args.max_reads)
+    if aligner:
+        results = align_map(aligner, results, n_thread=args.alignment_threads)
 
-        temp_reads = pairs.iloc[0::2]
-        comp_reads = pairs.iloc[1::2]
-    else:
-        if args.index is not None:
-            sys.stderr.write("> loading read index\n")
-            index = json.load(open(args.index, 'r'))
-        else:
-            sys.stderr.write("> building read index\n")
-            files = list(glob(os.path.join(args.reads_directory, '*.fast5')))
-            index = build_index(files, n_proc=8)
-            if args.save_index:
-                with open('bonito-read-id.idx', 'w') as f:
-                    json.dump(index, f)
-
-        pairs = pd.read_csv(args.pairs, sep=args.sep, names=['read_1', 'read_2'])
-        if args.max_reads > 0: pairs = pairs.head(args.max_reads)
-
-        pairs['file_1'] = pairs['read_1'].apply(index.get)
-        pairs['file_2'] = pairs['read_2'].apply(index.get)
-        pairs = pairs.dropna().reset_index()
-
-        temp_reads = pairs[['read_1', 'file_1']].rename(
-            columns={'read_1': 'read_id', 'file_1': 'filename_fast5'}
-        )
-        comp_reads = pairs[['read_2', 'file_2']].rename(
-            columns={'read_2': 'read_id', 'file_2': 'filename_fast5'}
-        )
-
-    if len(pairs) == 0:
-        print("> no matched pairs found in given directory", file=sys.stderr)
-        exit(1)
-
-    # https://github.com/clara-parabricks/GenomeWorks/issues/648
-    with devnull(): CudaPoaBatch(1000, 1000, 3724032)
-
-    basecalls = call(model, args.reads_directory, temp_reads, comp_reads, aligner=aligner)
-    writer = Writer(tqdm(basecalls, desc="> calling", unit=" reads", leave=False), aligner, duplex=True)
+    writer = DuplexWriter(
+        fmt.mode, tqdm(results, ascii=True, ncols=100, smoothing=0, leave=False,
+                       total=len(duplex_pairs), desc="> calling", unit=" pairs"),
+        aligner=aligner, ref_fn=args.reference, groups=(), min_qscore=args.min_qscore
+    )
 
     t0 = perf_counter()
     writer.start()
     writer.join()
     duration = perf_counter() - t0
-    num_samples = sum(num_samples for read_id, num_samples in writer.log)
 
-    print("> duration: %s" % timedelta(seconds=np.round(duration)), file=sys.stderr)
-    print("> samples per second %.1E" % (num_samples / duration), file=sys.stderr)
+    num_bases = sum(num_bases for read_id, num_bases in writer.log)
+    sys.stderr.write("> completed reads: %s\n" % len(writer.log))
+    sys.stderr.write("> duration: %s\n" % timedelta(seconds=np.round(duration)))
+    sys.stderr.write("> bases per second %.1E\n" % (num_bases / duration))
+    sys.stderr.write("> done\n")
 
 
-
+def argparser():
+    parser = ArgumentParser(
+        formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False
+    )
+    parser.add_argument("in_bam")
+    parser.add_argument("duplex_pairs_file")
+    parser.add_argument("--reference")
+    parser.add_argument("--min-qscore", default=0, type=int)
+    parser.add_argument("--no-header", action="store_true") # skip-header?
+    parser.add_argument("--threads", default=8, type=int)
+    parser.add_argument("--alignment-threads", default=8, type=int)
+    return parser

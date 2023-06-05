@@ -8,7 +8,7 @@ import csv
 import pandas as pd
 from threading import Thread
 from logging import getLogger
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from contextlib import contextmanager
 from os.path import realpath, splitext, dirname
 
@@ -144,7 +144,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
             mapping.r_st + 1,
             mapping.mapq,
             ''.join(softclip if mapping.strand == +1 else softclip[::-1]),
-            '*', 0, len(sequence),
+            '*', 0, 0,
             sequence if mapping.strand == +1 else mappy.revcomp(sequence),
             qstring,
             'NM:i:%s' % mapping.NM,
@@ -152,7 +152,7 @@ def sam_record(read_id, sequence, qstring, mapping, tags=None, sep='\t'):
         ]
     else:
         record = [
-            read_id, 4, '*', 0, 0, '*', '*', 0, len(sequence), sequence, qstring, 'NM:i:0'
+            read_id, 4, '*', 0, 0, '*', '*', 0, 0, sequence, qstring, 'NM:i:0'
         ]
 
     if tags is not None:
@@ -395,14 +395,13 @@ class NullWriter(Thread):
 class Writer(Thread):
 
     def __init__(
-            self, mode, iterator, aligner, fd=sys.stdout, duplex=False,
+            self, mode, iterator, aligner, fd=sys.stdout,
             ref_fn=None, groups=None, group_key=None, min_qscore=0
     ):
         super().__init__()
         self.fd = fd
         self.log = []
         self.mode = mode
-        self.duplex = duplex
         self.aligner = aligner
         self.iterator = iterator
         self.fastq = mode == 'wfq'
@@ -430,12 +429,8 @@ class Writer(Thread):
                 mapping = res.get('mapping', False)
                 mods_tags = res.get('mods', [])
 
-                if self.duplex:
-                    samples = len(read[0].signal) + len(read[1].signal)
-                    read_id = '%s;%s' % (read[0].read_id, read[1].read_id)
-                else:
-                    samples = len(read.signal)
-                    read_id = read.read_id
+                samples = len(read.signal)
+                read_id = read.read_id
 
                 self.log.append((read_id, samples))
 
@@ -464,13 +459,50 @@ class Writer(Thread):
                                 self.output.header
                             )
                         )
-                    if self.duplex:
-                        summary.append(duplex_summary_row(read[0], read[1], len(seq), mean_qscore, alignment=mapping))
-                    else:
-                        summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
-
+                    summary.append(summary_row(read, len(seq), mean_qscore, alignment=mapping))
                 else:
                     logger.warn("> skipping empty sequence %s", read_id)
+
+
+class DuplexWriter(Writer, Thread):
+
+    def run(self):
+        for read, res in self.iterator:
+
+            read_id = '%s;%s' % (read[0], read[1])
+
+            seq = res['sequence']
+            qstring = res.get('qstring', '*')
+            mean_qscore = res.get('mean_qscore', mean_qscore_from_qstring(qstring))
+            mapping = res.get('mapping', False)
+
+            self.log.append((read_id, len(seq)))
+
+            if mean_qscore < self.min_qscore:
+                continue
+
+            tags = [
+                f'qs:i:{round(mean_qscore)}',
+            ]
+
+            if len(seq):
+                if self.mode == 'wfq':
+                    write_fastq(read_id, seq, qstring, fd=self.fd, tags=tags)
+                else:
+                    self.output.write(
+                        AlignedSegment.fromstring(
+                            sam_record(read_id, seq, qstring, mapping, tags=tags),
+                            self.output.header
+                        )
+                    )
+
+
+class RejectCounter(dict):
+    """Used to count reasons for rejection"""
+    def __call__(self, reject_condition, condition_name):
+        if reject_condition:
+            self[condition_name] = self.get(condition_name, 0) + 1
+        return reject_condition
 
 
 class CTCWriter(Thread):
@@ -479,7 +511,8 @@ class CTCWriter(Thread):
     """
     def __init__(
             self, mode, iterator, aligner, fd=sys.stdout, min_coverage=0.90,
-            min_accuracy=0.99, ref_fn=None, groups=None, group_key=None, min_qscore=None
+            min_accuracy=0.99, ref_fn=None, groups=None, group_key=None,
+            min_qscore=None, rna=False
     ):
         super().__init__()
         self.fd = fd
@@ -490,6 +523,8 @@ class CTCWriter(Thread):
         self.group_key = group_key
         self.min_coverage = min_coverage
         self.min_accuracy = min_accuracy
+        self.min_qscore = min_qscore
+        self.rna = rna
         self.output = AlignmentFile(
             fd, 'w' if self.mode == 'wfq' else self.mode, add_sam_header=self.mode != 'wfq',
             reference_filename=ref_fn,
@@ -504,8 +539,9 @@ class CTCWriter(Thread):
 
         chunks = []
         targets = []
-        lengths = []
-
+        lengths = []            
+        reject_counter = RejectCounter()
+        
         with CSVLogger(summary_file(), sep='\t') as summary:
             for read, ctc_data in self.iterator:
 
@@ -515,16 +551,17 @@ class CTCWriter(Thread):
                 mapping = ctc_data.get('mapping', False)
 
                 self.log.append((read.read_id, len(read.signal)))
-
-                if len(seq) == 0 or mapping is None:
-                    continue
+                if reject_counter(mean_qscore < self.min_qscore, 'low_qscore'): continue
+                if reject_counter(len(seq)==0, 'zerolen_sequence'): continue
+                if reject_counter(mapping is None, 'no_mapping'): continue
 
                 cov = (mapping.q_en - mapping.q_st) / len(seq)
                 acc = mapping.mlen / mapping.blen
                 refseq = self.aligner.seq(mapping.ctg, mapping.r_st, mapping.r_en)
 
-                if acc < self.min_accuracy or cov < self.min_coverage or 'N' in refseq:
-                    continue
+                if reject_counter(acc < self.min_accuracy, f'low_accuracy{self.min_accuracy:.2f}'): continue
+                if reject_counter(cov < self.min_coverage, f'low_coverage{self.min_coverage:.2f}'): continue
+                if reject_counter('N' in refseq, 'N_in_sequence'): continue
 
                 self.output.write(
                     AlignedSegment.fromstring(
@@ -538,7 +575,8 @@ class CTCWriter(Thread):
                     refseq = mappy.revcomp(refseq)
 
                 target = [int(x) for x in refseq.translate({65: '1', 67: '2', 71: '3', 84: '4'})]
-                targets.append(target)
+                # RNA basecall already reversed. Flip back to signal-oriented for training.
+                targets.append(target[::-1] if self.rna else target)
                 chunks.append(read.signal)
                 lengths.append(len(target))
 
@@ -564,7 +602,10 @@ class CTCWriter(Thread):
         np.save(os.path.join(output_directory, "references.npy"), targets_)
         np.save(os.path.join(output_directory, "reference_lengths.npy"), lengths)
 
-        sys.stderr.write("> written ctc training data\n")
+        sys.stderr.write("> Chunks rejected from training data:\n")
+        for condition_name,count in reject_counter.items():
+            sys.stderr.write(f" - {condition_name}: {count}\n")
+        sys.stderr.write(f"> written ctc training data to {output_directory}\n")
         sys.stderr.write("  - chunks.npy with shape (%s)\n" % ','.join(map(str, chunks.shape)))
         sys.stderr.write("  - references.npy with shape (%s)\n" % ','.join(map(str, targets_.shape)))
         sys.stderr.write("  - reference_lengths.npy shape (%s)\n" % ','.join(map(str, lengths.shape)))

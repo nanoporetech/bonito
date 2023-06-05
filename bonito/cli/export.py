@@ -62,26 +62,60 @@ def save_tensor(directory, name, tensor):
     tensors.save(f"{directory}/{name}.tensor")
 
 
-def reformat_output_layer(layer_dict):
+def reformat_output_layer(layer_dict, v4=True):
+
     n_base, state_len, blank_score = [layer_dict.pop(k) for k in ['n_base', 'state_len', 'blank_score']]
     layer_dict['size'] = (n_base + 1) * n_base**state_len
-    layer_dict['type'] = 'GlobalNormTransducer'
-    if blank_score is not None:
-        assert layer_dict['activation'] == 'tanh'
-        params = layer_dict['params']
-        params['W'] = torch.nn.functional.pad(
-            params['W'].reshape([n_base**state_len, n_base, -1]),
-            (0, 0, 1, 0),
-            value=0.
-        ).reshape((n_base + 1) * n_base**state_len, -1)
 
-        params['b'] = torch.nn.functional.pad(
-            params['b'].reshape(n_base**state_len, n_base),
-            (1, 0),
-            value=np.arctanh(blank_score / layer_dict['scale'])
-        ).reshape(-1)
+    if blank_score is not None:
+        if v4:
+            layer_dict['type'] = 'GlobalNormTransducer'
+            params = layer_dict['params']
+            params['W'] = torch.nn.functional.pad(
+                params['W'].reshape([n_base**state_len, n_base, -1]),
+                (0, 0, 1, 0),
+                value=0.
+            ).reshape((n_base + 1) * n_base**state_len, -1)
+
+            if layer_dict['bias'] is False:
+                params['b'] = torch.zeros(n_base**state_len * (n_base + 1))
+                params['b'][0::5] = np.arctanh(blank_score / 5.0)
+            else:
+                params['b'] = torch.nn.functional.pad(
+                    params['b'].reshape(n_base**state_len, n_base),
+                    (1, 0),
+                    value=0.
+                ).reshape(-1)
+            layer_dict['activation'] = 'identity'
+            layer_dict['scale'] = 1.0
+            layer_dict['stay_score'] = blank_score
+        else:
+            layer_dict['type'] = 'GlobalNormTransducer'
+            assert layer_dict['activation'] == 'tanh'
+            params = layer_dict['params']
+            params['W'] = torch.nn.functional.pad(
+                params['W'].reshape([n_base**state_len, n_base, -1]),
+                (0, 0, 1, 0),
+                value=0.
+            ).reshape((n_base + 1) * n_base**state_len, -1)
+
+            params['b'] = torch.nn.functional.pad(
+                params['b'].reshape(n_base**state_len, n_base),
+                (1, 0),
+                value=np.arctanh(blank_score / layer_dict['scale'])
+            ).reshape(-1)
 
     return layer_dict
+
+
+def to_guppy_feed_forward(layer):
+    layer['type'] = 'feed-forward'
+    layer['insize'] = layer['in_features']
+    layer['size'] = layer['out_features']
+    layer['activation'] = 'identity'
+    del layer['in_features']
+    del layer['out_features']
+    return layer
 
 
 def to_guppy_dict(model, include_weights=True, binary_weights=True):
@@ -89,7 +123,10 @@ def to_guppy_dict(model, include_weights=True, binary_weights=True):
     guppy_dict['sublayers'] = [x for x in guppy_dict['sublayers'] if x['type'] != 'permute']
     guppy_dict['sublayers'] = [dict(x, type='LSTM', activation='tanh', gate='sigmoid') if x['type'] == 'lstm' else x for x in guppy_dict['sublayers']]
     guppy_dict['sublayers'] = [dict(x, padding=(x['padding'], x['padding'])) if x['type'] == 'convolution' else x for x in guppy_dict['sublayers']]
-    guppy_dict['sublayers'][-1] = reformat_output_layer(guppy_dict['sublayers'][-1])
+    guppy_dict['sublayers'] = [to_guppy_feed_forward(x) if x['type'] == 'linear' else x for x in guppy_dict['sublayers']]
+    idx = -1 if guppy_dict['sublayers'][-1]['type'] == 'linearcrfencoder' else -2
+    guppy_dict['sublayers'][idx] = reformat_output_layer(guppy_dict['sublayers'][idx])
+
     if binary_weights:
         for layer_dict in guppy_dict['sublayers']:
             if 'params' in layer_dict:

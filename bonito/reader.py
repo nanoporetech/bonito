@@ -13,6 +13,13 @@ from scipy.signal import find_peaks
 
 __formats__ = ["fast5", "pod5"]
 
+# Normalisation parameters for kit 14 DNA
+# Different parameters can be specified in the 'normalisation' section
+# of a bonito config file
+__default_norm_params__ = {'quantile_a' : 0.2,
+                           'quantile_b' : 0.9,
+                           'shift_multiplier' : 0.51,
+                           'scale_multiplier' : 0.53}
 
 class Reader:
 
@@ -67,6 +74,7 @@ class Read:
             f"mx:i:{self.mux}",
             f"ch:i:{self.channel}",
             f"st:Z:{self.start_time}",
+            f"du:f:{self.duration}",
             f"rn:i:{self.read_number}",
             f"f5:Z:{self.filename}",
             f"sm:f:{self.shift}",
@@ -128,11 +136,13 @@ def trim(signal, window_size=40, threshold=2.4, min_trim=10, min_elements=3, max
     return min_trim
 
 
-def normalisation(sig):
+def normalisation(sig, norm_params=None):
     """
     Calculate signal shift and scale factors for normalisation..
     """
-    q20, q90 = np.quantile(sig, [0.2, 0.9])
-    shift = max(10, 0.51 * (q20 + q90))
-    scale = max(1.0, 0.53 * (q90 - q20))
+    if norm_params is None:
+        norm_params = __default_norm_params__
+    qa, qb = np.quantile(sig, [norm_params['quantile_a'], norm_params['quantile_b']])
+    shift = max(10, norm_params['shift_multiplier'] * (qa + qb))
+    scale = max(1.0, norm_params['scale_multiplier'] * (qb - qa))
     return shift, scale
