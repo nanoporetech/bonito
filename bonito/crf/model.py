@@ -159,6 +159,8 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
             blank_score=blank_score, expand_blanks=expand_blanks
         )
     ])
+
+
 class SeqdistModel(Module):
     def __init__(self, encoder, seqdist, n_pre_post_context_bases=None):
         super().__init__()
@@ -194,7 +196,7 @@ class SeqdistModel(Module):
             quantize=kwargs["quantize"],
         )
 
-        
+
 class Model(SeqdistModel):
 
     def __init__(self, config):
