@@ -154,32 +154,22 @@ def chunk(signal, chunksize, overlap):
     Convert a read into overlapping chunks before calling
     """
     if signal.ndim == 1:
-        T = signal.shape[0]
-        if chunksize == 0:
-            chunks = signal[None, :]
-        elif T < chunksize:
-            chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
-        else:
-            stub = (T - overlap) % (chunksize - overlap)
-            chunks = signal[stub:].unfold(0, chunksize, chunksize - overlap)
-            if stub > 0:
-                chunks = torch.cat([signal[None, :chunksize], chunks], dim=0)
-        return chunks.unsqueeze(1)
+        signal = signal.unsqueeze(0)
+    T = signal.shape[-1]
+    if chunksize == 0:
+        chunks = signal[None, :]
+    elif T < chunksize:
+        n, overhang = divmod(chunksize, T)
+        # np.tile operates only on dimension -1 by default, 
+        # whereas torch.repeat requires explicit listing of all input dimensions eg (1,n) or (1,1,n)
+        chunks = torch.cat((torch.from_numpy(np.tile(signal,n)), signal[...,:overhang]), dim=-1)[None, :]
     else:
-        T = signal.shape[-1]
-        if chunksize == 0:
-            chunks = signal[None, :]
-        elif T < chunksize:
-            chunks = torch.nn.functional.pad(signal, (chunksize - T, 0))[None, :]
-        else:
-            stub = (T - overlap) % (chunksize - overlap)
-            chunks = signal[...,stub:].unfold(1, chunksize, chunksize - overlap)
-            chunks = torch.swapaxes(chunks,0,1)
-            if stub > 0:
-                chunks = torch.cat([signal[None, ..., :chunksize], chunks], dim=0)
-        return chunks
+        stub = (T - overlap) % (chunksize - overlap)
+        chunks = signal[...,stub:].unfold(-1, chunksize, chunksize - overlap).movedim(-2,0)
+        if stub > 0:
+            chunks = torch.cat([signal[None, ..., :chunksize], chunks], dim=0)
+    return chunks
 
-    
 
 def stitch(chunks, chunksize, overlap, length, stride, reverse=False):
     """
