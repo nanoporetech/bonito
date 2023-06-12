@@ -62,7 +62,7 @@ def basecall(model, reads, chunksize=4000, overlap=100, batchsize=32,
     Basecalls a set of reads.
     """
     chunks = thread_iter(
-        ((read, 0, len(read.signal)), chunk(torch.from_numpy(read.signal), chunksize, overlap))
+        ((read, 0, read.signal.shape[-1]), chunk(torch.from_numpy(read.signal), chunksize, overlap))
         for read in reads
     )
 
