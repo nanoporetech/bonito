@@ -72,8 +72,7 @@ $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
-(venv3) $ pip install -r requirements.txt
-(venv3) $ python setup.py develop
+(venv3) $ pip install -e .
 ```
 
 ## Interface
