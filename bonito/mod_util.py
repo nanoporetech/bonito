@@ -74,15 +74,19 @@ def call_mods(mods_model, read, read_attrs):
     if len(read_attrs['sequence']) < 10:
         return read_attrs
     remora_model, remora_metadata = mods_model
+    sig = read.signal
     # convert signal move table to remora read format
     sig_move = apply_stride_to_moves(read_attrs)
     seq_to_sig_map = np.empty(
         len(read_attrs['sequence']) + 1, dtype=np.int32
     )
-    seq_to_sig_map[-1] = read.signal.shape[0]
+    seq_to_sig_map[-1] = sig.shape[0]
     seq_to_sig_map[:-1] = np.where(sig_move)[0]
+    if remora_metadata["reverse_signal"]:
+        sig = sig[::-1]
+        seq_to_sig_map = seq_to_sig_map[-1] - seq_to_sig_map[::-1]
     remora_read = RemoraRead(
-        dacs=read.signal,
+        dacs=sig,
         shift=0,
         scale=1,
         seq_to_sig_map=seq_to_sig_map,
