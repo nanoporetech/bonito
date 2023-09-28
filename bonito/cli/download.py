@@ -108,13 +108,16 @@ models = [
     "dna_r10.4.1_e8.2_260bps_sup@v3.5.2",
 
     "dna_r10.4.1_e8.2_400bps_fast@v3.5.2",
-
     "dna_r10.4.1_e8.2_400bps_hac@v3.5.2",
     "dna_r10.4.1_e8.2_400bps_sup@v3.5.2",
 
     "dna_r9.4.1_e8_sup@v3.3",
     "dna_r9.4.1_e8_hac@v3.3",
     "dna_r9.4.1_e8_fast@v3.4",
+    
+    "rna004_130bps_fast@v3.0.1",
+    "rna004_130bps_hac@v3.0.1",
+    "rna004_130bps_sup@v3.0.1",
 ]
 
 
