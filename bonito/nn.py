@@ -330,6 +330,8 @@ def from_dict(model_dict, layer_types=None):
         layer_types = layers
     type_name = model_dict.pop('type')
     typ = layer_types[type_name]
+    if hasattr(typ, "from_dict"):
+        return typ.from_dict(model_dict, layer_types)
     if 'sublayers' in model_dict:
         sublayers = model_dict['sublayers']
         model_dict['sublayers'] = [
