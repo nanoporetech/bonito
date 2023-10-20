@@ -91,6 +91,8 @@ class Serial(torch.nn.Sequential):
             'sublayers': [to_dict(layer, include_weights) for layer in self._modules.values()]
         }
 
+    def __repr__(self):
+        return torch.nn.ModuleList.__repr__(self)
 
 @register
 class Reverse(Module):
@@ -139,6 +141,7 @@ class BatchNorm(Module):
         return res
 
 
+
 @register
 class Convolution(Module):
 
@@ -169,9 +172,16 @@ class Convolution(Module):
             "winlen": self.conv.kernel_size[0],
             "stride": self.conv.stride[0],
             "padding": self.conv.padding[0],
-            "activation": self.activation.name if self.activation else None,
-            "norm": self.norm.to_dict(include_weights) if self.norm is not None else None
         }
+        if self.activation is not None:
+            res["activation"] = self.activation.name
+        if self.norm is not None:
+            res["norm"] = to_dict(self.norm, include_weights)
+            #simplify default case e.g. norm="batchnorm"
+            if not include_weights and self.norm.name in layers:
+                if res["norm"] == to_dict(layers[self.norm.name](res["size"])):
+                    res["norm"] = self.norm.name
+
         if include_weights:
             res['params'] = {
                 'W': self.conv.weight, 'b': self.conv.bias if self.conv.bias is not None else []
@@ -215,9 +225,11 @@ class LinearCRFEncoder(Module):
             'state_len': self.state_len,
             'bias': self.linear.bias is not None,
             'scale': self.scale,
-            'activation': self.activation.name if self.activation else None,
             'blank_score': self.blank_score,
+            'expand_blanks': self.expand_blanks,
         }
+        if self.activation is not None:
+            res['activation'] = self.activation.name
         if include_weights:
             res['params'] = {
                 'W': self.linear.weight, 'b': self.linear.bias
@@ -325,6 +337,8 @@ def to_dict(layer, include_weights=False):
 
 
 def from_dict(model_dict, layer_types=None):
+    if not isinstance(model_dict, dict):
+        return model_dict
     model_dict = model_dict.copy()
     if layer_types is None:
         layer_types = layers
