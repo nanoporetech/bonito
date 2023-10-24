@@ -192,7 +192,7 @@ class Convolution(Module):
 @register
 class LinearCRFEncoder(Module):
 
-    def __init__(self, insize, n_base, state_len, bias=True, scale=None, activation=None, blank_score=None, expand_blanks=True):
+    def __init__(self, insize, n_base, state_len, bias=True, scale=None, activation=None, blank_score=None, expand_blanks=True, permute=None):
         super().__init__()
         self.scale = scale
         self.n_base = n_base
@@ -202,8 +202,11 @@ class LinearCRFEncoder(Module):
         size = (n_base + 1) * n_base**state_len if blank_score is None else n_base**(state_len + 1)
         self.linear = torch.nn.Linear(insize, size, bias=bias)
         self.activation = layers.get(activation, lambda: activation)()
+        self.permute = permute
 
     def forward(self, x):
+        if self.permute is not None:
+            x = x.permute(*self.permute)
         scores = self.linear(x)
         if self.activation is not None:
             scores = self.activation(scores)
@@ -230,6 +233,8 @@ class LinearCRFEncoder(Module):
         }
         if self.activation is not None:
             res['activation'] = self.activation.name
+        if self.permute is not None:
+            res['permute'] = self.permute
         if include_weights:
             res['params'] = {
                 'W': self.linear.weight, 'b': self.linear.bias
@@ -238,9 +243,13 @@ class LinearCRFEncoder(Module):
         return res
 
     def extra_repr(self):
-        return 'n_base={}, state_len={}, scale={}, blank_score={}, expand_blanks={}'.format(
+        rep = 'n_base={}, state_len={}, scale={}, blank_score={}, expand_blanks={}'.format(
             self.n_base, self.state_len, self.scale, self.blank_score, self.expand_blanks
         )
+        if self.permute:
+            rep += f', permute={self.permute}'
+        return rep
+            
 
 @register
 class Permute(Module):

@@ -176,7 +176,7 @@ class SeqdistModel(Module):
         if target_projection is None:
             self.target_projection = None
         else:
-            self.register_buffer('target_projection', torch.tensor([0] + target_projection))
+            self.register_buffer('target_projection', torch.tensor([0] + target_projection), persistent=False)
 
     @classmethod
     def from_dict(cls, model_dict, layer_types=None):
