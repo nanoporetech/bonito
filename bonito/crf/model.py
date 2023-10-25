@@ -12,16 +12,19 @@ from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_s
 from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, to_dict, from_dict, register
 
 
-def get_stride(m):
-    children = list(m.children())
-    if len(children) == 0:
-        if hasattr(m, "stride"):
-            stride = m.stride
-            if isinstance(stride, int):
-                return stride
-            return np.prod(stride)
-        return 1
-    return np.prod([get_stride(c) for c in children])
+def get_stride(m, stride=1):
+    if hasattr(m, "output_stride"):
+        stride = m.output_stride(stride)
+    elif hasattr(m, "stride"):
+        s = m.stride
+        if isinstance(s, tuple):
+            assert len(s) == 1
+            s = s[0]
+        stride = stride * s
+    else:
+        for child in m.children():
+            stride = get_stride(child, stride)
+    return stride
 
 
 class CTC_CRF(SequenceDist):
