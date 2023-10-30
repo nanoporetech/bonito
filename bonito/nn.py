@@ -141,7 +141,6 @@ class BatchNorm(Module):
         return res
 
 
-
 @register
 class Convolution(Module):
 
@@ -347,6 +346,7 @@ def to_dict(layer, include_weights=False):
 
 def from_dict(model_dict, layer_types=None):
     if not isinstance(model_dict, dict):
+        # enable model_dict to contain concrete objects, handy in nb creation etc
         return model_dict
     model_dict = model_dict.copy()
     if layer_types is None:

@@ -185,8 +185,8 @@ class SeqdistModel(Module):
     def from_dict(cls, model_dict, layer_types=None):
         kwargs = dict(
             model_dict,
-            encoder = from_dict(model_dict["encoder"], layer_types),
-            seqdist = CTC_CRF(**model_dict["seqdist"])
+            encoder=from_dict(model_dict["encoder"], layer_types),
+            seqdist=CTC_CRF(**model_dict["seqdist"])
         )
         return cls(**kwargs)
 
