@@ -91,6 +91,8 @@ class Serial(torch.nn.Sequential):
             'sublayers': [to_dict(layer, include_weights) for layer in self._modules.values()]
         }
 
+    def __repr__(self):
+        return torch.nn.ModuleList.__repr__(self)
 
 @register
 class Reverse(Module):
@@ -169,9 +171,16 @@ class Convolution(Module):
             "winlen": self.conv.kernel_size[0],
             "stride": self.conv.stride[0],
             "padding": self.conv.padding[0],
-            "activation": self.activation.name if self.activation else None,
-            "norm": self.norm.to_dict(include_weights) if self.norm is not None else None
         }
+        if self.activation is not None:
+            res["activation"] = self.activation.name
+        if self.norm is not None:
+            res["norm"] = to_dict(self.norm, include_weights)
+            #simplify default case e.g. norm="batchnorm"
+            if not include_weights and self.norm.name in layers:
+                if res["norm"] == to_dict(layers[self.norm.name](res["size"])):
+                    res["norm"] = self.norm.name
+
         if include_weights:
             res['params'] = {
                 'W': self.conv.weight, 'b': self.conv.bias if self.conv.bias is not None else []
@@ -182,7 +191,7 @@ class Convolution(Module):
 @register
 class LinearCRFEncoder(Module):
 
-    def __init__(self, insize, n_base, state_len, bias=True, scale=None, activation=None, blank_score=None, expand_blanks=True):
+    def __init__(self, insize, n_base, state_len, bias=True, scale=None, activation=None, blank_score=None, expand_blanks=True, permute=None):
         super().__init__()
         self.scale = scale
         self.n_base = n_base
@@ -192,8 +201,11 @@ class LinearCRFEncoder(Module):
         size = (n_base + 1) * n_base**state_len if blank_score is None else n_base**(state_len + 1)
         self.linear = torch.nn.Linear(insize, size, bias=bias)
         self.activation = layers.get(activation, lambda: activation)()
+        self.permute = permute
 
     def forward(self, x):
+        if self.permute is not None:
+            x = x.permute(*self.permute)
         scores = self.linear(x)
         if self.activation is not None:
             scores = self.activation(scores)
@@ -215,9 +227,13 @@ class LinearCRFEncoder(Module):
             'state_len': self.state_len,
             'bias': self.linear.bias is not None,
             'scale': self.scale,
-            'activation': self.activation.name if self.activation else None,
             'blank_score': self.blank_score,
+            'expand_blanks': self.expand_blanks,
         }
+        if self.activation is not None:
+            res['activation'] = self.activation.name
+        if self.permute is not None:
+            res['permute'] = self.permute
         if include_weights:
             res['params'] = {
                 'W': self.linear.weight, 'b': self.linear.bias
@@ -226,9 +242,13 @@ class LinearCRFEncoder(Module):
         return res
 
     def extra_repr(self):
-        return 'n_base={}, state_len={}, scale={}, blank_score={}, expand_blanks={}'.format(
+        rep = 'n_base={}, state_len={}, scale={}, blank_score={}, expand_blanks={}'.format(
             self.n_base, self.state_len, self.scale, self.blank_score, self.expand_blanks
         )
+        if self.permute:
+            rep += f', permute={self.permute}'
+        return rep
+            
 
 @register
 class Permute(Module):
@@ -325,11 +345,16 @@ def to_dict(layer, include_weights=False):
 
 
 def from_dict(model_dict, layer_types=None):
+    if not isinstance(model_dict, dict):
+        # enable model_dict to contain concrete objects, handy in nb creation etc
+        return model_dict
     model_dict = model_dict.copy()
     if layer_types is None:
         layer_types = layers
     type_name = model_dict.pop('type')
     typ = layer_types[type_name]
+    if hasattr(typ, "from_dict"):
+        return typ.from_dict(model_dict, layer_types)
     if 'sublayers' in model_dict:
         sublayers = model_dict['sublayers']
         model_dict['sublayers'] = [

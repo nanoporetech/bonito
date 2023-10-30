@@ -9,29 +9,30 @@ import koi
 from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 
-from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, from_dict
+from bonito.nn import Module, Convolution, LinearCRFEncoder, Serial, Permute, layers, to_dict, from_dict, register
 
 
-def get_stride(m):
-    children = list(m.children())
-    if len(children) == 0:
-        if hasattr(m, "stride"):
-            stride = m.stride
-            if isinstance(stride, int):
-                return stride
-            return np.prod(stride)
-        return 1
-    return np.prod([get_stride(c) for c in children])
+def get_stride(m, stride=1):
+    if hasattr(m, "output_stride"):
+        stride = m.output_stride(stride)
+    elif hasattr(m, "stride"):
+        s = m.stride
+        if isinstance(s, tuple):
+            assert len(s) == 1
+            s = s[0]
+        stride = stride * s
+    else:
+        for child in m.children():
+            stride = get_stride(child, stride)
+    return stride
 
 
 class CTC_CRF(SequenceDist):
 
-    def __init__(self, state_len, alphabet, n_pre_context_bases=0, n_post_context_bases=0):
+    def __init__(self, state_len, alphabet):
         super().__init__()
         self.alphabet = alphabet
         self.state_len = state_len
-        self.n_pre_context_bases = n_pre_context_bases
-        self.n_post_context_bases = n_post_context_bases
         self.n_base = len(alphabet[1:])
         self.idx = torch.cat([
             torch.arange(self.n_base**(self.state_len))[:, None],
@@ -160,19 +161,34 @@ def rnn_encoder(n_base, state_len, insize=1, stride=5, winlen=19, activation='sw
         )
     ])
 
-
+@register
 class SeqdistModel(Module):
-    def __init__(self, encoder, seqdist, n_pre_post_context_bases=None):
+    def __init__(self, encoder, seqdist, n_pre_post_context_bases=None, target_projection=None):
         super().__init__()
         self.seqdist = seqdist
         self.encoder = encoder
         self.stride = get_stride(encoder)
         self.alphabet = seqdist.alphabet
+
         if n_pre_post_context_bases is None:
             self.n_pre_context_bases = self.seqdist.state_len - 1
             self.n_post_context_bases = 1
         else:
             self.n_pre_context_bases, self.n_post_context_bases = n_pre_post_context_bases
+
+        if target_projection is None:
+            self.target_projection = None
+        else:
+            self.register_buffer('target_projection', torch.tensor([0] + target_projection), persistent=False)
+
+    @classmethod
+    def from_dict(cls, model_dict, layer_types=None):
+        kwargs = dict(
+            model_dict,
+            encoder=from_dict(model_dict["encoder"], layer_types),
+            seqdist=CTC_CRF(**model_dict["seqdist"])
+        )
+        return cls(**kwargs)
 
     def forward(self, x, *args):
         return self.encoder(x)
@@ -186,15 +202,24 @@ class SeqdistModel(Module):
         return self.decode_batch(x.unsqueeze(1))[0]
 
     def loss(self, scores, targets, target_lengths, **kwargs):
+        if self.target_projection is not None:
+            targets = self.target_projection[targets]
         return self.seqdist.ctc_loss(scores.to(torch.float32), targets, target_lengths, **kwargs)
 
     def use_koi(self, **kwargs):
-        self.encoder = koi.lstm.update_graph(
-            self.encoder,
-            batchsize=kwargs["batchsize"],
-            chunksize=kwargs["chunksize"] // self.stride,
-            quantize=kwargs["quantize"],
-        )
+        pass
+
+    def to_dict(self, include_weights=False):
+        if include_weights:
+            raise NotImplementedError
+        res = {
+            "encoder": to_dict(self.encoder),
+            "seqdist": {"state_len": self.seqdist.state_len, "alphabet": self.seqdist.alphabet},
+            "n_pre_post_context_bases": (self.n_pre_context_bases, self.n_post_context_bases),
+        }
+        if self.target_projection is not None:
+            res["target_projection"] = self.target_projection.tolist()[1:]
+        return res
 
 
 class Model(SeqdistModel):
@@ -211,3 +236,11 @@ class Model(SeqdistModel):
 
         super().__init__(encoder, seqdist, n_pre_post_context_bases=config['input'].get('n_pre_post_context_bases'))
         self.config = config
+
+    def use_koi(self, **kwargs):
+        self.encoder = koi.lstm.update_graph(
+            self.encoder,
+            batchsize=kwargs["batchsize"],
+            chunksize=kwargs["chunksize"] // self.stride,
+            quantize=kwargs["quantize"],
+        )
