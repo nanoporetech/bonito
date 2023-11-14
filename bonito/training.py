@@ -184,8 +184,9 @@ class Trainer:
 
     def validate_one_step(self, batch):
         data, targets, lengths, *args = batch
-        scores = self.model(data.to(self.device), *(x.to(self.device) for x in args))
-        losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
+        with amp.autocast(enabled=self.use_amp):
+            scores = self.model(data.to(self.device), *(x.to(self.device) for x in args))
+            losses = self.criterion(scores, targets.to(self.device), lengths.to(self.device))
         losses = {k: v.item() for k, v in losses.items()} if isinstance(losses, dict) else losses.item()
         if hasattr(self.model, 'decode_batch'):
             seqs = self.model.decode_batch(scores)
