@@ -10,6 +10,7 @@ import torch
 import numpy as np
 from scipy.signal import find_peaks
 
+import sys
 
 __formats__ = ["fast5", "pod5"]
 
@@ -136,13 +137,28 @@ def trim(signal, window_size=40, threshold=2.4, min_trim=10, min_elements=3, max
     return min_trim
 
 
-def normalisation(sig, norm_params=None):
+def normalisation(sig, scaling_strategy=None, norm_params=None):
     """
-    Calculate signal shift and scale factors for normalisation..
+    Calculate signal shift and scale factors for normalisation or standardisation.
+    If no information is provided in the config, quantile scaling is default.
     """
-    if norm_params is None:
-        norm_params = __default_norm_params__
-    qa, qb = np.quantile(sig, [norm_params['quantile_a'], norm_params['quantile_b']])
-    shift = max(10, norm_params['shift_multiplier'] * (qa + qb))
-    scale = max(1.0, norm_params['scale_multiplier'] * (qb - qa))
+    if scaling_strategy and scaling_strategy.get("strategy") == "pa":
+        if norm_params.get("standardise") == 1:
+            shift = norm_params.get('mean')
+            scale = norm_params.get('stdev')
+        elif norm_params.get("standardise") == 0:
+            shift = 0.0
+            scale = 1.0
+        else:
+            raise ValueError("Picoampere scaling requested, but standardisation flag not provided")
+
+    elif scaling_strategy is None or scaling_strategy.get("strategy") == "quantile":
+        if norm_params is None:
+            norm_params = __default_norm_params__
+
+        qa, qb = np.quantile(sig, [norm_params['quantile_a'], norm_params['quantile_b']])
+        shift = max(10, norm_params['shift_multiplier'] * (qa + qb))
+        scale = max(1.0, norm_params['scale_multiplier'] * (qb - qa))
+    else:
+        raise ValueError(f"Scaling strategy {scaling_strategy.get('strategy')} not supported; choose quantile or pa.")
     return shift, scale
