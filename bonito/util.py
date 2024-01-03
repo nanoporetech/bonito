@@ -293,11 +293,10 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
     Model = load_symbol(config, "Model")
     model = Model(config)
 
-    config["basecaller"]["chunksize"] -= config["basecaller"]["chunksize"] % model.stride
-    # overlap must be even multiple of stride for correct stitching
-    config["basecaller"]["overlap"] -= config["basecaller"]["overlap"] % (model.stride * 2)
-
     if use_koi:
+        config["basecaller"]["chunksize"] -= config["basecaller"]["chunksize"] % model.stride
+        # overlap must be even multiple of stride for correct stitching
+        config["basecaller"]["overlap"] -= config["basecaller"]["overlap"] % (model.stride * 2)
         model.use_koi(
             batchsize=config["basecaller"]["batchsize"],
             chunksize=config["basecaller"]["chunksize"],
