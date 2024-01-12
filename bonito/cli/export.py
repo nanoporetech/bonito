@@ -57,12 +57,19 @@ def get_layer_order_map(base_encoder):
 
 def export_to_dorado(model, config_dict, output):
     output.mkdir(exist_ok=True, parents=True)
-    layer_order_map = get_layer_order_map(model.encoder.base_encoder)
+    try:
+        # >v4 models
+        encoder = model.encoder.base_encoder
+    except AttributeError:
+        # <v4 models
+        encoder = model.encoder
+
+    layer_order_map = get_layer_order_map(encoder)
     config_dict = clean_config(config_dict)
     with (output / "config.toml").open("w") as f:
         toml.dump(config_dict, f)
 
-    for name, tensor in model.encoder.base_encoder.state_dict().items():
+    for name, tensor in encoder.state_dict().items():
         save_tensor(output, name, tensor)
 
         # Rename the layers to avoid counting Clamps
