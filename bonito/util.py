@@ -418,3 +418,24 @@ def poa(groups, max_poa_sequences=100, gpu_mem_per_batch=0.9):
             group_status, seq_status = batch.add_poa_group(group)
 
     return results
+
+def tqdm_environ() -> Dict[str, Any]:
+    """Get tqdm settings from environment variables"""
+    kwargs: Dict[str, Any] = {}
+    try:
+        interval = os.getenv("BONITO_PBAR_INTERVAL", None)
+        if interval is not None:
+            kwargs.update(dict(mininterval=float(interval), maxinterval=float(interval)))
+    except ValueError as exc:
+        print(f"[warning] couldn't parse BONITO_PBAR_INTERVAL as float - {exc}")
+        pass
+
+    try:
+        disable = os.getenv("BONITO_PBAR_DISABLE", None)
+        if disable is not None:
+            kwargs.update(dict(disable=bool(int(disable))))
+    except ValueError as exc:
+        print(f"[warning] couldn't parse BONITO_PBAR_DISABLE as bool - {exc}")
+        pass
+
+    return kwargs
