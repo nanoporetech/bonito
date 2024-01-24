@@ -9,7 +9,7 @@ from shutil import rmtree
 from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from bonito.util import __data__, __models__
+from bonito.util import __data__, __models__, tqdm_environ
 from bonito.cli.convert import main as convert
 from bonito.cli.convert import argparser as cargparser
 
@@ -58,7 +58,8 @@ class File:
             rmtree(self.location(fname.strip('.zip')))
 
         # download the file
-        with tqdm(total=total, unit='iB', ascii=True, ncols=100, unit_scale=True, leave=False) as t:
+        with tqdm(total=total, unit='iB', ascii=True, ncols=100,
+                  unit_scale=True, leave=False, **tqdm_environ()) as t:
             with open(self.location(fname), 'wb') as f:
                 for data in req.iter_content(1024):
                     f.write(data)

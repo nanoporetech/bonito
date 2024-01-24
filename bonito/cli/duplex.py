@@ -17,6 +17,7 @@ from parasail import dnafull, sg_trace_scan_32
 from bonito.io import DuplexWriter, biofmt
 from bonito.aligner import align_map, Aligner
 from bonito.multiprocessing import ProcessMap
+from bonito.util import tqdm_environ
 
 
 # Cigar int code ops are: MIDNSHP=X
@@ -68,7 +69,8 @@ class ReadIndexedBam:
 
         self.bam_idx = {} if self.skip_non_primary else defaultdict(list)
         self.open_bam()
-        pbar = tqdm(smoothing=0, unit=" Reads", desc="> indexing BAM by read id", leave=False)
+        pbar = tqdm(smoothing=0, unit=" Reads", desc="> indexing BAM by read id",
+                    leave=False, **tqdm_environ())
         # iterating over file handle gives incorrect pointers
         while True:
             read_ptr = self.bam_fh.tell()
