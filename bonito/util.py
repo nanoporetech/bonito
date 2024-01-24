@@ -419,9 +419,9 @@ def poa(groups, max_poa_sequences=100, gpu_mem_per_batch=0.9):
 
     return results
 
-def tqdm_environ() -> Dict[str, Any]:
+def tqdm_environ():
     """Get tqdm settings from environment variables"""
-    kwargs: Dict[str, Any] = {}
+    kwargs = {}
     try:
         interval = os.getenv("BONITO_PBAR_INTERVAL", None)
         if interval is not None:
