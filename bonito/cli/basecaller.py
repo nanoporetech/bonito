@@ -18,7 +18,7 @@ from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
 from bonito.cli.download import File, models, __models__
 from bonito.multiprocessing import process_cancel, process_itemmap
-from bonito.util import column_to_set, load_symbol, load_model, init
+from bonito.util import column_to_set, load_symbol, load_model, init, tqdm_environ
 
 
 def main(args):
@@ -162,7 +162,8 @@ def main(args):
         
     writer = ResultsWriter(
         fmt.mode, tqdm(results, desc="> calling", unit=" reads", leave=False,
-                       total=num_reads, smoothing=0, ascii=True, ncols=100),
+                       total=num_reads, smoothing=0, ascii=True, ncols=100,
+                       **tqdm_environ()),
         **writer_kwargs)
 
     t0 = perf_counter()
