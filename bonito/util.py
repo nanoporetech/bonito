@@ -8,6 +8,7 @@ import sys
 import random
 from glob import glob
 from itertools import groupby
+from logging import getLogger
 from operator import itemgetter
 from importlib import import_module
 from collections import deque, defaultdict, OrderedDict
@@ -36,6 +37,8 @@ split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
 default_data = os.path.join(__data__, "dna_r9.4.1")
 default_config = os.path.join(__configs__, "dna_r9.4.1@v3.1.toml")
 
+
+logger = getLogger('bonito')
 
 def init(seed, device, deterministic=True):
     """
@@ -418,3 +421,22 @@ def poa(groups, max_poa_sequences=100, gpu_mem_per_batch=0.9):
             group_status, seq_status = batch.add_poa_group(group)
 
     return results
+
+def tqdm_environ():
+    """Get tqdm settings from environment variables"""
+    kwargs = {}
+    try:
+        interval = os.getenv("BONITO_PBAR_INTERVAL", None)
+        if interval is not None:
+            kwargs.update(dict(mininterval=float(interval), maxinterval=float(interval)))
+    except ValueError as exc:
+        logger.warning(f"Couldn't parse BONITO_PBAR_INTERVAL as float - {exc}")
+
+    try:
+        disable = os.getenv("BONITO_PBAR_DISABLE", None)
+        if disable is not None:
+            kwargs.update(dict(disable=bool(int(disable))))
+    except ValueError as exc:
+        logger.warning(f"couldn't parse BONITO_PBAR_DISABLE as bool - {exc}")
+
+    return kwargs

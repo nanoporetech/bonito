@@ -15,6 +15,7 @@ from argparse import ArgumentDefaultsHelpFormatter
 
 from tqdm import tqdm
 from bonito.data import ChunkDataSet
+from bonito.util import tqdm_environ
 
 
 def align(samples, pointers, reference):
@@ -67,7 +68,7 @@ def chunk_dataset(reads, chunk_len, num_chunks=None):
         (chunk, target) for read in reads for chunk, target in
         get_chunks(reads[read], regular_break_points(len(reads[read]['Dacs']), chunk_len))
     )
-    chunks, targets = zip(*tqdm(take(all_chunks, num_chunks), total=num_chunks))
+    chunks, targets = zip(*tqdm(take(all_chunks, num_chunks), total=num_chunks, **tqdm_environ()))
     targets, target_lens = pad_lengths(targets) # convert refs from ragged arrray
     return ChunkDataSet(chunks, targets, target_lens)
 

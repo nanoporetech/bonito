@@ -12,7 +12,7 @@ from collections import OrderedDict
 from datetime import datetime
 
 from bonito.schedule import linear_warmup_cosine_decay
-from bonito.util import accuracy, decode_ref, permute, concat, match_names
+from bonito.util import accuracy, decode_ref, permute, concat, match_names, tqdm_environ
 import bonito
 
 import torch
@@ -149,7 +149,8 @@ class Trainer:
 
         progress_bar = tqdm(
             total=len(self.train_loader), desc='[0/{}]'.format(len(self.train_loader.sampler)),
-            ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]'
+            ascii=True, leave=True, ncols=100, bar_format='{l_bar}{bar}| [{elapsed}{postfix}]',
+            **tqdm_environ()
         )
         smoothed_loss = None
 
