@@ -2,7 +2,6 @@
 Bonito model evaluator
 """
 
-import os
 import time
 import torch
 import numpy as np
@@ -12,7 +11,7 @@ from pathlib import Path
 
 from bonito.data import load_numpy, load_script
 from bonito.util import accuracy, poa, decode_ref, half_supported
-from bonito.util import init, load_model, concat, permute
+from bonito.util import init, load_model, permute
 
 from torch.utils.data import DataLoader
 
@@ -46,6 +45,9 @@ def main(args):
 
         print("* loading model", w)
         model = load_model(args.model_directory, args.device, weights=w)
+        mean = model.config.get("standardisation", {}).get("mean", 0.0)
+        stdev = model.config.get("standardisation", {}).get("stdev", 1.0)
+        print(f"* * signal standardisation params: mean={mean}, stdev={stdev}")
 
         print("* calling")
         t0 = time.perf_counter()
@@ -54,6 +56,8 @@ def main(args):
 
         with torch.no_grad():
             for data, target, *_ in dataloader:
+                data = (data - mean) / stdev
+
                 targets.extend(torch.unbind(target, 0))
                 if half_supported():
                     data = data.type(torch.float16).to(args.device)
