@@ -1,3 +1,20 @@
+
+build_bonito::python3.10:
+  image: ${CI_REGISTRY}/traque/ont-docker-base/ont-base-python:3.10
+  tags:
+    - docker
+    - linux_x86
+  except:
+    - tags  # Don't run CI for release-tags
+  script:
+    - python3 -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install --prefer-binary .
+    - bonito --version  # Minimal test that bonito has been built correctly
+    - python -m unittest discover
+
+
 sre-test:
   image: ${TRIGGER_IMAGE}
   stage: test
