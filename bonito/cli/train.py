@@ -69,7 +69,7 @@ def main(args):
         )
 
     loader_kwargs = {
-        "batch_size": args.batch, "num_workers": 4, "pin_memory": True
+        "batch_size": args.batch, "num_workers": args.num_workers, "pin_memory": True
     }
     train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
     valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
@@ -99,7 +99,8 @@ def main(args):
         lr = [float(x) for x in args.lr.split(',')]
     else:
         lr = float(args.lr)
-    trainer.fit(workdir, args.epochs, lr)
+    optim_kwargs = config.get("optim", {})
+    trainer.fit(workdir, args.epochs, lr, **optim_kwargs)
 
 def argparser():
     parser = ArgumentParser(
@@ -125,4 +126,5 @@ def argparser():
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
     parser.add_argument("--quantile-grad-clip", action="store_true", default=False)
+    parser.add_argument("--num-workers", default=4, type=int)
     return parser
