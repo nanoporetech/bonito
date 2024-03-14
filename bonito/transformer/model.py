@@ -1,3 +1,5 @@
+import types
+
 import torch
 from flash_attn import flash_attn_qkvpacked_func
 from flash_attn.layers.rotary import RotaryEmbedding
@@ -5,13 +7,32 @@ from flash_attn.modules.mlp import GatedMlp
 from flash_attn.ops.triton.layer_norm import RMSNorm
 
 from bonito.crf.model import SeqdistModel
-from bonito.nn import from_dict, register
+from bonito.nn import from_dict, register, LinearCRFEncoder, Permute, Serial
+
+
+class MakeContiguous(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.contiguous()
 
 
 def deepnorm_params(depth):
     alpha = round((2*depth)**0.25, 7)
     beta = round((8*depth)**(-1/4), 7)
     return alpha, beta
+
+
+@register
+class Standardise(torch.nn.Module):
+    def __init__(self, mean, std):
+        super().__init__()
+        self.mean = mean
+        self.std = std
+
+    def forward(self, x):
+        return (x - self.mean) / self.std
 
 
 @register
@@ -35,6 +56,9 @@ class LinearUpsample(torch.nn.Module):
         if not self.batch_first:
             h = h.permute([1, 0, 2])
         return h
+
+    def output_stride(self, input_stride):
+        return input_stride // self.scale_factor
 
     def to_dict(self, include_weights=False):
         if include_weights:
@@ -124,7 +148,7 @@ class TransformerEncoderLayer(torch.nn.Module):
         torch.nn.init.xavier_normal_(self.self_attn.Wqkv.weight[:2*d_model], gain=1)
 
     def forward(self, x):
-        x = self.norm1(self.self_attn(x, self.window), self.deepnorm_alpha*x)
+        x = self.norm1(self.self_attn(x), self.deepnorm_alpha*x)
         x = self.norm2(self.ff(x), self.deepnorm_alpha*x)
         return x
 
@@ -134,8 +158,23 @@ class TransformerEncoderLayer(torch.nn.Module):
         return self.kwargs
 
 
+def use_koi(self, **kwargs):
+    # koi switches LSTM implementation (output dimension order differs to PyTorch!)
+    # and modifies the LinearCRFLayer settings
+    def _expand_blanks(m):
+        if isinstance(m, LinearCRFEncoder):
+            m.expand_blanks = False
+    self.encoder.apply(_expand_blanks)
+    self.encoder = Serial([
+        self.encoder,
+        Permute([1, 0, 2]),
+        MakeContiguous(),
+    ])
+
+
 def Model(config):
     model_config = {k: v for k, v in config["model"].items() if k != "package"}
     model = from_dict(model_config)
     model.config = config
+    model.use_koi = types.MethodType(use_koi, model)
     return model

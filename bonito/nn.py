@@ -102,6 +102,7 @@ class Stack(Serial):
     @classmethod
     def from_dict(cls, model_dict, layer_types=None):
         return cls([from_dict(model_dict["layer"], layer_types) for _ in range(model_dict["depth"])])
+
     def to_dict(self, include_weights=False):
         if include_weights:
             raise NotImplementedError
