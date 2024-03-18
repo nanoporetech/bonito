@@ -19,20 +19,12 @@ class MakeContiguous(torch.nn.Module):
 
 
 def deepnorm_params(depth):
+    """
+    Returns the DeepNorm (https://arxiv.org/abs/2203.00555) alpha and beta parameters.
+    """
     alpha = round((2*depth)**0.25, 7)
     beta = round((8*depth)**(-1/4), 7)
     return alpha, beta
-
-
-@register
-class Standardise(torch.nn.Module):
-    def __init__(self, mean, std):
-        super().__init__()
-        self.mean = mean
-        self.std = std
-
-    def forward(self, x):
-        return (x - self.mean) / self.std
 
 
 @register
@@ -159,8 +151,7 @@ class TransformerEncoderLayer(torch.nn.Module):
 
 
 def use_koi(self, **kwargs):
-    # koi switches LSTM implementation (output dimension order differs to PyTorch!)
-    # and modifies the LinearCRFLayer settings
+    # koi needs modified LinearCRFLayer settings
     def _expand_blanks(m):
         if isinstance(m, LinearCRFEncoder):
             m.expand_blanks = False
