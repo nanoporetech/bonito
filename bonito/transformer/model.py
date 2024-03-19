@@ -1,6 +1,8 @@
 import types
+from functools import lru_cache
 
 import torch
+import torch.nn.functional as F
 from flash_attn import flash_attn_qkvpacked_func
 from flash_attn.layers.rotary import RotaryEmbedding
 from flash_attn.modules.mlp import GatedMlp
@@ -25,6 +27,16 @@ def deepnorm_params(depth):
     alpha = round((2*depth)**0.25, 7)
     beta = round((8*depth)**(-1/4), 7)
     return alpha, beta
+
+
+@lru_cache(maxsize=2)
+def sliding_window_mask(seq_len, window, device):
+    band = torch.full((seq_len, seq_len), fill_value=1.0)
+    band = torch.triu(band, diagonal=-window[0])
+    band = band * torch.tril(band, diagonal=window[1])
+    band = band.to(torch.bool).to(device)
+    return band
+
 
 
 @register
@@ -76,10 +88,17 @@ class MultiHeadAttention(torch.nn.Module):
         self.out_proj = torch.nn.Linear(d_model, d_model, bias=out_bias)
 
         self.rotary_emb = RotaryEmbedding(self.rotary_dim, interleaved=False)
-        self.attn_window = (-1, -1) if attn_window is None else attn_window
+        self.attn_window = (-1, -1) if attn_window is None else tuple(attn_window)
 
     def attn_func(self, qkv):
-        attn_output = flash_attn_qkvpacked_func(qkv, window_size=self.attn_window)
+        if torch.cuda.get_device_capability(qkv.device)[0] >= 8:
+            attn_output = flash_attn_qkvpacked_func(qkv, window_size=self.attn_window)
+        else:
+            N, L, *_ = qkv.shape[:2]
+            q, k, v = torch.chunk(qkv.permute(0, 2, 3, 1, 4), chunks=3, dim=1)
+            mask = sliding_window_mask(L, self.attn_window, q.device)
+            attn_output = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)
+            attn_output = attn_output.permute(0, 1, 3, 2, 4).reshape(N, L, self.d_model)
         return attn_output
 
     def forward(self, x):
