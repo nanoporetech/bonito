@@ -41,7 +41,6 @@ def sliding_window_mask(seq_len, window, device):
     return band
 
 
-
 @register
 class LinearUpsample(torch.nn.Module):
     """
