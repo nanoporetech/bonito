@@ -3,10 +3,13 @@ from functools import lru_cache
 
 import torch
 import torch.nn.functional as F
-from flash_attn import flash_attn_qkvpacked_func
-from flash_attn.layers.rotary import RotaryEmbedding
-from flash_attn.modules.mlp import GatedMlp
-from flash_attn.ops.triton.layer_norm import RMSNorm
+try:
+    from flash_attn import flash_attn_qkvpacked_func
+    from flash_attn.layers.rotary import RotaryEmbedding
+    from flash_attn.modules.mlp import GatedMlp
+    from flash_attn.ops.triton.layer_norm import RMSNorm
+except ImportError:
+    raise ImportError("please install flash-attn: `pip install flash-attn --no-build-isolation`")
 
 from bonito.crf.model import SeqdistModel
 from bonito.nn import from_dict, register, LinearCRFEncoder, Permute, Serial

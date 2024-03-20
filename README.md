@@ -1,6 +1,6 @@
 # Bonito
 
-[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito) 
+[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
 [![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
@@ -30,6 +30,13 @@ $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
 
+## Transformer Models
+
+The `bonito.transformer` package requires
+[flash-attn](https://github.com/Dao-AILab/flash-attention?tab=readme-ov-file#installation-and-features).
+
+This must be manually installed as the `flash-attn` packaging system prevents it from being listed as a normal dependency.
+
 ## Modified Bases
 
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
@@ -49,7 +56,7 @@ $ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads 
 $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 ```
 
-In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
+In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.
 
 ```bash
 bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
@@ -62,7 +69,7 @@ $ bonito download --training
 $ bonito train /data/training/model-dir
 ```
 
-All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
+All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True.
 
 ## Developer Quickstart
 
