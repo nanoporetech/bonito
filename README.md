@@ -5,7 +5,7 @@
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
 [![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
 [![py311](https://img.shields.io/badge/python-3.11-brightgreen.svg)](https://img.shields.io/badge/python-3.11-brightgreen.svg)
-[![cu117](https://img.shields.io/badge/cuda-11.7-blue.svg)](https://img.shields.io/badge/cuda-11.7-blue.svg)
+[![cu118](https://img.shields.io/badge/cuda-11.8-blue.svg)](https://img.shields.io/badge/cuda-11.8-blue.svg)
 
 Bonito is an open source research basecaller for Oxford Nanopore reads.
 
@@ -29,6 +29,8 @@ Bonito will download and cache the basecalling model automatically on first use 
 $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
+
+The default `ont-bonito` package is built against CUDA 11.8, however a 12.1 build is available.
 
 ## Transformer Models
 
@@ -79,6 +81,7 @@ $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
+(venv3) $ pip install -r requirements.txt
 (venv3) $ pip install -e .
 ```
 
