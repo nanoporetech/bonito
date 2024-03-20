@@ -34,6 +34,7 @@ with open('README.md', encoding='utf-8') as f:
 
 flash_attn_version = "2.5.6"
 install_dir = os.path.join(ROOT_DIR, THIRDPARTY_SUBDIR)
+#os.mkdir(install_dir, exist_ok=True)
 subprocess.check_output(
     [
         sys.executable,
