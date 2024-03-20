@@ -11,7 +11,7 @@ build_bonito::python3.10:
     - source venv/bin/activate
     - pip install --upgrade pip
     - pip install --prefer-binary .
-    - pip install packaging ninja
+    - pip install packaging ninja wheel
     - pip install flash-attn --no-build-isolation
     - bonito --version  # Minimal test that bonito has been built correctly
     - python -m unittest discover
