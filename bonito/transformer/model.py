@@ -99,7 +99,7 @@ class MultiHeadAttention(torch.nn.Module):
         self.attn_window = (-1, -1) if attn_window is None else tuple(attn_window)
 
     def attn_func(self, qkv):
-        if torch.cuda.get_device_capability(qkv.device)[0] >= 8:
+        if torch.cuda.get_device_capability(qkv.device)[0] >= 8 and (torch.is_autocast_enabled() or qkv.dtype == torch.half):
             attn_output = flash_attn_qkvpacked_func(qkv, window_size=self.attn_window)
         else:
             N, L, *_ = qkv.shape[:2]
