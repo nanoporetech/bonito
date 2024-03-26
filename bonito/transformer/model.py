@@ -145,7 +145,7 @@ class TransformerEncoderLayer(torch.nn.Module):
         self.ff = GatedMlp(
             d_model,
             hidden_features=dim_feedforward,
-            activation=torch.nn.functional.silu,
+            activation=F.silu,
             bias1=False,
             bias2=False,
             multiple_of=1,
