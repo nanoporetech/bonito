@@ -1,5 +1,8 @@
+import logging
 import types
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn.functional as F
@@ -9,7 +12,10 @@ try:
     from flash_attn.modules.mlp import GatedMlp
     from flash_attn.ops.triton.layer_norm import RMSNorm
 except ImportError:
-    print("please install flash-attn: `pip install flash-attn --no-build-isolation`")
+    logging.warning(
+        "please install flash-attn to use the transformer module: "
+        "`pip install flash-attn --no-build-isolation`"
+    )
 
 from bonito.crf.model import SeqdistModel
 from bonito.nn import from_dict, register, LinearCRFEncoder, Permute, Serial
