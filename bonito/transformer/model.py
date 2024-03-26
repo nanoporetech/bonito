@@ -18,15 +18,7 @@ except ImportError:
     )
 
 from bonito.crf.model import SeqdistModel
-from bonito.nn import from_dict, register, LinearCRFEncoder, Permute, Serial
-
-
-class MakeContiguous(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return x.contiguous()
+from bonito.nn import from_dict, register, LinearCRFEncoder, MakeContiguous, Permute, Serial
 
 
 def deepnorm_params(depth):
@@ -45,41 +37,6 @@ def sliding_window_mask(seq_len, window, device):
     band = band * torch.tril(band, diagonal=window[1])
     band = band.to(torch.bool).to(device)
     return band
-
-
-@register
-class LinearUpsample(torch.nn.Module):
-    """
-    Applies a linear transformation to upsample the sequence length by ``scale_factor``.
-    """
-
-    def __init__(self, d_model, scale_factor, batch_first=True):
-        super().__init__()
-        self.d_model = d_model
-        self.scale_factor = scale_factor
-        self.batch_first = batch_first
-        self.linear = torch.nn.Linear(d_model, self.scale_factor * d_model)
-
-    def forward(self, src):
-        if not self.batch_first:
-            src = src.permute([1, 0, 2])
-        N, L, E = src.shape
-        h = self.linear(src).reshape(N, self.scale_factor * L, E)
-        if not self.batch_first:
-            h = h.permute([1, 0, 2])
-        return h
-
-    def output_stride(self, input_stride):
-        return input_stride // self.scale_factor
-
-    def to_dict(self, include_weights=False):
-        if include_weights:
-            raise NotImplementedError
-        return {
-            "d_model": self.d_model,
-            "scale_factor": self.scale_factor,
-            "batch_first": self.batch_first
-        }
 
 
 class MultiHeadAttention(torch.nn.Module):
