@@ -102,11 +102,10 @@ class MultiHeadAttention(torch.nn.Module):
         if torch.cuda.get_device_capability(qkv.device)[0] >= 8 and (torch.is_autocast_enabled() or qkv.dtype == torch.half):
             attn_output = flash_attn_qkvpacked_func(qkv, window_size=self.attn_window)
         else:
-            N, L, *_ = qkv.shape[:2]
             q, k, v = torch.chunk(qkv.permute(0, 2, 3, 1, 4), chunks=3, dim=1)
-            mask = sliding_window_mask(L, self.attn_window, q.device)
+            mask = sliding_window_mask(qkv.shape[1], self.attn_window, q.device)
             attn_output = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)
-            attn_output = attn_output.permute(0, 1, 3, 2, 4).reshape(N, L, self.d_model)
+            attn_output = attn_output.permute(0, 1, 3, 2, 4)
         return attn_output
 
     def forward(self, x):
