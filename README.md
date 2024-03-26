@@ -30,8 +30,6 @@ $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
 
-The default `ont-bonito` package is built against CUDA 11.8, however a 12.1 build is available.
-
 ## Transformer Models
 
 The `bonito.transformer` package requires
@@ -81,9 +79,12 @@ $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
-(venv3) $ pip install -r requirements.txt
-(venv3) $ pip install -e .
+(venv3) $ pip install -e .[cu118] --extra-index-url https://download.pytorch.org/whl/cu118
 ```
+
+The `ont-bonito[cu118]` and `ont-bonito[cu121]` optional dependencies can be used, along
+with the corresponding `--extra-index-url`, to ensure the PyTorch package matches the
+local CUDA setup.
 
 ## Interface
 

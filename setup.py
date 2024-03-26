@@ -16,21 +16,8 @@ else:
     raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
 
 
-CUDA_VERSION = os.environ.get('CUDA_VERSION')
-assert CUDA_VERSION in {'118', '121', None}
-
-if CUDA_VERSION == '121':
-    print(f'Building with CUDA {CUDA_VERSION}')
-    require_file = f'requirements-cuda{CUDA_VERSION}.txt'
-    package_name = f'ont-bonito-cuda{CUDA_VERSION}'
-else:
-    print(f'Building with CUDA 11.8')
-    require_file = 'requirements.txt'
-    package_name = 'ont-bonito'
-
-
 with open(require_file) as f:
-    requirements = [r.split()[0] for r in f.read().splitlines() if r[0] not in {"#", "-"}]
+    requirements = [r.split()[0] for r in f.read().splitlines()]
 
 with open('README.md', encoding='utf-8') as f:
     long_description = f.read()
@@ -47,6 +34,12 @@ setup(
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
+    extras_require={
+        # --extra-index-url https://download.pytorch.org/whl/cu118
+        "cu118": ["torch==2.2.1+cu118"],
+        # --extra-index-url https://download.pytorch.org/whl/cu121
+        "cu121": ["torch==2.2.1+cu121"],
+    },
     entry_points={
         'console_scripts': [
             '{0} = {0}:main'.format(__pkg_name__)
