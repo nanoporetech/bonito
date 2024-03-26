@@ -12,7 +12,7 @@ try:
     from flash_attn.modules.mlp import GatedMlp
     from flash_attn.ops.triton.layer_norm import RMSNorm
 except ImportError:
-    logging.warning(
+    logger.warning(
         "please install flash-attn to use the transformer module: "
         "`pip install flash-attn --no-build-isolation`"
     )
