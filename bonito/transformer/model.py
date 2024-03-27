@@ -18,7 +18,7 @@ except ImportError:
     )
 
 from bonito.crf.model import SeqdistModel
-from bonito.nn import from_dict, register, LinearCRFEncoder, MakeContiguous, Permute, Serial
+from bonito.nn import from_dict, register, LinearCRFEncoder, MakeContiguous, Module, Permute, Serial
 
 
 def deepnorm_params(depth):
@@ -39,7 +39,7 @@ def sliding_window_mask(seq_len, window, device):
     return band
 
 
-class MultiHeadAttention(torch.nn.Module):
+class MultiHeadAttention(Module):
     def __init__(self, d_model, nhead, qkv_bias=False, out_bias=True, rotary_dim=None, attn_window=None):
         super().__init__()
         assert d_model % nhead == 0, "d_model must be divisible by nhead"
@@ -80,7 +80,7 @@ class MultiHeadAttention(torch.nn.Module):
 
 
 @register
-class TransformerEncoderLayer(torch.nn.Module):
+class TransformerEncoderLayer(Module):
     def __init__(self, d_model, nhead, dim_feedforward, deepnorm_alpha, deepnorm_beta, attn_window=None):
         super().__init__()
         self.kwargs = {

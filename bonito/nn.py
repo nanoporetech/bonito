@@ -128,7 +128,7 @@ class NamedSerial(torch.nn.Sequential):
         return {k: to_dict(v) for k, v in self.named_children()}
 
 
-class MakeContiguous(torch.nn.Module):
+class MakeContiguous(Module):
     def __init__(self):
         super().__init__()
 
@@ -137,7 +137,7 @@ class MakeContiguous(torch.nn.Module):
 
 
 @register
-class LinearUpsample(torch.nn.Module):
+class LinearUpsample(Module):
     """
     Applies a linear transformation to upsample the sequence length by ``scale_factor``.
     """
