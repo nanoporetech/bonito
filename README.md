@@ -37,6 +37,8 @@ The `bonito.transformer` package requires
 
 This must be manually installed as the `flash-attn` packaging system prevents it from being listed as a normal dependency.
 
+Setting `CUDA_HOME` to the relevant library directory will help avoid CUDA version mismatches between packages.
+
 ## Modified Bases
 
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
