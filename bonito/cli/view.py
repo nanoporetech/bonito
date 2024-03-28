@@ -2,13 +2,19 @@
 Bonito model viewer - display a model architecture for a given config.
 """
 
+import os.path
+
 import toml
 import argparse
 from bonito.util import load_symbol
 
 
 def main(args):
-    config = toml.load(args.config)
+
+    if os.path.isdir(args.config):
+        config = toml.load(os.path.join(args.config, "config.toml"))
+    else:
+        config = toml.load(args.config)
     Model = load_symbol(config, "Model")
     model = Model(config)
     print(model)
