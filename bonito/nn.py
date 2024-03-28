@@ -2,6 +2,8 @@
 Bonito nn modules.
 """
 
+from collections import OrderedDict
+
 import torch
 from torch.nn import Module
 from torch.nn.init import orthogonal_
@@ -93,6 +95,81 @@ class Serial(torch.nn.Sequential):
 
     def __repr__(self):
         return torch.nn.ModuleList.__repr__(self)
+
+
+@register
+class Stack(Serial):
+    @classmethod
+    def from_dict(cls, model_dict, layer_types=None):
+        return cls([from_dict(model_dict["layer"], layer_types) for _ in range(model_dict["depth"])])
+
+    def to_dict(self, include_weights=False):
+        if include_weights:
+            raise NotImplementedError
+        layer_dicts = [to_dict(layer) for layer in self]
+        for layer_dict in layer_dicts[1:]:
+            assert layer_dict == layer_dicts[0], "all layers should be the same"
+        return {"layer": layer_dicts[0], "depth": len(self)}
+
+
+@register
+class NamedSerial(torch.nn.Sequential):
+    @classmethod
+    def from_dict(cls, model_dict, layer_types=None):
+        return cls({k: from_dict(v, layer_types) for k, v in model_dict.items()})
+
+    def __init__(self, layers):
+        # Sequential throws error if given dict
+        super().__init__(OrderedDict(layers.items()))
+
+    def to_dict(self, include_weights=False):
+        if include_weights:
+            raise NotImplementedError
+        return {k: to_dict(v) for k, v in self.named_children()}
+
+
+class MakeContiguous(Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.contiguous()
+
+
+@register
+class LinearUpsample(Module):
+    """
+    Applies a linear transformation to upsample the sequence length by ``scale_factor``.
+    """
+
+    def __init__(self, d_model, scale_factor, batch_first=True):
+        super().__init__()
+        self.d_model = d_model
+        self.scale_factor = scale_factor
+        self.batch_first = batch_first
+        self.linear = torch.nn.Linear(d_model, self.scale_factor * d_model)
+
+    def forward(self, src):
+        if not self.batch_first:
+            src = src.permute([1, 0, 2])
+        N, L, E = src.shape
+        h = self.linear(src).reshape(N, self.scale_factor * L, E)
+        if not self.batch_first:
+            h = h.permute([1, 0, 2])
+        return h
+
+    def output_stride(self, input_stride):
+        return input_stride // self.scale_factor
+
+    def to_dict(self, include_weights=False):
+        if include_weights:
+            raise NotImplementedError
+        return {
+            "d_model": self.d_model,
+            "scale_factor": self.scale_factor,
+            "batch_first": self.batch_first
+        }
+
 
 @register
 class Reverse(Module):
@@ -248,7 +325,7 @@ class LinearCRFEncoder(Module):
         if self.permute:
             rep += f', permute={self.permute}'
         return rep
-            
+
 
 @register
 class Permute(Module):

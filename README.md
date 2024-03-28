@@ -1,11 +1,11 @@
 # Bonito
 
-[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito) 
+[![PyPI version](https://badge.fury.io/py/ont-bonito.svg)](https://badge.fury.io/py/ont-bonito)
 [![py38](https://img.shields.io/badge/python-3.8-brightgreen.svg)](https://img.shields.io/badge/python-3.8-brightgreen.svg)
 [![py39](https://img.shields.io/badge/python-3.9-brightgreen.svg)](https://img.shields.io/badge/python-3.9-brightgreen.svg)
 [![py310](https://img.shields.io/badge/python-3.10-brightgreen.svg)](https://img.shields.io/badge/python-3.10-brightgreen.svg)
 [![py311](https://img.shields.io/badge/python-3.11-brightgreen.svg)](https://img.shields.io/badge/python-3.11-brightgreen.svg)
-[![cu117](https://img.shields.io/badge/cuda-11.7-blue.svg)](https://img.shields.io/badge/cuda-11.7-blue.svg)
+[![cu118](https://img.shields.io/badge/cuda-11.8-blue.svg)](https://img.shields.io/badge/cuda-11.8-blue.svg)
 
 Bonito is an open source research basecaller for Oxford Nanopore reads.
 
@@ -30,6 +30,15 @@ $ bonito download --models --show  # show all available models
 $ bonito download --models         # download all available models
 ```
 
+## Transformer Models
+
+The `bonito.transformer` package requires
+[flash-attn](https://github.com/Dao-AILab/flash-attention?tab=readme-ov-file#installation-and-features).
+
+This must be manually installed as the `flash-attn` packaging system prevents it from being listed as a normal dependency.
+
+Setting `CUDA_HOME` to the relevant library directory will help avoid CUDA version mismatches between packages.
+
 ## Modified Bases
 
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
@@ -49,7 +58,7 @@ $ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads 
 $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 ```
 
-In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.  
+In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.
 
 ```bash
 bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
@@ -62,7 +71,7 @@ $ bonito download --training
 $ bonito train /data/training/model-dir
 ```
 
-All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True. 
+All training calls use Automatic Mixed Precision to speed up training. To disable this, set the `--no-amp` flag to True.
 
 ## Developer Quickstart
 
@@ -72,8 +81,12 @@ $ cd bonito
 $ python3 -m venv venv3
 $ source venv3/bin/activate
 (venv3) $ pip install --upgrade pip
-(venv3) $ pip install -e .
+(venv3) $ pip install -e .[cu118] --extra-index-url https://download.pytorch.org/whl/cu118
 ```
+
+The `ont-bonito[cu118]` and `ont-bonito[cu121]` optional dependencies can be used, along
+with the corresponding `--extra-index-url`, to ensure the PyTorch package matches the
+local CUDA setup.
 
 ## Interface
 

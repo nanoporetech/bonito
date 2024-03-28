@@ -1,7 +1,6 @@
 import os
 import re
 from setuptools import setup, find_packages
-from setuptools.command.install import install
 
 
 __pkg_name__ = 'bonito'
@@ -35,12 +34,15 @@ setup(
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
-    entry_points = {
+    extras_require={
+        # --extra-index-url https://download.pytorch.org/whl/cu118
+        "cu118": ["torch==2.2.1+cu118"],
+        # --extra-index-url https://download.pytorch.org/whl/cu121
+        "cu121": ["torch==2.2.1+cu121"],
+    },
+    entry_points={
         'console_scripts': [
             '{0} = {0}:main'.format(__pkg_name__)
         ]
     },
-    dependency_links=[
-        'https://download.pytorch.org/whl/cu113',
-    ]
 )
