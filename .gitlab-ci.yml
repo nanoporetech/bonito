@@ -1,6 +1,4 @@
-
-build_bonito::python3.10:
-  image: ${CI_REGISTRY}/traque/ont-docker-base/ont-base-python:3.10
+.build_template: &build_template
   tags:
     - docker
     - linux_x86
@@ -10,10 +8,19 @@ build_bonito::python3.10:
     - python3 -m venv venv
     - source venv/bin/activate
     - pip install --upgrade pip
-    - pip install --prefer-binary .
+    - pip install -e .[cu118] --extra-index-url https://download.pytorch.org/whl/cu118 --prefer-binary
     - bonito --version  # Minimal test that bonito has been built correctly
     - python -m unittest discover
 
+build_bonito:
+  stage: build
+  image: ${CI_REGISTRY}/traque/ont-docker-base/ont-base-python:${PYTHON_VERSION}
+  variables:
+    PYTHON_VERSION: "3.10"
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.8", "3.9", "3.10", "3.11"]
+  <<: *build_template
 
 sre-test:
   image: ${TRIGGER_IMAGE}
