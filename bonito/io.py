@@ -17,7 +17,6 @@ import numpy as np
 from pysam import AlignmentFile, AlignmentHeader, AlignedSegment
 
 import bonito
-from bonito.cli.convert import typical_indices
 from bonito.util import mean_qscore_from_qstring
 
 
@@ -25,6 +24,12 @@ logger = getLogger('bonito')
 Format = namedtuple("Format", "aligned name mode")
 
 __ont_bam_spec__ = "0.0.2"
+
+
+def typical_indices(x, n=2.5):
+    mu, sd = np.mean(x), np.std(x)
+    idx, = np.where((mu - n*sd < x) & (x < mu + n*sd))
+    return idx
 
 
 def biofmt(aligned=False):

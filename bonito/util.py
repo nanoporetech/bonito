@@ -4,19 +4,17 @@ Bonito utils
 
 import os
 import re
-import sys
 import random
 from glob import glob
 from itertools import groupby
 from logging import getLogger
 from operator import itemgetter
 from importlib import import_module
-from collections import deque, defaultdict, OrderedDict
-from torch.utils.data import DataLoader
+from collections import defaultdict, OrderedDict
 
 import toml
 import torch
-import koi.lstm
+
 import parasail
 import numpy as np
 from torch.cuda import get_device_capability
@@ -29,13 +27,11 @@ except ImportError:
 
 
 __dir__ = os.path.dirname(os.path.realpath(__file__))
-__data__ = os.path.join(__dir__, "data")
-__models__ = os.path.join(__dir__, "models")
-__configs__ = os.path.join(__dir__, "models/configs")
+__models_dir__ = os.path.join(__dir__, "models")
+__data_dir__ = os.path.join(__dir__, "data")
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
-default_data = os.path.join(__data__, "dna_r9.4.1")
-default_config = os.path.join(__configs__, "dna_r9.4.1@v3.1.toml")
+default_config = os.path.join(__dir__, "models/configs", "dna_r9.4.1@v3.1.toml")
 
 
 logger = getLogger('bonito')
@@ -238,8 +234,8 @@ def load_symbol(config, symbol):
     Dynamic load a symbol from module specified in model config.
     """
     if not isinstance(config, dict):
-        if not os.path.isdir(config) and os.path.isdir(os.path.join(__models__, config)):
-            dirname = os.path.join(__models__, config)
+        if not os.path.isdir(config) and os.path.isdir(os.path.join(__models_dir__, config)):
+            dirname = os.path.join(__models_dir__, config)
         else:
             dirname = config
         config = toml.load(os.path.join(dirname, 'config.toml'))
@@ -283,8 +279,8 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     """
     Load a model config and weights off disk from `dirname`.
     """
-    if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
-        dirname = os.path.join(__models__, dirname)
+    if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models_dir__, dirname)):
+        dirname = os.path.join(__models_dir__, dirname)
     weights = get_last_checkpoint(dirname) if weights is None else os.path.join(dirname, 'weights_%s.tar' % weights)
     config = toml.load(os.path.join(dirname, 'config.toml'))
     config = set_config_defaults(config, chunksize, batchsize, overlap, quantize)

@@ -11,13 +11,12 @@ from pathlib import Path
 from importlib import import_module
 
 from bonito.data import load_numpy, load_script
-from bonito.util import __models__, default_config, default_data
+from bonito.util import __models_dir__, default_config
 from bonito.util import load_model, load_symbol, init, half_supported
-from bonito.training import load_state, Trainer
+from bonito.training import Trainer
 
 import toml
 import torch
-import numpy as np
 from torch.utils.data import DataLoader
 
 
@@ -36,8 +35,8 @@ def main(args):
         config = toml.load(args.config)
     else:
         dirname = args.pretrained
-        if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models__, dirname)):
-            dirname = os.path.join(__models__, dirname)
+        if not os.path.isdir(dirname) and os.path.isdir(os.path.join(__models_dir__, dirname)):
+            dirname = os.path.join(__models_dir__, dirname)
         pretrain_file = os.path.join(dirname, 'config.toml')
         config = toml.load(pretrain_file)
         if 'lr_scheduler' in config:

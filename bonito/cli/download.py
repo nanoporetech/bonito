@@ -2,85 +2,75 @@
 Bonito Download
 """
 
-import os
-import re
+import contextlib
+import shutil
 import sys
-from shutil import rmtree
-from zipfile import ZipFile
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-
-from bonito.util import __data__, __models__, tqdm_environ
-from bonito.cli.convert import main as convert
-from bonito.cli.convert import argparser as cargparser
+from pathlib import Path
+from zipfile import ZipFile
 
 import requests
 from tqdm import tqdm
 
+from bonito.util import __models_dir__, tqdm_environ, __data_dir__
 
-class File:
+
+class Printer:
+
+    def __init__(self):
+        print("[available models]", file=sys.stderr)
+
+    def download(self, fstem):
+        print(f" - {fstem}", file=sys.stderr)
+
+
+class Downloader:
     """
     Small class for downloading models and training assets.
     """
-    __url__ = "https://cdn.oxfordnanoportal.com/software/analysis/bonito/"
+    __url__ = "https://cdn.oxfordnanoportal.com/software/analysis/bonito"
 
-    def __init__(self, path, url_frag, force=False):
-        self.path = path
+    def __init__(self, out_dir: Path, force=False):
+        print(f"[Downloading to {out_dir}]", file=sys.stderr)
+        out_dir.mkdir(exist_ok=True, parents=True)
+        self.path = out_dir
         self.force = force
-        self.filename = url_frag
-        if url_frag.endswith('.hdf5'):
-            self.url = os.path.join(self.__url__, url_frag)
-            self.fname = self.filename
-        else:
-            self.url = os.path.join(self.__url__, "%s.zip" % url_frag)
-            self.fname = "%s.zip" % self.filename
 
-    def location(self, filename):
-        return os.path.join(self.path, filename)
+    def download(self, fname):
+        url = f"{self.__url__}/{fname}.zip"
+        fpath = self.path / f"{fname}"
+        fpath_zip = self.path / f"{fname}.zip"
 
-    def exists(self, filename):
-        return os.path.exists(self.location(filename))
+        if fpath.exists():
+            if self.force:
+                fpath.unlink() if fpath.is_file() else shutil.rmtree(fpath)
+            else:
+                print(f" - Skipping: {fname}", file=sys.stderr)
+                return fpath
 
-    def download(self):
-        """
-        Download the remote file
-        """
         # create the requests for the file
-        req = requests.get(self.url, stream=True)
+        req = requests.get(url, stream=True)
         total = int(req.headers.get('content-length', 0))
-        fname = self.fname
 
-        # skip download if local file is found
-        if self.exists(fname.strip('.zip')) and not self.force:
-            print("[skipping %s]" % fname, file=sys.stderr)
-            return
-
-        if self.exists(fname.strip('.zip')) and self.force:
-            rmtree(self.location(fname.strip('.zip')))
-
-        # download the file
+        # download the file content
         with tqdm(total=total, unit='iB', ascii=True, ncols=100,
                   unit_scale=True, leave=False, **tqdm_environ()) as t:
-            with open(self.location(fname), 'wb') as f:
+            with fpath_zip.open('wb') as f:
                 for data in req.iter_content(1024):
+                    if b'Error' in data:
+                        raise FileNotFoundError(f" - Failed to download: {fname}\n{data.decode()}")
                     f.write(data)
                     t.update(len(data))
+        self._unzip(fpath_zip)
+        print(f" - Downloaded: {fname}", file=sys.stderr)
+        return fpath
 
-        print("[downloaded %s]" % fname, file=sys.stderr)
-
-        # unzip .zip files
-        if fname.endswith('.zip'):
-            with ZipFile(self.location(fname), 'r') as zfile:
-                zfile.extractall(self.path)
-            os.remove(self.location(fname))
-
-        # convert chunkify training files to bonito
-        if fname.endswith('.hdf5'):
-            print("[converting %s]" % fname, file=sys.stderr)
-            args = cargparser().parse_args([
-                self.location(fname),
-                self.location(fname).strip('.hdf5')
-            ])
-            convert(args)
+    def _unzip(self, fpath):
+        unzip_path = fpath.with_suffix("")
+        with ZipFile(fpath, 'r') as zfile:
+            zfile.extractall(path=unzip_path)
+        fpath.unlink()
+        return unzip_path
 
 
 models = [
@@ -119,7 +109,7 @@ models = [
     "dna_r9.4.1_e8_sup@v3.3",
     "dna_r9.4.1_e8_hac@v3.3",
     "dna_r9.4.1_e8_fast@v3.4",
-    
+
     "rna002_70bps_fast@v3",
     "rna002_70bps_hac@v3",
     "rna002_70bps_sup@v3",
@@ -129,10 +119,16 @@ models = [
     "rna004_130bps_sup@v3.0.1",
 ]
 
-
 training = [
-    "dna_r9.4.1.hdf5",
+    "example_data_dna_r9.4.1_v0"
 ]
+
+
+def download_files(out_dir, file_list, show, force):
+    dl = Printer() if show else Downloader(out_dir, force)
+    for remote_file in file_list:
+        with contextlib.suppress(FileNotFoundError):
+            dl.download(remote_file)
 
 
 def main(args):
@@ -140,19 +136,11 @@ def main(args):
     Download models and training sets
     """
     if args.models or args.all:
-        
-        if args.show:
-            print("[available models]", file=sys.stderr)
-            for model in models:
-                print(f" - {model}", file=sys.stderr)
-        else:
-            print("[downloading models]", file=sys.stderr)
-            for model in models:
-                File(__models__, model, args.force).download()
-    if args.training or args.all:
-        print("[downloading training data]", file=sys.stderr)
-        for train in training:
-            File(__data__, train, args.force).download()
+        out_dir = __models_dir__ if args.out_dir is None else args.out_dir
+        download_files(out_dir, models, args.show, args.force)
+    elif args.training:
+        out_dir = __data_dir__ if args.out_dir is None else args.out_dir
+        download_files(out_dir, training, args.show, args.force)
 
 
 def argparser():
@@ -160,10 +148,13 @@ def argparser():
         formatter_class=ArgumentDefaultsHelpFormatter,
         add_help=False
     )
+    parser.add_argument('--out_dir', default=None, type=Path)
+    parser.add_argument('--list', '--show', dest='show', action='store_true')
+    parser.add_argument('-f', '--force', action='store_true')
+
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--all', action='store_true')
     group.add_argument('--models', action='store_true')
     group.add_argument('--training', action='store_true')
-    parser.add_argument('--list', '--show', dest='show', action='store_true')
-    parser.add_argument('-f', '--force', action='store_true')
+
     return parser

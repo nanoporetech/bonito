@@ -30,7 +30,7 @@ def clean_config(config):
     """
     Strip any non-inference time features out of the model
     """
-    config["model"]["package"] = "bonito.crf"
+    config.pop("model", None)
     config.pop("decoder", None)
     config.pop("aux_CRF_losses", None)
     config.pop("training", None)
