@@ -120,6 +120,8 @@ def main(args):
     
     if args.max_reads:
         reads = take(reads, args.max_reads)
+        if num_reads is not None:
+            num_reads = min(num_reads, args.max_reads)
 
     if args.save_ctc:
         reads = (
