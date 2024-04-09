@@ -1,19 +1,16 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
-from bonito.cli import basecaller, convert, download, duplex, evaluate, export, train, view
+from bonito.cli import basecaller, download, duplex, evaluate, export, train, view
 
 modules = [
-    'basecaller', 'convert', 'download', 'duplex', 'evaluate', 'export', 'train', 'view',
+    'basecaller', 'download', 'duplex', 'evaluate', 'export', 'train', 'view',
 ]
 
 __version__ = '0.7.3'
 
 
 def main():
-    parser = ArgumentParser(
-        'bonito',
-        formatter_class=ArgumentDefaultsHelpFormatter
-    )
+    parser = ArgumentParser('bonito', formatter_class=ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
         '-v', '--version', action='version',

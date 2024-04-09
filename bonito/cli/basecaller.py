@@ -16,7 +16,7 @@ from bonito.aligner import align_map, Aligner
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
-from bonito.cli.download import File, models, __models__
+from bonito.cli.download import Downloader, models, __models_dir__
 from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init, tqdm_environ
 
@@ -42,9 +42,9 @@ def main(args):
     else:
         sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
 
-    if args.model_directory in models and args.model_directory not in os.listdir(__models__):
+    if args.model_directory in models and args.model_directory not in os.listdir(__models_dir__):
         sys.stderr.write("> downloading model\n")
-        File(__models__, args.model_directory).download()
+        Downloader(__models_dir__).download(args.model_directory)
 
     sys.stderr.write(f"> loading model {args.model_directory}\n")
     try:
