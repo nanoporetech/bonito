@@ -30,11 +30,12 @@ def clean_config(config):
     """
     Strip any non-inference time features out of the model
     """
-    config.pop("model", None)
     config.pop("decoder", None)
     config.pop("aux_CRF_losses", None)
     config.pop("training", None)
     config.pop("basecaller", None)
+    config.pop("lr_scheduler", None)
+    config.pop("optim", None)
 
     expected_fields = ["qscore", "run_info", "scaling", "standardisation", "training_dataset"]
     for field in expected_fields:
@@ -57,14 +58,17 @@ def get_layer_order_map(base_encoder):
 
 def export_to_dorado(model, config_dict, output):
     output.mkdir(exist_ok=True, parents=True)
-    try:
-        # >v4 models
+
+    if hasattr(model, "base_model") and hasattr(model.base_model, "encoder"):
+        # v5-style transformer models
+        encoder = model.base_model.encoder
+        config_dict["model"] = config_dict["model"]["base_model"]
+    elif hasattr(model, "encoder") and hasattr(model.encoder, "base_encoder"):
+        # v4-style lstm-models
         encoder = model.encoder.base_encoder
-    except AttributeError:
-        # <v4 models
+    else:
         encoder = model.encoder
 
-    layer_order_map = get_layer_order_map(encoder)
     config_dict = clean_config(config_dict)
     with (output / "config.toml").open("w") as f:
         toml.dump(config_dict, f)
@@ -72,6 +76,14 @@ def export_to_dorado(model, config_dict, output):
     for name, tensor in encoder.state_dict().items():
         save_tensor(output, name, tensor)
 
+    if any(isinstance(encoder[i], Clamp) for i in range(len(encoder) - 1)):
+        reorder_layers_without_clamp(encoder, output)
+
+
+def reorder_layers_without_clamp(encoder, output):
+    # In v4.0-v4.2 we had clamp layers after the convs which need removing
+    layer_order_map = get_layer_order_map(encoder)
+    for name, tensor in encoder.state_dict().items():
         # Rename the layers to avoid counting Clamps
         # We have to do this _after_ saving the file to get an identical object
         # since tensor.save() encodes the filename in the file
