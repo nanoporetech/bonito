@@ -36,9 +36,9 @@ setup(
     url='https://github.com/nanoporetech/bonito',
     extras_require={
         # --extra-index-url https://download.pytorch.org/whl/cu118
-        "cu118": ["torch==2.2.1+cu118"],
+        "cu118": ["torch==2.1.2+cu118"],
         # --extra-index-url https://download.pytorch.org/whl/cu121
-        "cu121": ["torch==2.2.1+cu121"],
+        "cu121": ["torch==2.1.2+cu121"],
     },
     entry_points={
         'console_scripts': [
