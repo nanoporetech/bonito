@@ -40,7 +40,7 @@ def clean_config(config):
     expected_fields = ["qscore", "run_info", "scaling", "standardisation", "training_dataset"]
     for field in expected_fields:
         if field not in config:
-            logger.warning(f"WARNING: {field} is not set in config")
+            logger.warning(f"INFO: metadata '{field}' is not set in config")
     return config
 
 
