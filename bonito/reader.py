@@ -36,7 +36,7 @@ class Reader:
         if self.fmt == "fast5":
             sys.stderr.write(
                 "DeprecationWarning: fast5 support will be deprecated in a "
-                "future bonito version. Please use pod5"
+                "future bonito version. Please use pod5\n"
             )
         _reader = import_module(f"bonito.{self.fmt}")
         self._get_reads = getattr(_reader, "get_reads")
