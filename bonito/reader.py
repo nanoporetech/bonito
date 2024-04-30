@@ -1,7 +1,7 @@
 """
 Bonito Read Utils
 """
-
+import sys
 from glob import iglob
 from collections import OrderedDict
 from importlib import import_module
@@ -11,7 +11,7 @@ import numpy as np
 from scipy.signal import find_peaks
 
 
-__formats__ = ["fast5", "pod5"]
+__formats__ = ["pod5", "fast5"]
 
 # Normalisation parameters for kit 14 DNA
 # Different parameters can be specified in the 'normalisation' section
@@ -33,7 +33,11 @@ class Reader:
                 break
         else:
             raise FileNotFoundError()
-
+        if self.fmt == "fast5":
+            sys.stderr.write(
+                "DeprecationWarning: fast5 support will be deprecated in a "
+                "future bonito version. Please use pod5"
+            )
         _reader = import_module(f"bonito.{self.fmt}")
         self._get_reads = getattr(_reader, "get_reads")
         self._get_read_groups = getattr(_reader, "get_read_groups")
