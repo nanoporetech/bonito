@@ -34,6 +34,7 @@ setup(
     author='Oxford Nanopore Technologies, Ltd',
     author_email='support@nanoporetech.com',
     url='https://github.com/nanoporetech/bonito',
+    python_requires='>=3.8',
     extras_require={
         # --extra-index-url https://download.pytorch.org/whl/cu118
         "cu118": ["torch==2.1.2+cu118"],
