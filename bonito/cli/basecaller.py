@@ -12,6 +12,7 @@ from datetime import timedelta
 from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from bonito.nn import fuse_bn_
 from bonito.aligner import align_map, Aligner
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
@@ -58,6 +59,7 @@ def main(args):
             quantize=args.quantize,
             use_koi=True,
         )
+        model = model.apply(fuse_bn_)
     except FileNotFoundError:
         sys.stderr.write(f"> error: failed to load {args.model_directory}\n")
         sys.stderr.write(f"> available models:\n")
