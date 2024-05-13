@@ -5,7 +5,7 @@ Bonito CTC-CRF Model.
 import torch
 import numpy as np
 
-import koi
+import koi.lstm
 from koi.ctc import SequenceDist, Max, Log, semiring
 from koi.ctc import logZ_cu, viterbi_alignments, logZ_cu_sparse, bwd_scores_cu_sparse, fwd_scores_cu_sparse
 

@@ -8,7 +8,6 @@ from importlib import import_module
 
 import torch
 import numpy as np
-from scipy.signal import find_peaks
 
 
 __formats__ = ["pod5", "fast5"]
