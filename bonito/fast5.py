@@ -77,6 +77,8 @@ class Read(bonito.reader.Read):
         self.scaled = np.array(self.scaling * (raw + self.offset), dtype=np.float32)
         self.num_samples = len(self.scaled)
 
+        self.scaling_strategy = ("quantile" if scaling_strategy is None else
+                                 scaling_strategy.get("strategy","quantile")) 
         self.shift, self.scale = bonito.reader.normalisation(self.scaled, scaling_strategy, norm_params)
         self.trimmed_samples = bonito.reader.trim(self.scaled, threshold=self.scale * 2.4 + self.shift) if do_trim else 0
         self.template_start = self.start + (self.trimmed_samples / self.sample_rate)
