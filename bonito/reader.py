@@ -82,7 +82,7 @@ class Read:
             f"f5:Z:{self.filename}",
             f"sm:f:{self.shift}",
             f"sd:f:{self.scale}",
-            f"sv:Z:quantile",
+            f"sv:Z:{self.scaling_strategy}",
         ]
 
 
