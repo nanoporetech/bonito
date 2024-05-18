@@ -5,6 +5,7 @@ Bonito Basecaller
 import os
 import sys
 import numpy as np
+from mappy import Aligner
 from tqdm import tqdm
 from time import perf_counter
 from functools import partial
@@ -13,7 +14,7 @@ from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.nn import fuse_bn_
-from bonito.aligner import align_map, Aligner
+from bonito.aligner import align_map
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
@@ -82,7 +83,7 @@ def main(args):
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset='map-ont', best_n=1)
+        aligner = Aligner(args.reference, preset=args.mm2_preset, best_n=None)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
@@ -215,5 +216,6 @@ def argparser():
     parser.add_argument("--min-qscore", default=0, type=int)
     parser.add_argument("--min-accuracy-save-ctc", default=0.99, type=float)
     parser.add_argument("--alignment-threads", default=8, type=int)
+    parser.add_argument("--mm2-preset", default='lr:hq', type=str)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser

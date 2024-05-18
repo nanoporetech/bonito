@@ -10,12 +10,12 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import pysam
 import numpy as np
 from tqdm import tqdm
-from mappy import revcomp
+from mappy import revcomp, Aligner
 from edlib import align as edlib_align
 from parasail import dnafull, sg_trace_scan_32
 
 from bonito.io import DuplexWriter, biofmt
-from bonito.aligner import align_map, Aligner
+from bonito.aligner import align_map
 from bonito.multiprocessing import ProcessMap
 from bonito.util import tqdm_environ
 
@@ -347,7 +347,7 @@ def main(args):
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset='map-ont', best_n=1)
+        aligner = Aligner(args.reference, preset=args.mm2_preset, best_n=None)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
@@ -393,4 +393,5 @@ def argparser():
     parser.add_argument("--no-header", action="store_true") # skip-header?
     parser.add_argument("--threads", default=8, type=int)
     parser.add_argument("--alignment-threads", default=8, type=int)
+    parser.add_argument("--mm2-preset", default='lr:hq', type=str)
     return parser
