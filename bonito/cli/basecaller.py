@@ -82,8 +82,7 @@ def main(args):
         sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
-        sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset=args.mm2_preset, best_n=None)
+        aligner = Aligner(args.reference, preset=args.mm2_preset)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
