@@ -113,3 +113,14 @@ http://nanoporetech.com
 ### Research Release
 
 Research releases are provided as technology demonstrators to provide early access to features or stimulate Community development of tools. Support for this software will be minimal and is only provided directly by the developers. Feature requests, improvements, and discussions are welcome and can be implemented by forking and pull requests. However much as we would like to rectify every issue and piece of feedback users may have, the developers may have limited resource for support of this software. Research releases may be unstable and subject to rapid iteration by Oxford Nanopore Technologies.
+
+### Citation
+
+@software{bonito,
+  title = {Bonito: A PyTorch Basecaller for Oxford Nanopore Reads},
+  author = {{Chris Seymour, Oxford Nanopore Technologies Ltd.}},
+  year = {2019},
+  url = {https://github.com/nanoporetech/bonito},
+  note = {Oxford Nanopore Technologies, Ltd. Public License, v. 1.0},
+  abstract = {Bonito is an open source research basecaller for Oxford Nanopore reads. It provides a flexible platform for training and developing basecalling models using PyTorch.}
+}
