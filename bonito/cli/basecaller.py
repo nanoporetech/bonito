@@ -43,7 +43,7 @@ def main(args):
     else:
         sys.stderr.write(f"> outputting {fmt.aligned} {fmt.name}\n")
 
-    if args.model_directory in models and args.model_directory not in os.listdir(__models_dir__):
+    if args.model_directory in models and not (__models_dir__ / args.model_directory).exists():
         sys.stderr.write("> downloading model\n")
         Downloader(__models_dir__).download(args.model_directory)
 

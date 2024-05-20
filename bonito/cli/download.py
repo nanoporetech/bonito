@@ -66,7 +66,7 @@ class Downloader:
         return fpath
 
     def _unzip(self, fpath):
-        unzip_path = fpath.with_suffix("")
+        unzip_path = fpath.parent.with_suffix("")
         with ZipFile(fpath, 'r') as zfile:
             zfile.extractall(path=unzip_path)
         fpath.unlink()
@@ -74,6 +74,10 @@ class Downloader:
 
 
 models = [
+    "dna_r10.4.1_e8.2_400bps_fast@v5.0.0",
+    "dna_r10.4.1_e8.2_400bps_hac@v5.0.0",
+    "dna_r10.4.1_e8.2_400bps_sup@v5.0.0",
+
     "dna_r10.4.1_e8.2_400bps_fast@v4.3.0",
     "dna_r10.4.1_e8.2_400bps_hac@v4.3.0",
     "dna_r10.4.1_e8.2_400bps_sup@v4.3.0",
@@ -110,25 +114,33 @@ models = [
     "dna_r9.4.1_e8_hac@v3.3",
     "dna_r9.4.1_e8_fast@v3.4",
 
-    "rna002_70bps_fast@v3",
-    "rna002_70bps_hac@v3",
-    "rna002_70bps_sup@v3",
+    "rna004_130bps_fast@v5.0.0",
+    "rna004_130bps_hac@v5.0.0",
+    "rna004_130bps_sup@v5.0.0",
 
     "rna004_130bps_fast@v3.0.1",
     "rna004_130bps_hac@v3.0.1",
     "rna004_130bps_sup@v3.0.1",
+
+    "rna002_70bps_fast@v3",
+    "rna002_70bps_hac@v3",
+    "rna002_70bps_sup@v3",
 ]
 
 training = [
-    "example_data_dna_r9.4.1_v0"
+    "example_data_dna_r9.4.1_v0",
+    "example_data_dna_r10.4.1_v0",
+    "example_data_rna004_v0",
 ]
 
 
 def download_files(out_dir, file_list, show, force):
     dl = Printer() if show else Downloader(out_dir, force)
     for remote_file in file_list:
-        with contextlib.suppress(FileNotFoundError):
+        try:
             dl.download(remote_file)
+        except FileNotFoundError:
+            print(f" - Failed to download: {remote_file}")
 
 
 def main(args):
@@ -138,7 +150,7 @@ def main(args):
     if args.models or args.all:
         out_dir = __models_dir__ if args.out_dir is None else args.out_dir
         download_files(out_dir, models, args.show, args.force)
-    elif args.training:
+    if args.training or args.all:
         out_dir = __data_dir__ if args.out_dir is None else args.out_dir
         download_files(out_dir, training, args.show, args.force)
 
@@ -152,7 +164,7 @@ def argparser():
     parser.add_argument('--list', '--show', dest='show', action='store_true')
     parser.add_argument('-f', '--force', action='store_true')
 
-    group = parser.add_mutually_exclusive_group()
+    group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--all', action='store_true')
     group.add_argument('--models', action='store_true')
     group.add_argument('--training', action='store_true')

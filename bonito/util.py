@@ -11,6 +11,7 @@ from logging import getLogger
 from operator import itemgetter
 from importlib import import_module
 from collections import defaultdict, OrderedDict
+from pathlib import Path
 
 import toml
 import torch
@@ -26,12 +27,12 @@ except ImportError:
     pass
 
 
-__dir__ = os.path.dirname(os.path.realpath(__file__))
-__models_dir__ = os.path.join(__dir__, "models")
-__data_dir__ = os.path.join(__dir__, "data")
+__dir__ = Path(__file__).parent
+__models_dir__ = __dir__ / "models"
+__data_dir__ = __dir__ / "data"
 
 split_cigar = re.compile(r"(?P<len>\d+)(?P<op>\D+)")
-default_config = os.path.join(__dir__, "models/configs", "dna_r9.4.1@v3.1.toml")
+default_config = __dir__ / "models/configs/dna_r9.4.1@v3.1.toml"
 
 
 logger = getLogger('bonito')
