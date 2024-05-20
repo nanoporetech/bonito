@@ -116,6 +116,7 @@ Research releases are provided as technology demonstrators to provide early acce
 
 ### Citation
 
+```
 @software{bonito,
   title = {Bonito: A PyTorch Basecaller for Oxford Nanopore Reads},
   author = {{Chris Seymour, Oxford Nanopore Technologies Ltd.}},
@@ -124,3 +125,4 @@ Research releases are provided as technology demonstrators to provide early acce
   note = {Oxford Nanopore Technologies, Ltd. Public License, v. 1.0},
   abstract = {Bonito is an open source research basecaller for Oxford Nanopore reads. It provides a flexible platform for training and developing basecalling models using PyTorch.}
 }
+```
