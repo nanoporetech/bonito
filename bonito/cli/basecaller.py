@@ -82,7 +82,7 @@ def main(args):
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
-        aligner = Aligner(args.reference, preset='map-ont', best_n=1)
+        aligner = Aligner(args.reference, preset=args.mm2_preset)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
             exit(1)
@@ -215,5 +215,6 @@ def argparser():
     parser.add_argument("--min-qscore", default=0, type=int)
     parser.add_argument("--min-accuracy-save-ctc", default=0.99, type=float)
     parser.add_argument("--alignment-threads", default=8, type=int)
+    parser.add_argument("--mm2-preset", default='lr:hq', type=str)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     return parser
