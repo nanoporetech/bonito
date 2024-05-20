@@ -1,0 +1,127 @@
+[model]
+package = "bonito.crf"
+
+[labels]
+labels = [ "N", "A", "C", "G", "T",]
+
+[input]
+features = 1
+
+[global_norm]
+state_len = 5
+
+[encoder]
+type = "serial"
+[[encoder.sublayers]]
+type = "convolution"
+insize = 1
+size = 16
+bias = true
+winlen = 5
+stride = 1
+padding = 2
+activation = "swish"
+norm = "batchnorm"
+
+[[encoder.sublayers]]
+type = "clamp"
+min = -0.5
+max = 3.5
+
+[[encoder.sublayers]]
+type = "convolution"
+insize = 16
+size = 16
+bias = true
+winlen = 5
+stride = 1
+padding = 2
+activation = "swish"
+norm = "batchnorm"
+
+[[encoder.sublayers]]
+type = "clamp"
+min = -0.5
+max = 3.5
+
+[[encoder.sublayers]]
+type = "convolution"
+insize = 16
+size = 1024
+bias = true
+winlen = 19
+stride = 5
+padding = 9
+activation = "swish"
+norm = "batchnorm"
+
+[[encoder.sublayers]]
+type = "clamp"
+min = -0.5
+max = 3.5
+
+[[encoder.sublayers]]
+type = "permute"
+dims = [ 2, 0, 1,]
+
+[[encoder.sublayers]]
+type = "lstm"
+size = 1024
+insize = 1024
+bias = true
+reverse = 1
+
+[[encoder.sublayers]]
+type = "lstm"
+size = 1024
+insize = 1024
+bias = true
+reverse = 0
+
+[[encoder.sublayers]]
+type = "lstm"
+size = 1024
+insize = 1024
+bias = true
+reverse = 1
+
+[[encoder.sublayers]]
+type = "lstm"
+size = 1024
+insize = 1024
+bias = true
+reverse = 0
+
+[[encoder.sublayers]]
+type = "lstm"
+size = 1024
+insize = 1024
+bias = true
+reverse = 1
+
+[[encoder.sublayers]]
+type = "linear"
+in_features = 1024
+out_features = 256
+
+[[encoder.sublayers]]
+type = "linearcrfencoder"
+insize = 256
+n_base = 4
+state_len = 5
+bias = false
+blank_score = 2.0
+
+[[encoder.sublayers]]
+type = "clamp"
+min = -5.0
+max = 5.0
+
+[qscore]
+scale = 0.96
+bias = -0.4
+
+[basecaller]
+batchsize = 96
+chunksize = 10000
+overlap = 500
