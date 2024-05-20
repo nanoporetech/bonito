@@ -10,12 +10,12 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import pysam
 import numpy as np
 from tqdm import tqdm
-from mappy import revcomp, Aligner
+from mappy import revcomp
 from edlib import align as edlib_align
 from parasail import dnafull, sg_trace_scan_32
 
 from bonito.io import DuplexWriter, biofmt
-from bonito.aligner import align_map
+from bonito.aligner import align_map, Aligner
 from bonito.multiprocessing import ProcessMap
 from bonito.util import tqdm_environ
 

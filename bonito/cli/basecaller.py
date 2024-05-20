@@ -5,7 +5,6 @@ Bonito Basecaller
 import os
 import sys
 import numpy as np
-from mappy import Aligner
 from tqdm import tqdm
 from time import perf_counter
 from functools import partial
@@ -14,7 +13,7 @@ from itertools import islice as take
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from bonito.nn import fuse_bn_
-from bonito.aligner import align_map
+from bonito.aligner import align_map, Aligner
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
 from bonito.mod_util import call_mods, load_mods_model
@@ -82,6 +81,7 @@ def main(args):
         sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
+        sys.stderr.write("> loading reference\n")
         aligner = Aligner(args.reference, preset=args.mm2_preset)
         if not aligner:
             sys.stderr.write("> failed to load/build index\n")
