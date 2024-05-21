@@ -106,11 +106,6 @@ strategy = "pa"
 sample_type = "dna"
 sample_rate = 5000
 
-[standardisation]
-standardise = 1
-mean = 93.69239463939118
-stdev = 23.506745239082388
-
 [qscore]
 scale = 1.05
 bias = 1.3

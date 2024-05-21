@@ -16,11 +16,6 @@ strategy = "pa"
 [run_info]
 sample_rate = 5000
 
-[standardisation]
-standardise = 1
-mean = 93.38
-stdev = 23.42
-
 [qscore]
 scale = 1.05
 bias = 0.2
