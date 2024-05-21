@@ -14,13 +14,13 @@ For anything other than basecaller training or method development please use [do
 ```bash
 $ pip install --upgrade pip
 $ pip install ont-bonito
-$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 /data/reads > basecalls.bam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v5.0.0 /data/reads > basecalls.bam
 ```
 
 Bonito supports writing aligned/unaligned `{fastq, sam, bam, cram}`.
 
 ```bash
-$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --reference reference.mmi /data/reads > basecalls.bam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v5.0.0 --reference reference.mmi /data/reads > basecalls.bam
 ```
 
 Bonito will download and cache the basecalling model automatically on first use but all models can be downloaded with -
@@ -44,7 +44,7 @@ Setting `CUDA_HOME` to the relevant library directory will help avoid CUDA versi
 Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
 
 ```bash
-$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v4.0.0 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v5.0.0 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
 ```
 
 See available modified base models with the ``remora model list_pretrained`` command.
@@ -54,14 +54,14 @@ See available modified base models with the ``remora model list_pretrained`` com
 To train a model using your own reads, first basecall the reads with the additional `--save-ctc` flag and use the output directory as the input directory for training.
 
 ```bash
-$ bonito basecaller dna_r9.4.1 --save-ctc --reference reference.mmi /data/reads > /data/training/ctc-data/basecalls.sam
+$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v5.0.0 --save-ctc --reference reference.mmi /data/reads > /data/training/ctc-data/basecalls.sam
 $ bonito train --directory /data/training/ctc-data /data/training/model-dir
 ```
 
 In addition to training a new model from scratch you can also easily fine tune one of the pretrained models.
 
 ```bash
-bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4.1_e8.2_400bps_hac@v4.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
+bonito train --epochs 1 --lr 5e-4 --pretrained dna_r10.4.1_e8.2_400bps_hac@v5.0.0 --directory /data/training/ctc-data /data/training/fine-tuned-model
 ```
 
 If you are interested in method development and don't have you own set of reads then a pre-prepared set is provide.
