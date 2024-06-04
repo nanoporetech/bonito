@@ -145,10 +145,10 @@ def normalisation(sig, scaling_strategy=None, norm_params=None):
     If no information is provided in the config, quantile scaling is default.
     """
     if scaling_strategy and scaling_strategy.get("strategy") == "pa":
-        if norm_params.get("standardise") == 1:
+        if norm_params and norm_params.get("standardise") == 1:
             shift = norm_params.get('mean')
             scale = norm_params.get('stdev')
-        elif norm_params.get("standardise") == 0:
+        elif norm_params and norm_params.get("standardise") == 0:
             shift = 0.0
             scale = 1.0
         else:
