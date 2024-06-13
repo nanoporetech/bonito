@@ -8,8 +8,7 @@
     - python3 -m venv venv
     - source venv/bin/activate
     - pip install uv
-    - uv pip install --upgrade pip
-    - uv pip install -e .[cu118] --extra-index-url https://download.pytorch.org/whl/cu118 --prefer-binary
+    - uv pip install -e .[cu118] --extra-index-url https://download.pytorch.org/whl/cu118
     - bonito --version  # Minimal test that bonito has been built correctly
     - python -m unittest discover
 
