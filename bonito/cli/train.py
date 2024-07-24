@@ -124,6 +124,9 @@ def argparser():
     parser.add_argument("--nondeterministic", action="store_true", default=False)
     parser.add_argument("--save-optim-every", default=10, type=int)
     parser.add_argument("--grad-accum-split", default=1, type=int)
-    parser.add_argument("--quantile-grad-clip", action="store_true", default=False)
+    quantile_group = parser.add_mutually_exclusive_group()
+    quantile_group.add_argument('--quantile-grad-clip', dest='quantile_grad_clip', action='store_true')
+    quantile_group.add_argument('--no-quantile-grad-clip', dest='quantile_grad_clip', action='store_false')
+    quantile_group.set_defaults(quantile_grad_clip=True)
     parser.add_argument("--num-workers", default=4, type=int)
     return parser
