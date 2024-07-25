@@ -14,7 +14,7 @@ toml
 tqdm
 wheel
 # specific requirements
-torch==2.1.2
+torch==2.2.0
 # ont requirements
 ont-fast5-api
 ont-koi
