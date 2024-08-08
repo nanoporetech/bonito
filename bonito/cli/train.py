@@ -54,27 +54,44 @@ def main(args):
 
     print("[loading data]")
     try:
-        train_loader_kwargs, valid_loader_kwargs = load_numpy(
-            args.chunks, args.directory, valid_chunks = args.valid_chunks
-        )
-    except FileNotFoundError:
-        train_loader_kwargs, valid_loader_kwargs = load_script(
-            args.directory,
-            seed=args.seed,
-            chunks=args.chunks,
-            valid_chunks=args.valid_chunks,
-            n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
-            n_post_context_bases=getattr(model, "n_post_context_bases", 0),
-        )
+        if (Path(args.directory) / "chunks.npy").exists():
+            print(f"[loading data] - chunks from {args.directory}")
+            train_loader_kwargs, valid_loader_kwargs = load_numpy(
+                args.chunks,
+                args.directory,
+                valid_chunks=args.valid_chunks,
+            )
+        elif (Path(args.directory) / "dataset.py").exists():
+            print(f"[loading data] - dynamically from {args.directory}/dataset.py")
+            train_loader_kwargs, valid_loader_kwargs = load_script(
+                args.directory,
+                seed=args.seed,
+                chunks=args.chunks,
+                valid_chunks=args.valid_chunks,
+                n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
+                n_post_context_bases=getattr(model, "n_post_context_bases", 0),
+                batch_size=args.batch,
+                standardisation=config.get("standardisation", {}),
+            )
+        else:
+            raise FileNotFoundError(f"No suitable training data found at: {args.directory}")
+    except Exception as e:
+        raise IOError(f"Failed to load input data from {args.directory}") from e
 
     loader_kwargs = {
         "batch_size": args.batch, "num_workers": args.num_workers, "pin_memory": True
     }
-    train_loader = DataLoader(**loader_kwargs, **train_loader_kwargs)
-    valid_loader = DataLoader(**loader_kwargs, **valid_loader_kwargs)
+    # Allow options from the train/valid_loader to override the loader_kwargs
+    train_loader = DataLoader(**{**loader_kwargs, **train_loader_kwargs})
+    valid_loader = DataLoader(**{**loader_kwargs, **valid_loader_kwargs})
 
     os.makedirs(workdir, exist_ok=True)
-    toml.dump({**config, **argsdict}, open(os.path.join(workdir, 'config.toml'), 'w'))
+    try:
+        # Allow the train-loader to write meta-data fields to the config
+        dataset_cfg = train_loader.dataset.dataset_config
+    except AttributeError:
+        dataset_cfg = {}
+    toml.dump({**config, **argsdict, **dataset_cfg}, open(os.path.join(workdir, 'config.toml'), 'w'))
 
     if config.get("lr_scheduler"):
         sched_config = config["lr_scheduler"]
@@ -91,7 +108,9 @@ def main(args):
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
         grad_accum_split=args.grad_accum_split,
-        quantile_grad_clip=args.quantile_grad_clip
+        quantile_grad_clip=args.quantile_grad_clip,
+        chunks_per_epoch=args.chunks,
+        batch_size=args.batch,
     )
 
     if (',' in args.lr):
