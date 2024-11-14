@@ -72,6 +72,7 @@ def main(args):
                 n_post_context_bases=getattr(model, "n_post_context_bases", 0),
                 batch_size=args.batch,
                 standardisation=config.get("standardisation", {}),
+                log_dir=workdir,
             )
         else:
             raise FileNotFoundError(f"No suitable training data found at: {args.directory}")
