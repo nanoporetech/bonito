@@ -21,12 +21,11 @@ from torch.utils.data import DataLoader
 
 
 def main(args):
-
     workdir = os.path.expanduser(args.training_directory)
-
     if os.path.exists(workdir) and not args.force:
         print("[error] %s exists, use -f to force continue training." % workdir)
         exit(1)
+    os.makedirs(workdir, exist_ok=True)
 
     init(args.seed, args.device, (not args.nondeterministic))
     device = torch.device(args.device)
@@ -82,11 +81,16 @@ def main(args):
     loader_kwargs = {
         "batch_size": args.batch, "num_workers": args.num_workers, "pin_memory": True
     }
+    if args.num_workers == 0:
+        for mp_arg in ["prefetch_factor", "persistent_workers"]:
+            if mp_arg in train_loader_kwargs:
+                del train_loader_kwargs[mp_arg]
+            if mp_arg in valid_loader_kwargs:
+                del valid_loader_kwargs[mp_arg]
     # Allow options from the train/valid_loader to override the loader_kwargs
     train_loader = DataLoader(**{**loader_kwargs, **train_loader_kwargs})
     valid_loader = DataLoader(**{**loader_kwargs, **valid_loader_kwargs})
 
-    os.makedirs(workdir, exist_ok=True)
     try:
         # Allow the train-loader to write meta-data fields to the config
         dataset_cfg = train_loader.dataset.dataset_config
