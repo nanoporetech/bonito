@@ -77,7 +77,7 @@ In the case of the `references.npy` output each array must additionally be zero-
 width of the largest array. 
 ```
 refs_1 = np.load("ctc_data/dataset_1/references.npy")
-refs_2 = np.load("ctc_data/dataset_2/references.npy")[:,:1000]
+refs_2 = np.load("ctc_data/dataset_2/references.npy")
 ...
 
 max_width = max(refs_1.shape[1], refs_2.shape[1], ...)
