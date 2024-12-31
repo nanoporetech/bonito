@@ -13,16 +13,22 @@ training samples and rigorously validated to ensure robust performance across a 
 types, making them the recommended choice for general use cases.
 
 Model training can be a complex and resource-intensive process, requiring a good understanding of 
-machine learning principles, bioinformatics and nanopore sequencing data. While Bonito provides 
-tools to facilitate this, it is important to note that we are unable to offer extensive support 
-for custom model training. Users undertaking this should be prepared to troubleshoot and refine 
-their workflows independently, the examples below are intended as a starting point for further 
-development.
+machine learning principles, bioinformatics, and nanopore sequencing data. While Bonito provides 
+tools to facilitate model training, it is important to note that we are unable to offer extensive 
+support for custom model training. Users undertaking this should be prepared to troubleshoot and 
+refine their workflows independently, the examples below are intended as a starting point for 
+further development.
 
 
 ## Training a model
 
-Bonito models can be trained with the `bonito train` command. The choice of hyperparameters for model training depends on the experiment and the data provided and as such Oxford Nanopore cannot provide recommendations for appropriate parametrisations.
+Bonito models can be trained with the `bonito train` command. 
+The choice of model design and hyperparameters for training will depend on the experiment and 
+the data provided. Some default values are provided by Bonito, but these may need to be adjusted 
+to fit your requirements. 
+
+The required arguments are shown below, for a full argument  list including optional arguments
+please see `bonito train --help` 
 
 ```
 bonito train 
