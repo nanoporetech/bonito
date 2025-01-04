@@ -72,6 +72,7 @@ def main(args):
                 batch_size=args.batch,
                 standardisation=config.get("standardisation", {}),
                 log_dir=workdir,
+                num_workers=args.num_workers,
             )
         else:
             raise FileNotFoundError(f"No suitable training data found at: {args.directory}")
@@ -81,12 +82,6 @@ def main(args):
     loader_kwargs = {
         "batch_size": args.batch, "num_workers": args.num_workers, "pin_memory": True
     }
-    if args.num_workers == 0:
-        for mp_arg in ["prefetch_factor", "persistent_workers"]:
-            if mp_arg in train_loader_kwargs:
-                del train_loader_kwargs[mp_arg]
-            if mp_arg in valid_loader_kwargs:
-                del valid_loader_kwargs[mp_arg]
     # Allow options from the train/valid_loader to override the loader_kwargs
     train_loader = DataLoader(**{**loader_kwargs, **train_loader_kwargs})
     valid_loader = DataLoader(**{**loader_kwargs, **valid_loader_kwargs})
