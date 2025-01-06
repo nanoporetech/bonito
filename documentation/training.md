@@ -6,11 +6,11 @@ by Oxford Nanopore devices into genomic sequences.
 ## Should I train a custom model for my data using bonito?
 
 For the vast majority Oxford Nanopore sequencing use cases **there is no need to train custom 
-basecall models**. Oxford Nanopore releases production basecall models through the Dorado project 
-(https://github.com/nanoporetech/dorado) and these are incorporated into the MinKnow device software
-available on all Oxford Nanopore devices. These models are trained using a highly diverse pool of 
-training samples and rigorously validated to ensure robust performance across a wide range of sample
-types, making them the recommended choice for general use cases.
+basecall models**. Oxford Nanopore releases production basecall models through the 
+[Dorado project](https://github.com/nanoporetech/dorado) and these are incorporated into the MinKnow
+device software available on all Oxford Nanopore devices. These models are trained using a 
+highly diverse pool of training samples and rigorously validated to ensure robust performance across 
+a wide range of sample types, making them the recommended choice for general use cases.
 
 Model training can be a complex and resource-intensive process, requiring a good understanding of 
 machine learning principles, bioinformatics, and nanopore sequencing data. While Bonito provides 
@@ -65,7 +65,7 @@ basecaller training with `bonito train ... --directory {basecaller_output_dir}`
 In some cases it may be necessary to make several calls to `bonito basecaller --save-ctc` and 
 combine the results. In these cases the output arrays can be combined by concatenation. 
 
-```
+```python
 chunks_1 = np.load("dataset_1/chunks.npy")
 chunks_2 = np.load("dataset_2/chunks.npy")
 ...
@@ -75,7 +75,7 @@ np.save("chunks.npy", chunks_combined)
 ```
 In the case of the `references.npy` output each array must additionally be zero-padded to the 
 width of the largest array. 
-```
+```python
 refs_1 = np.load("ctc_data/dataset_1/references.npy")
 refs_2 = np.load("ctc_data/dataset_2/references.npy")
 ...
@@ -118,7 +118,7 @@ The data is loaded into bonito here: https://github.com/nanoporetech/bonito/blob
 #### Example
 This example shows how a `dataset.py` module can be used to load the default `--save-ctc` output format. It is possible to extend this method to utilise more complex datastructures for training.
 
-```
+```python
 """
 This is an example dataset.py file that can be loaded dynamically by bonito
 """
