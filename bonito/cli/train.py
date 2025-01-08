@@ -21,12 +21,11 @@ from torch.utils.data import DataLoader
 
 
 def main(args):
-
     workdir = os.path.expanduser(args.training_directory)
-
     if os.path.exists(workdir) and not args.force:
         print("[error] %s exists, use -f to force continue training." % workdir)
         exit(1)
+    os.makedirs(workdir, exist_ok=True)
 
     init(args.seed, args.device, (not args.nondeterministic))
     device = torch.device(args.device)
@@ -73,6 +72,7 @@ def main(args):
                 batch_size=args.batch,
                 standardisation=config.get("standardisation", {}),
                 log_dir=workdir,
+                num_workers=args.num_workers,
             )
         else:
             raise FileNotFoundError(f"No suitable training data found at: {args.directory}")
@@ -86,7 +86,6 @@ def main(args):
     train_loader = DataLoader(**{**loader_kwargs, **train_loader_kwargs})
     valid_loader = DataLoader(**{**loader_kwargs, **valid_loader_kwargs})
 
-    os.makedirs(workdir, exist_ok=True)
     try:
         # Allow the train-loader to write meta-data fields to the config
         dataset_cfg = train_loader.dataset.dataset_config
