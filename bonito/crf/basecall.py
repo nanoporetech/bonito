@@ -7,7 +7,7 @@ import numpy as np
 from koi.decode import beam_search, to_str
 
 from bonito.multiprocessing import thread_iter
-from bonito.util import chunk, stitch, batchify, unbatchify, half_supported
+from bonito.util import chunk, stitch, batchify, unbatchify
 
 
 def stitch_results(results, length, size, overlap, stride, reverse=False):
@@ -30,8 +30,7 @@ def compute_scores(model, batch, beam_width=32, beam_cut=100.0, scale=1.0, offse
     """
     with torch.inference_mode():
         device = next(model.parameters()).device
-        dtype = torch.float16 if half_supported() else torch.float32
-        scores = model(batch.to(dtype).to(device))
+        scores = model(batch.to(torch.float16).to(device))
         if reverse:
             scores = model.seqdist.reverse_complement(scores)
         with torch.cuda.device(scores.device):

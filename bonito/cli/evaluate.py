@@ -10,7 +10,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 
 from bonito.data import load_numpy, load_script
-from bonito.util import accuracy, poa, decode_ref, half_supported
+from bonito.util import accuracy, poa, decode_ref
 from bonito.util import init, load_model, permute
 
 from torch.utils.data import DataLoader
@@ -59,11 +59,7 @@ def main(args):
                 data = (data - mean) / stdev
 
                 targets.extend(torch.unbind(target, 0))
-                if half_supported():
-                    data = data.type(torch.float16).to(args.device)
-                else:
-                    data = data.to(args.device)
-
+                data = data.type(torch.float16).to(args.device)
                 log_probs = model(data)
 
                 if hasattr(model, 'decode_batch'):
