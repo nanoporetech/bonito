@@ -102,16 +102,6 @@ def size(x, dim=0):
     raise TypeError
 
 
-def half_supported():
-    """
-    Returns whether FP16 is support on the GPU
-    """
-    try:
-        return get_device_capability()[0] >= 7
-    except:
-        return False
-
-
 def phred(prob, scale=1.0, bias=0.0):
     """
     Converts `prob` into a ascii encoded phred quality score between 0 and 40.
@@ -276,7 +266,7 @@ def set_config_defaults(config, chunksize=None, batchsize=None, overlap=None, qu
     return config
 
 
-def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
+def load_model(dirname, device, weights=None, half=True, chunksize=None, batchsize=None, overlap=None, quantize=False, use_koi=False):
     """
     Load a model config and weights off disk from `dirname`.
     """
@@ -288,7 +278,7 @@ def load_model(dirname, device, weights=None, half=None, chunksize=None, batchsi
     return _load_model(weights, config, device, half, use_koi)
 
 
-def _load_model(model_file, config, device, half=None, use_koi=False):
+def _load_model(model_file, config, device, half=True, use_koi=False):
     device = torch.device(device)
     Model = load_symbol(config, "Model")
     model = Model(config)
@@ -312,10 +302,8 @@ def _load_model(model_file, config, device, half=None, use_koi=False):
 
     model.load_state_dict(new_state_dict)
 
-    if half is None:
-        half = half_supported()
-
-    if half: model = model.half()
+    if half:
+        model = model.half()
     model.eval()
     model.to(device)
     return model

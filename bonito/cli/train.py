@@ -12,7 +12,7 @@ from importlib import import_module
 
 from bonito.data import load_numpy, load_script
 from bonito.util import __models_dir__, default_config
-from bonito.util import load_model, load_symbol, init, half_supported
+from bonito.util import load_model, load_symbol, init
 from bonito.training import Trainer
 
 import toml
@@ -103,7 +103,7 @@ def main(args):
 
     trainer = Trainer(
         model, device, train_loader, valid_loader,
-        use_amp=half_supported() and not args.no_amp,
+        use_amp=not args.no_amp,
         lr_scheduler_fn=lr_scheduler_fn,
         restore_optim=args.restore_optim,
         save_optim_every=args.save_optim_every,
