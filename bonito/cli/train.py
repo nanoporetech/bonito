@@ -5,19 +5,16 @@ Bonito training.
 """
 
 import os
-from argparse import ArgumentParser
-from argparse import ArgumentDefaultsHelpFormatter
 from pathlib import Path
 from importlib import import_module
-
-from bonito.data import load_numpy, load_script
-from bonito.util import __models_dir__, default_config
-from bonito.util import load_model, load_symbol, init
-from bonito.training import Trainer
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 import toml
 import torch
-from torch.utils.data import DataLoader
+
+from bonito.training import Trainer
+from bonito.data import load_data, ModelSetup, ComputeSettings, DataSettings
+from bonito.util import __models_dir__, default_config, load_model, load_symbol, init
 
 
 def main(args):
@@ -39,52 +36,37 @@ def main(args):
         pretrain_file = os.path.join(dirname, 'config.toml')
         config = toml.load(pretrain_file)
         if 'lr_scheduler' in config:
-            print(f"[ignoring 'lr_scheduler' in --pretrained config]")
+            print("[ignoring 'lr_scheduler' in --pretrained config]")
             del config['lr_scheduler']
 
     argsdict = dict(training=vars(args))
 
     print("[loading model]")
     if args.pretrained:
-        print("[using pretrained model {}]".format(args.pretrained))
+        print(f"[using pretrained model {args.pretrained}]")
         model = load_model(args.pretrained, device, half=False)
     else:
         model = load_symbol(config, 'Model')(config)
 
     print("[loading data]")
-    try:
-        if (Path(args.directory) / "chunks.npy").exists():
-            print(f"[loading data] - chunks from {args.directory}")
-            train_loader_kwargs, valid_loader_kwargs = load_numpy(
-                args.chunks,
-                args.directory,
-                valid_chunks=args.valid_chunks,
-            )
-        elif (Path(args.directory) / "dataset.py").exists():
-            print(f"[loading data] - dynamically from {args.directory}/dataset.py")
-            train_loader_kwargs, valid_loader_kwargs = load_script(
-                args.directory,
-                seed=args.seed,
-                chunks=args.chunks,
-                valid_chunks=args.valid_chunks,
-                n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
-                n_post_context_bases=getattr(model, "n_post_context_bases", 0),
-                batch_size=args.batch,
-                standardisation=config.get("standardisation", {}),
-                log_dir=workdir,
-                num_workers=args.num_workers,
-            )
-        else:
-            raise FileNotFoundError(f"No suitable training data found at: {args.directory}")
-    except Exception as e:
-        raise IOError(f"Failed to load input data from {args.directory}") from e
+    data = DataSettings(
+        training_data=args.directory,
+        num_train_chunks=args.chunks,
+        num_valid_chunks=args.valid_chunks,
+        output_dir=workdir
+    )
+    model_setup = ModelSetup(
+        n_pre_context_bases=getattr(model, "n_pre_context_bases", 0),
+        n_post_context_bases=getattr(model, "n_post_context_bases", 0),
+        standardisation=config.get("standardisation", {}),
+    )
+    compute_settings = ComputeSettings(
+        batch_size=args.batch,
+        num_workers=args.num_workers,
+        seed=args.seed,
+    )
 
-    loader_kwargs = {
-        "batch_size": args.batch, "num_workers": args.num_workers, "pin_memory": True
-    }
-    # Allow options from the train/valid_loader to override the loader_kwargs
-    train_loader = DataLoader(**{**loader_kwargs, **train_loader_kwargs})
-    valid_loader = DataLoader(**{**loader_kwargs, **valid_loader_kwargs})
+    train_loader, valid_loader = load_data(data, model_setup, compute_settings)
 
     try:
         # Allow the train-loader to write meta-data fields to the config
@@ -149,3 +131,4 @@ def argparser():
     quantile_group.set_defaults(quantile_grad_clip=True)
     parser.add_argument("--num-workers", default=4, type=int)
     return parser
+

@@ -1,9 +1,72 @@
 import importlib
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 from torch.utils.data import DataLoader
+
+
+@dataclass
+class DataSettings:
+    training_data: Path
+    num_train_chunks: int
+    num_valid_chunks: int
+    output_dir: Path
+
+@dataclass
+class ComputeSettings:
+    batch_size: int
+    num_workers: int
+    seed: int
+    pin_memory: bool = True
+
+@dataclass
+class ModelSetup:
+    n_pre_context_bases: int
+    n_post_context_bases: int
+    standardisation: Dict
+
+
+def load_data(data, model_setup, compute_settings):
+    try:
+        if (Path(data.training_data) / "chunks.npy").exists():
+            print(f"[loading data] - chunks from {data.training_data}")
+            train_loader_kwargs, valid_loader_kwargs = load_numpy(
+                data.num_train_chunks,
+                data.training_data,
+                valid_chunks=data.num_valid_chunks,
+            )
+        elif (Path(data.training_data) / "dataset.py").exists():
+            print(f"[loading data] - dynamically from {data.training_data}/dataset.py")
+            train_loader_kwargs, valid_loader_kwargs = load_script(
+                data.training_data,
+                chunks=data.num_train_chunks,
+                valid_chunks=data.num_valid_chunks,
+                log_dir=data.output_dir,
+                n_pre_context_bases=model_setup.n_pre_context_bases,
+                n_post_context_bases=model_setup.n_post_context_bases,
+                standardisation=model_setup.standardisation,
+                seed=compute_settings.seed,
+                batch_size=compute_settings.batch_size,
+                num_workers=compute_settings.num_workers,
+            )
+        else:
+            raise FileNotFoundError(f"No suitable training data found at: {data.training_data}")
+    except Exception as e:
+        raise IOError(f"Failed to load input data from {data.training_data}") from e
+
+    default_settings = {
+        "batch_size": compute_settings.batch_size,
+        "num_workers": compute_settings.num_workers,
+        "pin_memory": compute_settings.pin_memory,
+    }
+
+    # Allow options from the train/valid_loader to override the default_kwargs
+    train_loader = DataLoader(**{**default_settings, **train_loader_kwargs})
+    valid_loader = DataLoader(**{**default_settings, **valid_loader_kwargs})
+    return train_loader, valid_loader
 
 
 class ChunkDataSet:
