@@ -106,7 +106,7 @@ module. This more advanced method allows for more flexible data loading, but req
 perform several intermediate steps such as the signal-reference mapping and creation of a DataLoader. 
 
 #### Interface
-The data is loaded into bonito here: https://github.com/nanoporetech/bonito/blob/5a711385/bonito/cli/train.py#L65
+The data is loaded into bonito here: https://github.com/nanoporetech/bonito/blob/4bf419df/bonito/cli/data.py#L32
 
 - There should be a module named `dataset.py` in the folder passed to the `--directory` argument of `bonito train`
 - This module should have a callable named `Loader` which instantiates a class with the methods `train_loader_kwargs` and `valid_loader_kwargs`
