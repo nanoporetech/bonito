@@ -16,7 +16,6 @@ from bonito.nn import fuse_bn_
 from bonito.aligner import align_map, Aligner
 from bonito.reader import read_chunks, Reader
 from bonito.io import CTCWriter, Writer, biofmt
-from bonito.mod_util import call_mods, load_mods_model
 from bonito.cli.download import Downloader, models, __models_dir__
 from bonito.multiprocessing import process_cancel, process_itemmap
 from bonito.util import column_to_set, load_symbol, load_model, init, tqdm_environ
@@ -70,15 +69,6 @@ def main(args):
         sys.stderr.write(f"> model basecaller params: {model.config['basecaller']}\n")
 
     basecall = load_symbol(args.model_directory, "basecall")
-
-    mods_model = None
-    if args.modified_base_model is not None or args.modified_bases is not None:
-        sys.stderr.write("> loading modified base model\n")
-        mods_model = load_mods_model(
-            args.modified_bases, args.model_directory, args.modified_base_model,
-            device=args.modified_device,
-        )
-        sys.stderr.write(f"> {mods_model[1]['alphabet_str']}\n")
 
     if args.reference:
         sys.stderr.write("> loading reference\n")
@@ -144,14 +134,7 @@ def main(args):
         chunksize=model.config["basecaller"]["chunksize"],
         overlap=model.config["basecaller"]["overlap"]
     )
-    
-    if mods_model is not None:
-        if args.modified_device:
-            results = ((k, call_mods(mods_model, k, v)) for k, v in results)
-        else:
-            results = process_itemmap(
-                partial(call_mods, mods_model), results, n_proc=args.modified_procs
-            )
+
     if aligner:
         results = align_map(aligner, results, n_thread=args.alignment_threads)
 
@@ -190,10 +173,6 @@ def argparser():
     parser.add_argument("model_directory")
     parser.add_argument("reads_directory")
     parser.add_argument("--reference")
-    parser.add_argument("--modified-bases", nargs="+")
-    parser.add_argument("--modified-base-model")
-    parser.add_argument("--modified-procs", default=8, type=int)
-    parser.add_argument("--modified-device", default=None)
     parser.add_argument("--read-ids")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", default=25, type=int)
