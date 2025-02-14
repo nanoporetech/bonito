@@ -41,13 +41,8 @@ Setting `CUDA_HOME` to the relevant library directory will help avoid CUDA versi
 
 ## Modified Bases
 
-Modified base calling is handled by [Remora](https://github.com/nanoporetech/remora).
-
-```bash
-$ bonito basecaller dna_r10.4.1_e8.2_400bps_hac@v5.0.0 /data/reads --modified-bases 5mC --reference ref.mmi > basecalls_with_mods.bam
-```
-
-See available modified base models with the ``remora model list_pretrained`` command.
+For modified-base calling with ont-supported mods please use [dorado](https://github.com/nanoporetech/dorado)
+For development of modified base calling models please see [remora](https://github.com/nanoporetech/remora).
 
 ## Training your own model
 

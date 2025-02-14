@@ -18,4 +18,3 @@ torch==2.1.2
 # ont requirements
 ont-fast5-api
 ont-koi
-ont-remora
