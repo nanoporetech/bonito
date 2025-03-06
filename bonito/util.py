@@ -233,6 +233,8 @@ def load_symbol(config, symbol):
     imported = import_module(config['model']['package'])
     return getattr(imported, symbol)
 
+def load_object(package, obj_name):
+    return getattr(import_module(package), obj_name)
 
 def match_names(state_dict, model):
     keys_and_shapes = lambda state_dict: zip(*[
@@ -307,7 +309,6 @@ def _load_model(model_file, config, device, half=True, use_koi=False):
     model.eval()
     model.to(device)
     return model
-
 
 def parasail_to_sam(result, seq):
     """

@@ -7,18 +7,16 @@ import os
 import re
 from glob import glob
 from itertools import islice
-from functools import partial
 from time import perf_counter
 from collections import OrderedDict
 from datetime import datetime
 
 from bonito.schedule import linear_warmup_cosine_decay
-from bonito.util import accuracy, decode_ref, permute, concat, match_names, tqdm_environ
+from bonito.util import accuracy, decode_ref, permute, match_names, tqdm_environ, load_object
 import bonito
 
 import torch
 import numpy as np
-import torch.nn as nn
 from tqdm import tqdm
 import torch.cuda.amp as amp
 
@@ -218,14 +216,16 @@ class Trainer:
         loss = np.mean([(x['loss'] if isinstance(x, dict) else x) for x in losses])
         return loss, np.mean(accs), np.median(accs)
 
-    def init_optimizer(self, lr, **kwargs):
-        if isinstance(lr, (list, tuple)):
-            if len(list(self.model.children())) != len(lr):
-                raise ValueError('Number of lrs does not match number of model children')
-            param_groups = [{'params': list(m.parameters()), 'lr': v} for (m, v) in zip(self.model.children(), lr)]
-            self.optimizer = torch.optim.AdamW(param_groups, lr=lr[0], **kwargs)
+    def init_optimizer(self, lr, **optim_kwargs):
+        if "package" in optim_kwargs:
+            optim_cls = load_object(optim_kwargs.pop('package'), optim_kwargs.pop('symbol'))
         else:
-            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, **kwargs)
+            optim_cls = torch.optim.AdamW
+
+        print(f"[loading optim] - '{optim_cls.__name__}' with args: {optim_kwargs}")
+        optim_kwargs["lr"] = lr
+        self.optimizer = optim_cls(self.model.parameters(), **optim_kwargs)
+
 
     def get_lr_scheduler(self, epochs, last_epoch=0):
         return self.lr_scheduler_fn(self.optimizer, self.steps_per_epoch, epochs, last_epoch)
