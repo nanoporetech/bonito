@@ -139,12 +139,13 @@ class Trainer:
                     for k, v in losses_.items()
                 }
 
+        scale = self.scaler.get_scale()
         self.scaler.unscale_(self.optimizer)
         grad_norm = self.clip_grad(self.model.parameters())
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-        return losses, grad_norm
+        return losses, grad_norm, scale
 
     def train_one_epoch(self, loss_log, lr_scheduler):
         t0 = perf_counter()
@@ -163,7 +164,7 @@ class Trainer:
 
             for batch in islice(self.train_loader, self.steps_per_epoch):
                 chunks += batch[0].shape[0]
-                losses, grad_norm = self.train_one_step(batch)
+                losses, grad_norm, scale = self.train_one_step(batch)
 
                 smoothed_loss = losses['loss'] if smoothed_loss is None else (0.01 * losses['loss'] + 0.99 * smoothed_loss)
 
@@ -179,6 +180,7 @@ class Trainer:
                         'time': perf_counter() - t0,
                         'grad_norm': grad_norm,
                         'lr': lr,
+                        'scale': scale,
                         **losses
                     })
 
