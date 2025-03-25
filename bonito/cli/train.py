@@ -39,7 +39,9 @@ def main(args):
             print("[ignoring 'lr_scheduler' in --pretrained config]")
             del config['lr_scheduler']
 
+    # Record the args and working directory so we can track them
     argsdict = dict(training=vars(args))
+    argsdict["training"]["pwd"] = os.getcwd()
 
     print("[loading model]")
     if args.pretrained:
