@@ -2,9 +2,8 @@
 edlib
 fast-ctc-decode
 mappy
-networkx     # required for py3.8 torch compatability
-numpy<2      # numpy~=2 is currently unreleased, it may have breaking changes
-pandas<3     # pandas~=3 is currently unreleased, it may have breaking changes
+numpy
+pandas
 parasail
 pod5
 pysam
@@ -14,7 +13,7 @@ toml
 tqdm
 wheel
 # specific requirements
-torch==2.1.2
+torch==2.6.0
 # ont requirements
 ont-fast5-api
-ont-koi
+ont-koi==0.5.4
