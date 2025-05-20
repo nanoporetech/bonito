@@ -74,6 +74,10 @@ class Downloader:
 
 
 models = [
+    "dna_r10.4.1_e8.2_400bps_fast@v5.2.0",
+    "dna_r10.4.1_e8.2_400bps_hac@v5.2.0",
+    "dna_r10.4.1_e8.2_400bps_sup@v5.2.0",
+
     "dna_r10.4.1_e8.2_400bps_fast@v5.0.0",
     "dna_r10.4.1_e8.2_400bps_hac@v5.0.0",
     "dna_r10.4.1_e8.2_400bps_sup@v5.0.0",
@@ -113,6 +117,10 @@ models = [
     "dna_r9.4.1_e8_sup@v3.3",
     "dna_r9.4.1_e8_hac@v3.3",
     "dna_r9.4.1_e8_fast@v3.4",
+
+    "rna004_130bps_fast@v5.2.0",
+    "rna004_130bps_hac@v5.2.0",
+    "rna004_130bps_sup@v5.2.0",
 
     "rna004_130bps_fast@v5.1.0",
     "rna004_130bps_hac@v5.1.0",
