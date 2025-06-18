@@ -39,7 +39,7 @@ setup(
         # --extra-index-url https://download.pytorch.org/whl/cu118
         "cu118": ["torch==2.6.0+cu118"],
         # --extra-index-url https://download.pytorch.org/whl/cu124
-        "cu124": ["torch==2.6.0+cu124"],
+        "cu124": ["torch==2.7.1"],
     },
     entry_points={
         'console_scripts': [
