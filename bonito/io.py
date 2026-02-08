@@ -56,7 +56,7 @@ def biofmt(aligned=False):
 
 def encode_moves(moves, stride, sep=','):
     """
-    Encode a numpy array of integers into a comma seperated string
+    Encode a numpy array of integers into a comma-separated string
     starting with `stride`. For efficiency, this method is only
     valid for +ve single digit values in `moves`.
 
